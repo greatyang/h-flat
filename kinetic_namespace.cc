@@ -82,6 +82,21 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 	return status;
 }
 
+/* Convert passed version string to integer, increment, and pass it back as a string */
+std::string incr(const std::string &version)
+{
+	std::uint64_t iversion;
+	try{
+		iversion = std::stoll(version);
+	}
+	catch(std::exception& e){
+		pok_warning("Exception thrown during conversion of string '%s' to int, resetting key-version to 0. Exception Reason: %s \n .",version.c_str(), e.what());
+		iversion = 0;
+	}
+	iversion++;
+	return std::to_string(iversion);
+}
+
 NamespaceStatus KineticNamespace::append( MetadataInfo *mdi, const std::string &value)
 {
 	std::string  data;
@@ -101,17 +116,11 @@ NamespaceStatus KineticNamespace::append( MetadataInfo *mdi, const std::string &
 	/* update block data */
 	data.append(value);
 
-	/* put block data with changed version number to get atomic behavior. Retry as necessary*/
-	kinetic::KineticRecord record(data, version+"1", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	/* put block data with changed version number to get atomic behavior. Retry as necessary */
+	kinetic::KineticRecord record(data, incr(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
 	status = connection->Put(key, version, record);
 	if(status.versionMismatch())
 		return append(mdi,value);
-
-	if(status.ok()){
-		mdi->pbuf()->set_size(mdi->pbuf()->size() + value.length());
-		mdi->pbuf()->set_blocks(blocknumber+1);
-		mdi->updateACMtime();
-	}
 	return status;
 }
 

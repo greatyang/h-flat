@@ -24,7 +24,7 @@ std::int64_t PathMapDB::getSnapshotVersion() const
 	return snapshotVersion;
 }
 
-bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove) const
+bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove, const bool followSymlink) const
 {
 	/* Found path in snapshot */ 
 	if (snapshot.count(path))
@@ -32,11 +32,26 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 		/* Store maximum encountered timestamp */
 		maxTimeStamp = std::max(maxTimeStamp,snapshot.at(path).permissionTimeStamp);
 		
-		/* Ignore a reuse entry after a move entry to prevent invalid remaps.
+		/* There are a number of cases where we DO NOT want to remap the path even though we found it in the snapshot.
+		 *
+		 * 1) A TargetType::NONE mapping does not have a destination
+		 *
+		 * 2) A TargetType::LINK mapping that is at the very end of the full path should only be followed if the mapping is requested by
+		 * the fuse readlink function. Otherwise every lookup of the link (e.g. 'ls' of parent directory) would go straight to the destination.
+		 *
+		 *
+		 * 2) A reuse entry after a move entry should be ignored to prevent invalid remaps.
 		 * Example: mv a b, ln -s a l >> [ b->a, a->*a, l->a ]
 		 * We want calls to 'b' be mapped to 'a' not to '*a'.
-		 * At the same time we keep correct functionality for links: calls to 'l' are mapped to '*a'. */
-		if(snapshot.at(path).type != TargetType::NONE && (!afterMove || snapshot.at(path).type != TargetType::REUSE))
+		 * At the same time we keep correct functionality for links: calls to 'l' are mapped to '*a'.
+		 *
+		 * */
+		if(		( snapshot.at(path).type == TargetType::NONE ) ||
+				( !followSymlink && snapshot.at(path).type == TargetType::LINK ) ||
+				( afterMove && snapshot.at(path).type == TargetType::REUSE )
+		)
+		{ /*don't remap*/ }
+		else
 			return true; 
 	}
 	
@@ -45,13 +60,14 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 	if(pos == std::string::npos)
 		return false;
 	path.erase(pos,std::string::npos);
-	return searchPathRecursive(path, maxTimeStamp, afterMove);
+	return searchPathRecursive(path, maxTimeStamp, afterMove, true);
 }
 
-std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTimeStamp) const
+std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTimeStamp, CallingType ctype) const
 {
 	int 		 numLinksFollowed = 0; 
 	bool   		 afterMove = false;
+	bool 		 followSymlink = ctype == CallingType::LOOKUP ? false : true;
 	std::string  temp(user_path);
 	std::string  systemPath(user_path);
 	maxTimeStamp = 0;
@@ -61,14 +77,14 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 		++currentReaders;
 	}	
 	
-	while(searchPathRecursive(temp, maxTimeStamp, afterMove)){
-		/* Guard against symbolic link loops */ 
-		if(snapshot.at(temp).type == TargetType::LINK)
+	while(searchPathRecursive(temp, maxTimeStamp, afterMove, followSymlink)){
+		if(snapshot.at(temp).type == TargetType::LINK){
+			/* Guard against symbolic link loops */
 			if(++numLinksFollowed > MAXSYMLINKS){ 
 				maxTimeStamp = -ELOOP;
 				break;
 			}
-			
+		}
 		/* Remember if the target is due to a move */
 		afterMove = (snapshot.at(temp).type == TargetType::MOVE) ? true : false;
 
@@ -89,7 +105,7 @@ std::int64_t PathMapDB::updateSnapshot()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		
 	/* TODO: Apply log to local snapshot */ 
-		
+
 	return snapshotVersion;
 } 
 

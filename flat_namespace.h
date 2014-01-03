@@ -35,16 +35,28 @@ public:
       bool invalid_value_;
 };
 
+
+/* Interface for the underlying key-value store. It's deliberately high-level: exporting multiple put / get methods enables optimized
+ * implementation depending on the type of key being processed while keeping such details out of the file system itself. */
 class FlatNamespace{
 public:
-	virtual NamespaceStatus getMD( MetadataInfo *const mdi) = 0;
-	virtual NamespaceStatus putMD( MetadataInfo *const mdi) = 0;
+	/* File Metadata */
+	virtual NamespaceStatus getMD( 	  MetadataInfo *const mdi) = 0;
+	virtual NamespaceStatus putMD( 	  MetadataInfo *const mdi) = 0;
 	virtual NamespaceStatus deleteMD( MetadataInfo *const mdi ) = 0;
 
+	/* File Data */
 	virtual NamespaceStatus get(	MetadataInfo *mdi, unsigned int blocknumber, std::string *value) = 0;
 	virtual NamespaceStatus put(	MetadataInfo *mdi, unsigned int blocknumber, const std::string &value) = 0;
-	virtual NamespaceStatus append(	MetadataInfo *mdi, const std::string &value) = 0;
 	virtual NamespaceStatus free(   MetadataInfo *mdi, unsigned int blocknumber) = 0;
+	virtual NamespaceStatus append(	MetadataInfo *mdi, const std::string &value) = 0;
+
+	/* Database Handling
+	virtual NamespaceStatus putDBEntry( int DBVersion ) = 0;
+	virtual NamespaceStatus getDBEntry( int Version ) = 0;
+	virtual NamespaceStatus putDBSnapshot( int Version ) = 0;
+	virtual NamespaceStatus getDBSnapshot( int Version ) = 0;
+	*/
 
 public:
 	virtual ~FlatNamespace(){};

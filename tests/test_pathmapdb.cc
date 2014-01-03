@@ -9,7 +9,7 @@ TEST_CASE( "init+sanity", "[pathmapdb]" ) {
    
    std::string  t1("/a/b/c/d/file");
    std::int64_t pathPermissionTimeStamp;
-   std::string t1b = db->toSystemPath(t1.c_str(), pathPermissionTimeStamp);
+   std::string t1b = db->toSystemPath(t1.c_str(), pathPermissionTimeStamp, CallingType::LOOKUP);
 
 
    REQUIRE(db->getSnapshotVersion() == 0);
@@ -29,7 +29,7 @@ TEST_CASE( "Rename", "[pathmapdb]" ) {
    /* move /x/a /x/b */
    db->addDirectoryMove("/x/a", "/x/b");
    REQUIRE(db->getSnapshotVersion() == 1);
-   systemPath = db->toSystemPath("/x/b", pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/b", pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/a");
    /*******************
@@ -41,10 +41,10 @@ TEST_CASE( "Rename", "[pathmapdb]" ) {
    /* move /x/b /x/c */
    db->addDirectoryMove("/x/b", "/x/c");
    REQUIRE(db->getSnapshotVersion() == 2);
-   systemPath = db->toSystemPath("/x/b", pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/b", pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/b");
-   systemPath = db->toSystemPath("/x/c",pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/c",pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/a");
 	/*******************
@@ -58,13 +58,13 @@ TEST_CASE( "Rename", "[pathmapdb]" ) {
    /* move /x/c /x/a */
    db->addDirectoryMove("/x/c", "/x/a");
    REQUIRE(db->getSnapshotVersion() == 3);
-   systemPath = db->toSystemPath("/x/a",pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/a",pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/a");
-   systemPath = db->toSystemPath("/x/b",pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/b",pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/b");
-   systemPath = db->toSystemPath("/x/c",pathPermissionTimeStamp);
+   systemPath = db->toSystemPath("/x/c",pathPermissionTimeStamp, CallingType::LOOKUP);
    REQUIRE(pathPermissionTimeStamp == 0);
    REQUIRE(systemPath == "/x/c");
   /*******************

@@ -29,3 +29,10 @@ void MetadataInfo::updateACMtime(){
 	md.set_ctime(now);
 }
 
+void MetadataInfo::updateACtime(){
+	std::time_t now;
+	std::time(&now);
+	md.set_atime(now);
+	md.set_ctime(now);
+}
+

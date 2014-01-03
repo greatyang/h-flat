@@ -1,6 +1,5 @@
 #include "main.h"
 #include "debug.h"
-#include <uuid/uuid.h>
 
 
 int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi)
@@ -9,7 +8,7 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi)
 	std::int64_t pathPermissionTimeStamp = 0;
 
 	/* Step 1: Transform user path to system path and obtain required path permission timestamp */
-	key = PRIV->pmap->toSystemPath(user_path, pathPermissionTimeStamp);
+	key = PRIV->pmap->toSystemPath(user_path, pathPermissionTimeStamp, CallingType::LOOKUP);
 	if(pathPermissionTimeStamp < 0)
 		return pathPermissionTimeStamp;
 
@@ -45,12 +44,4 @@ int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &md
 	key.erase(pos,std::string::npos);
 
 	return lookup(key.c_str(), mdi_parent);
-}
-
-std::string generate_unique_id(){
-	uuid_t uuid;
-	uuid_generate(uuid);
-	char buf[100];
-	uuid_unparse(uuid, buf);
-	return std::string(buf);
 }

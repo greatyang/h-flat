@@ -1,5 +1,6 @@
 #include "main.h"
 #include "debug.h"
+#include <uuid/uuid.h>
 
 /** Remove a file */
 int pok_unlink(const char *user_path)
@@ -11,7 +12,7 @@ int pok_unlink(const char *user_path)
 	if (err)
 		return err;
 
-	return err;
+	return -ENOSYS;
 }
 
 /** File open operation
@@ -52,8 +53,20 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
 }
 
 
-void inherit_path_permission(std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent)
+
+static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
+	uuid_t uuid;
+	uuid_generate(uuid);
+	char uuid_parsed[100];
+	uuid_unparse(uuid, uuid_parsed);
+
+	mdi->updateACMtime();
+	mdi->pbuf()->set_id_group(fuse_get_context()->gid);
+	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
+	mdi->pbuf()->set_mode(mode);
+	mdi->pbuf()->set_data_unique_id(uuid_parsed);
+
 	/* Inherit path permissions existing for directory */
 	for(int i=0; i<mdi_parent->pbuf()->path_permission_size(); i++){
 		posixok::Metadata::ReachabilityEntry e_dir = mdi_parent->pbuf()->path_permission(i);
@@ -70,15 +83,17 @@ void inherit_path_permission(std::unique_ptr<MetadataInfo> &mdi, const std::uniq
 		e->set_uid (e_dir.uid());
 		e->set_type(e_dir.type());
 	}
+	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
 	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
 }
 
-int add_filename(const std::unique_ptr<MetadataInfo> &mdi_dir, std::string filename)
+static inline std::string path_to_filename(const std::string &path)
 {
-
-	return 0;
+	return path.substr(path.find_last_of('/')+1);
 }
 
+
+#include <bitset>
 /**
  * Create and open a file
  *
@@ -93,7 +108,8 @@ int add_filename(const std::unique_ptr<MetadataInfo> &mdi_dir, std::string filen
  */
 int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 {
-	pok_trace("Attempting to create file with user path: %s",user_path);
+	std::bitset<32> bmode (mode);
+	pok_trace("Attempting to create file with user path: %s with mode %s. Isdir?: %d",user_path,std::to_string(mode).data(),S_ISDIR(mode));
 	if(fi->fh){
 		// This could be perfectly legal, I am not sure how fuse works... if it is
 		// we need to reference count metadata_info structures.
@@ -112,38 +128,33 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 	if(err)
 		return err;
 
-	mdi->updateACMtime();
-	mdi->pbuf()->set_id_group(fuse_get_context()->gid);
-	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
-	mdi->pbuf()->set_mode(mode);
-	mdi->pbuf()->set_data_unique_id(generate_unique_id());
 
-	inherit_path_permission(mdi, mdi_dir);
-
+	/* File: initialize metadata and write metadata-key to drive*/
+	init_metadata(mdi, mdi_dir, mode);
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk()){
-		pok_warning("Failed creating key '%s' due to %s",mdi->getSystemPath().c_str(),status.ToString().c_str());
+		pok_warning("Failed creating key '%s' due to %s",mdi->getSystemPath().c_str());
 		return -EINVAL;
 	}
 
-	/* TODO: delete created key if directory update fails? */
-	std::string filename = mdi->getSystemPath().substr(mdi->getSystemPath().find_last_of('/')+1);
-	filename.insert(0,"|");
-	status = PRIV->nspace->append(mdi_dir.get(), filename);
+	/* Directory: insert filename with separator and update metadata. */
+	std::string file = path_to_filename(mdi->getSystemPath()).insert(0,"|");
+	status = PRIV->nspace->append(mdi_dir.get(), file);
+	if(status.ok()){
+		mdi_dir->pbuf()->set_size(mdi_dir->pbuf()->size() + file.length());
+		mdi_dir->pbuf()->set_blocks(mdi_dir->pbuf()->size() / (1024*1024) + 1);
+		mdi_dir->updateACMtime();
+		status = PRIV->nspace->putMD(mdi_dir.get());
+	}
 	if(status.notOk()){
-		pok_warning("Failed appending filename to directory at user path '%s' due to %s",user_path,status.ToString().c_str());
-		return -EINVAL;
-	}
-	status = PRIV->nspace->putMD(mdi_dir.get());
-	if(status.notOk()){
-		pok_warning("Failed storing updated metadata of directory at user path '%s' due to %s",user_path,status.ToString().c_str());
+		/* TODO: delete created key if directory update fails? */
+		pok_warning("Failed updating directory at user path '%s' due to %s",user_path,status.ToString().c_str());
 		return -EINVAL;
 	}
 
-
-	pok_trace("Successfully created user path %s.",user_path);
 	// while this isn't pretty, it's probably the best way to use fi->fh
 	fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
+	pok_trace("Successfully created user path %s.",user_path);
 	return 0;
 }
 

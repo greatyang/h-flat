@@ -6,6 +6,9 @@
 #include <mutex>
 #include <string>
 
+/* There are slight differences in handling path mapping depending on where the call originates. */
+enum class CallingType { LOOKUP, READLINK };
+
 class PathMapDB final
 {
 private:
@@ -25,7 +28,7 @@ private:
 	mutable std::mutex lock; 
 	
 private:
-	bool searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove) const;
+	bool searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove, const bool followSymlink) const;
 
 public:
 	explicit PathMapDB();
@@ -37,7 +40,8 @@ public:
 	/* Remaps supplied path according to current database snapshot. 
 	 * userPath -> systemPath
 	 * minimal required path permission timestamp value is stored in supplied integer. */
-	std::string toSystemPath(const char * user_path, std::int64_t &permissionTimeStamp) const;
+	std::string toSystemPath(const char * user_path, std::int64_t &permissionTimeStamp, CallingType ctype) const;
+
 
 	/* Return current database snapshot version */ 
 	std::int64_t getSnapshotVersion() const;

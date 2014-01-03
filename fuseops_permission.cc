@@ -2,7 +2,7 @@
 #include "debug.h"
 #include <sys/types.h>
 
-void fillattr(struct stat *attr, MetadataInfo * mdi)
+static void fillattr(struct stat *attr, MetadataInfo * mdi)
 {
 	attr->st_atime = mdi->pbuf()->atime();
 	attr->st_mtime = mdi->pbuf()->mtime();
@@ -99,8 +99,6 @@ int pok_access (const char *user_path, int mode)
 		if ( (mode & mdi->pbuf()->mode() >> 6) == umode )
 			return 0;
 	}
-
-	pok_debug("no access granted");
 	return -EACCES;
 }
 

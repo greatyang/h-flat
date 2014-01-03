@@ -1,26 +1,6 @@
 #include "main.h"
 #include "debug.h"
 
-/* permission */
-extern int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi);
-extern int pok_getattr (const char *user_path, struct stat *attr);
-extern int pok_access  (const char *user_path, int mode);
-
-/* file */
-extern int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi);
-extern int pok_unlink(const char *user_path);
-extern int pok_open(const char *user_path, struct fuse_file_info *fi);
-extern int pok_release (const char *user_path, struct fuse_file_info *fi);
-
-/* data */
-extern int pok_read (const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi);
-extern int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi);
-
-/* directory */
-//extern int pok_opendir 		(const char *user_path, struct fuse_file_info *fi);
-//extern int pok_releasedir 	(const char *user_path, struct fuse_file_info *fi);
-extern int pok_readdir 		(const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
-
 
 /**
  * Initialize filesystem
@@ -43,6 +23,10 @@ void *pok_init (struct fuse_conn_info *conn)
 		mdi->pbuf()->set_id_group(fuse_get_context()->gid);
 		mdi->pbuf()->set_id_user(fuse_get_context()->uid);
 		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+		mdi->pbuf()->set_blocks(0);
+		mdi->pbuf()->set_size(0);
+		mdi->pbuf()->set_path_permission_verified(0);
+		mdi->pbuf()->set_data_unique_id("|");
 		if(PRIV->nspace->putMD(mdi.get()).notOk()){
 			pok_warning("Failed initializing file system root entry.");
 		}
@@ -77,9 +61,13 @@ static void init_pok_ops(fuse_operations *ops)
 	ops->open		= pok_open;
 	ops->release	= pok_release;
 
+	ops->mkdir		= pok_mkdir;
 	ops->opendir	= pok_open;
 	ops->releasedir = pok_release;
 	ops->readdir	= pok_readdir;
+
+	ops->symlink    = pok_symlink;
+	ops->readlink	= pok_readlink;
 
 	ops->read		= pok_read;
 	ops->write		= pok_write;

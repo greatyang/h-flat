@@ -31,8 +31,32 @@ struct pok_priv
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
 
 
-/* internal.cpp */
+
+/* lookup > these are utility functions provided to the various path based fuse operations. */
 int lookup		 (const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
-std::string generate_unique_id();
+
+/* permission */
+int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi);
+int pok_getattr (const char *user_path, struct stat *attr);
+int pok_access  (const char *user_path, int mode);
+
+/* file */
+int pok_create	(const char *user_path, mode_t mode, struct fuse_file_info *fi);
+int pok_unlink	(const char *user_path);
+int pok_open	(const char *user_path, struct fuse_file_info *fi);
+int pok_release (const char *user_path, struct fuse_file_info *fi);
+
+/* data */
+int pok_read 	(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi);
+int pok_write	(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi);
+
+/* directory */
+int pok_readdir (const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
+int pok_mkdir 	(const char *user_path, mode_t mode);
+
+/* link */
+int pok_symlink (const char *link_destination, const char *user_path);
+int pok_readlink (const char *user_path, char *buffer, size_t size);
+
 #endif

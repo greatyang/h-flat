@@ -24,6 +24,7 @@ public:
 	posixok::Metadata * pbuf(); 								// direct access to protobuf structure
 
 	void updateACMtime();
+	void updateACtime();
 	const std::string & getSystemPath();
 	const std::string & getCurrentVersion();
 	void setSystemPath(const std::string &systemPath);

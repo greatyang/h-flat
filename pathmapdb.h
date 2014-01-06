@@ -5,8 +5,11 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <list>
+#include "database.pb.h"
 
-/* There are slight differences in handling path mapping depending on where the call originates. */
+/* There are slight differences in handling path mapping depending on if a terminating symbolic link should
+ * be followed (readlink, open) or not (getattr). */
 enum class CallingType { LOOKUP, READLINK };
 
 class PathMapDB final
@@ -46,10 +49,9 @@ public:
 	/* Return current database snapshot version */ 
 	std::int64_t getSnapshotVersion() const;
 	
-	/* Update the current database snapshot to newest version. 
-	 * Returns new database snapshot version on success or a negative
-	   error code */
-	std::int64_t updateSnapshot(); 
+	/* Update the current database snapshot to given version using the supplied list of new entries.
+	 * Returns 0 on success or a negative error code */
+	int updateSnapshot(const std::list<posixok::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion);
 	
 	/* It is the responsiblity of the client to ensure that these functions are only called after
 	 * a successful update of the remote database (as an alternative of calling updateSnapshot()). */

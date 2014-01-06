@@ -14,23 +14,6 @@
  */
 void *pok_init (struct fuse_conn_info *conn)
 {
-	/* Instead of a mkfs utility, build root metadata if its not available*/
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	mdi->setSystemPath("/");
-	if(PRIV->nspace->getMD(mdi.get()).notOk()){
-		pok_debug("Creating new file system root.");
-		mdi->updateACMtime();
-		mdi->pbuf()->set_id_group(fuse_get_context()->gid);
-		mdi->pbuf()->set_id_user(fuse_get_context()->uid);
-		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-		mdi->pbuf()->set_blocks(0);
-		mdi->pbuf()->set_size(0);
-		mdi->pbuf()->set_path_permission_verified(0);
-		mdi->pbuf()->set_data_unique_id("|");
-		if(PRIV->nspace->putMD(mdi.get()).notOk()){
-			pok_warning("Failed initializing file system root entry.");
-		}
-	}
 	return PRIV;
 }
 
@@ -86,8 +69,38 @@ int main(int argc, char *argv[])
 		 priv = new pok_priv();
 	}
 	catch(std::exception& e){
-		pok_error("Exception thrown. Reason: %s \n ABORTING MOUNT.",e.what());
+		pok_error("Exception thrown during mount operation. Reason: %s",e.what());
 		return -1;
 	}
+	pok_debug("0");
+
+	/* Verify that root metadata is available. If it isn't, initialize it. */
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	mdi->setSystemPath("/");
+	NamespaceStatus status = priv->nspace->getMD(mdi.get());
+
+	if (status.notFound()){
+		pok_trace("Initialzing root metadata.");
+
+		mdi->updateACMtime();
+		mdi->pbuf()->set_id_group(0);
+		mdi->pbuf()->set_id_user(0);
+		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+		mdi->pbuf()->set_blocks(0);
+		mdi->pbuf()->set_size(0);
+		mdi->pbuf()->set_path_permission_verified(0);
+		mdi->pbuf()->set_data_unique_id("|");
+
+		NamespaceStatus status = priv->nspace->putMD(mdi.get());
+		if(status.notOk()){
+			pok_error("Failed initializing Namespace");
+			return -1;
+		}
+	}
+	else if (status.notOk()){
+		pok_error("Error encountered when trying to validate root metadata.");
+		return -1;
+	}
+
 	return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

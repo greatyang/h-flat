@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cassert>
+#include "debug.h"
 
 PathMapDB::PathMapDB():
 	snapshotVersion(0),
@@ -96,17 +97,47 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 	return systemPath;
 }
 
-std::int64_t PathMapDB::updateSnapshot()
+int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion)
 {
-	/* TODO: Obtain latest log from Remote DB */
-	
 	std::lock_guard<std::mutex> locker(lock);
 	while(currentReaders.load())
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		
-	/* TODO: Apply log to local snapshot */ 
 
-	return snapshotVersion;
+	/* No need to update */
+	if(toVersion <= snapshotVersion)
+		return 0;
+		
+	/* sanity checks */
+	assert(entries.size() == (size_t)(toVersion - fromVersion));
+	assert(fromVersion <= snapshotVersion);
+
+	std::int64_t currentVersion = snapshotVersion;
+
+	for (auto& entry : entries){
+		currentVersion++;
+		if(currentVersion < fromVersion)
+			continue;
+
+		switch(entry.type()){
+			case posixok::db_entry_TargetType_LINK:
+				addSoftLink(entry.origin(), entry.target());
+				break;
+			case posixok::db_entry_TargetType_MOVE:
+				addDirectoryMove(entry.origin(), entry.target());
+				break;
+			case posixok::db_entry_TargetType_NONE:
+				addPermissionChange(entry.origin());
+				break;
+			default:
+				pok_error("Invalid database entry supplied. Resetting pathmapDB");
+				this->snapshotVersion = 0;
+				this->snapshot.clear();
+				return -EINVAL;
+		}
+	}
+
+	snapshotVersion = toVersion;
+	return 0;
 } 
 
 

@@ -1,6 +1,7 @@
 #include "main.h"
 #include "debug.h"
 #include <sys/types.h>
+#include <unistd.h>
 
 static void fillattr(struct stat *attr, MetadataInfo * mdi)
 {

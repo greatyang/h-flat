@@ -1,6 +1,7 @@
 #################################
 # Environment Setup 			
 KINETIC_CLIENT := $(HOME)/git/Kinetic-C-Client
+MOUNT_DIR	   := /scratch
 
 #################################
 # Yes, the Kinetic-C-Client is weird... there really shouldn't be outside dependencies in include/kinetic
@@ -29,9 +30,11 @@ TARGET    := POSIX-o-K
 TESTDIR   := $(PWD)/tests/
 TESTSRC   := $(foreach sdir,$(TESTDIR),$(wildcard $(sdir)*.cc))
 TESTOBJ   := $(patsubst $(PWD)/%.cc,%.o,$(TESTSRC))
-TESTTARGET:= test
+TESTTARGET:= test-pok
 
-CPPFLAGS  		:= -std=c++11 -O2 -g -Wall -Wextra -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS $(KINETIC_INCLUDES) 
+PROTOSRC  := $(wildcard *.proto)
+
+CPPFLAGS  		:= -std=c++11 -O2 -g -Wfatal-errors -Wall -Wextra -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS $(KINETIC_INCLUDES) 
 LIBS			:= $(KINETIC_LIBS)
 
 OS := $(shell uname)
@@ -54,8 +57,8 @@ clean:
 	rm -f $(OBJ) $(TESTOBJ) $(TARGET) $(TESTTARGET)
 
 proto: 
-	protoc -I=./ --cpp_out=./ ./metadata.proto
+	protoc -I=./ --cpp_out=./ $(PROTOSRC) 
 	
 # baby steps. single threaded & forground mode
 mount: all
-	./$(TARGET) -f -s /scratch  
+	./$(TARGET) -f -s $(MOUNT_DIR)

@@ -4,30 +4,33 @@
 #include "kinetic/kinetic_connection_factory.h"
 #include "kinetic/connection_options.h"
 #include "kinetic/status.h"
+
 #include "protobufutil/message_stream.h"
 
 #include <exception>
+#include <chrono>
+#include <thread>
 
+
+using palominolabs::protobufutil::MessageStreamFactory;
 
 KineticNamespace::KineticNamespace()
 {
-	kinetic::ConnectionOptions options;
-	options.host = std::string("localhost");
-	options.port = 8123;
-	options.user_id = 1;
-	options.hmac_key = "asdfasdf";
+	kinetic::ConnectionOptions con_options;
+	con_options.host = "localhost";
+	con_options.port = 8123;
+	con_options.user_id  = 1;
+	con_options.hmac_key = "asdfasdf";
 
-	palominolabs::protobufutil::MessageStreamFactory message_stream_factory(NULL, value_factory);
-	kinetic::KineticConnectionFactory kinetic_connection_factory(hmac_provider,
-			message_stream_factory);
+    palominolabs::protobufutil::MessageStreamFactory * message_stream_factory = new palominolabs::protobufutil::MessageStreamFactory(NULL, value_factory);
+    con_factory = std::unique_ptr<kinetic::KineticConnectionFactory>(new kinetic::KineticConnectionFactory(hmac_provider, message_stream_factory));
 
-	kinetic::KineticConnection *kineticConnection;
-	kinetic::Status con = kinetic_connection_factory.NewConnection(options, &kineticConnection);
-	if(!con.ok()){
+	kinetic::KineticConnection *kineticConnection = nullptr;
+	kinetic::Status con = con_factory->NewConnection(con_options, &kineticConnection);
+	if(!con.ok() || !kineticConnection){
 		pok_debug("Unable to connect, Error: %s",con.ToString().c_str());
 		throw std::runtime_error(con.ToString());
 	}
-
 	connection = std::unique_ptr<kinetic::KineticConnection>(kineticConnection);
 }
 
@@ -83,7 +86,7 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 }
 
 /* Convert passed version string to integer, increment, and pass it back as a string */
-std::string incr(const std::string &version)
+static std::string incr(const std::string &version)
 {
 	std::uint64_t iversion;
 	try{
@@ -128,4 +131,90 @@ NamespaceStatus KineticNamespace::append( MetadataInfo *mdi, const std::string &
 NamespaceStatus KineticNamespace::free( MetadataInfo *mdi, unsigned int blocknumber)
 {
 	return NamespaceStatus::makeInternalError("No blocking delete implemented in Kinetic-C-Client at the moment.");
+}
+
+void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
+{
+	/* Get the value and see what's what ... if it still hasn't been updated, assume the other client died. If it has been
+	 * updated beyond the current version (this client might have lost network connection for a while), accept the situation.
+	 */
+	std::int64_t stored_version;
+	kinetic::KineticStatus status = getDBVersion(stored_version);
+	if(status.notOk()){
+		pok_warning("Failed to set 'pathmapDB_version' key after successfully putting pathmdb entry.");
+		return;
+	}
+
+	if(stored_version > version)
+		return;
+
+	kinetic::KineticRecord record(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	status = connection->Put("pathmaDB_version", std::to_string(stored_version), record);
+
+	if(status.versionMismatch()){
+		pok_debug("Encountered version missmatch in fixDBVersionMissmatch. Retrying due to possible race condition. ");
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		return fixDBVersionMissmatch(version);
+	}
+
+	if(status.notOk())
+		pok_warning("Failed to set 'pathmapDB_version' key after successfully putting pathmdb entry.");
+}
+
+NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixok::db_entry &entry )
+{
+	std::string key = "pathmapDB_" + std::to_string(version);
+	kinetic::KineticRecord record(entry.SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	kinetic::KineticStatus status = connection->Put(key, "", record);
+
+	if(status.notOk())
+		return status;
+
+	/* At this point the update has been successfully completed. We should update the pathmapDB_version record to reflect this change.  */
+	kinetic::KineticRecord vrecord(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	status = connection->Put("pathmaDB_version", version > 1 ? std::to_string(version-1) : "", vrecord);
+
+	/* A version missmatch can occur if a previous putDBEntry call (possibly from another client) has not updated the pathmapDB_version key.
+	 * This could be due to
+	 * 	a) a simple race condition
+	 * 	b) an error that occurred after the previous entry was put (e.g. loss of network connection) */
+	if(status.versionMismatch())
+		fixDBVersionMissmatch( version );
+
+	return NamespaceStatus::makeOk();
+}
+
+NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_entry &entry)
+{
+	std::string key = "pathmapDB_" + std::to_string(version);
+	std::string value, keyversion, tag;
+	kinetic::KineticStatus status = connection->Get(key, &value, &keyversion, &tag);
+
+	if(status.ok())
+		if(!entry.ParseFromString(value))
+			return NamespaceStatus::makeInvalid();
+	return status;
+}
+
+
+NamespaceStatus KineticNamespace::getDBVersion (std::int64_t &version)
+{
+	std::string value, keyversion, tag;
+	kinetic::KineticStatus status = connection->Get("pathmapDB_version", &value, &keyversion, &tag);
+
+	if(status.notFound()){
+		version = 0;
+		return NamespaceStatus::makeOk();
+	}
+	if(status.notOk())
+		return status;
+
+	try{
+		version = std::stoll(value);
+	}
+	catch(std::exception& e){
+		pok_warning("Exception thrown during conversion of string '%s' to int, resetting key-version to 0. Exception Reason: %s \n .",value.c_str(), e.what());
+		return NamespaceStatus::makeInternalError(e.what());
+	}
+	return status;
 }

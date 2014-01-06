@@ -1,0 +1,23 @@
+package posixok;
+
+message db_entry {
+	
+	// Note that there is no REUSE type as in pathmapdb. This type is implicit and is only computed for the 
+	// in-memory hashmap representation of the database. Similarly, there is no permissionTimeStamp as it is 
+	// similarly implicit by the entry database version number.  
+	enum TargetType { 
+		MOVE 	= 1;
+		LINK	= 2;
+		NONE	= 3;
+	};
+	
+	required string 	origin					= 1;
+	required TargetType type					= 2; 
+	optional string 	target					= 3;	
+}
+
+// A list of db-entries, to be stored in a single key. Used to update clients that are out-of-date by a lot. 
+message db_entries {
+	repeated db_entry data = 1;
+}
+	

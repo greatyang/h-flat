@@ -2,6 +2,8 @@
 #define FLAT_NAMESPACE_H_
 
 #include "metadata_info.h"
+#include "database.pb.h"
+
 #include "kinetic/status.h"
 /*
  * Let`s just pretend not to see the use of KineticStatus in this class.
@@ -41,9 +43,9 @@ public:
 class FlatNamespace{
 public:
 	/* File Metadata */
-	virtual NamespaceStatus getMD( 	  MetadataInfo *const mdi) = 0;
-	virtual NamespaceStatus putMD( 	  MetadataInfo *const mdi) = 0;
-	virtual NamespaceStatus deleteMD( MetadataInfo *const mdi ) = 0;
+	virtual NamespaceStatus getMD( 	  MetadataInfo *mdi)  = 0;
+	virtual NamespaceStatus putMD( 	  MetadataInfo *mdi)  = 0;
+	virtual NamespaceStatus deleteMD( MetadataInfo *mdi ) = 0;
 
 	/* File Data */
 	virtual NamespaceStatus get(	MetadataInfo *mdi, unsigned int blocknumber, std::string *value) = 0;
@@ -51,12 +53,10 @@ public:
 	virtual NamespaceStatus free(   MetadataInfo *mdi, unsigned int blocknumber) = 0;
 	virtual NamespaceStatus append(	MetadataInfo *mdi, const std::string &value) = 0;
 
-	/* Database Handling
-	virtual NamespaceStatus putDBEntry( int DBVersion ) = 0;
-	virtual NamespaceStatus getDBEntry( int Version ) = 0;
-	virtual NamespaceStatus putDBSnapshot( int Version ) = 0;
-	virtual NamespaceStatus getDBSnapshot( int Version ) = 0;
-	*/
+	/* Database Handling */
+	virtual NamespaceStatus putDBEntry(		std::int64_t version, const posixok::db_entry &entry) = 0;
+	virtual NamespaceStatus getDBEntry( 	std::int64_t version, posixok::db_entry &entry) = 0;
+	virtual NamespaceStatus getDBVersion( 	std::int64_t &version) = 0;
 
 public:
 	virtual ~FlatNamespace(){};

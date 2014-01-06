@@ -11,18 +11,15 @@ message Metadata {
 	required uint32	id_user		= 4;					
 	required uint32	id_group	= 5;					
 	required uint32 mode		= 6;
-	optional uint32	flags		= 7		[default = 0];	// ? is this in-memory only ?
-	optional uint32	link_count	= 8		[default = 1];	// number of names for this inode (hardlinks)
-	optional uint32	size		= 9 	[default = 0];	// size in bytes
-	optional uint32	blocks		= 10	[default = 0];	// allocated file system blocks
-
+	optional uint32	link_count	= 7		[default = 1];	// number of names for this inode (hardlinks)
+	optional uint32	size		= 8 	[default = 0];	// size in bytes
+	optional uint32	blocks		= 9		[default = 0];	// allocated file system blocks
 
 
 	//////////////////////////////////////////
 	// Flat Namespace Metadata
 	//
 	optional string data_unique_id = 11; 	// base-key to all data fields: we don't want to have to move data when we move metadata 
-
 
 
 	//////////////////////////////////////////
@@ -44,7 +41,5 @@ message Metadata {
 	optional int64	path_permission_verified   = 13 [default = 0];		// pathmapdb version path permissions have been verified against
 	repeated ReachabilityEntry path_permission = 14; 					// a set of reachability entries specifying the path permissions
 	repeated ReachabilityEntry path_permission_children = 15;			// only for directories: store restrictions introduced by this directory so that children do not have to recompute
-
-
 	
 }

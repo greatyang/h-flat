@@ -1,7 +1,5 @@
 #include "main.h"
 #include "debug.h"
-#include <algorithm>
-
 
 static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, bool write)
 {
@@ -91,7 +89,7 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 
 	/* update metadata on success */
 	if(rtn>0){
-		size_t newsize = std::max(offset+size,(std::uint64_t)mdi->pbuf()->size());
+		size_t newsize = std::max((std::uint64_t)offset+size,(std::uint64_t)mdi->pbuf()->size());
 		mdi->pbuf()->set_size(newsize);
 		mdi->pbuf()->set_blocks(newsize / 1024*1024 + 1);
 		mdi->updateACMtime();

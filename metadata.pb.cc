@@ -38,14 +38,13 @@ void protobuf_AssignDesc_metadata_2eproto() {
       "metadata.proto");
   GOOGLE_CHECK(file != NULL);
   Metadata_descriptor_ = file->message_type(0);
-  static const int Metadata_offsets_[14] = {
+  static const int Metadata_offsets_[13] = {
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, atime_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, mtime_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, ctime_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, id_user_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, id_group_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, mode_),
-    GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, flags_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, link_count_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, size_),
     GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(Metadata, blocks_),
@@ -117,21 +116,21 @@ void protobuf_AddDesc_metadata_2eproto() {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
   ::google::protobuf::DescriptorPool::InternalAddGeneratedFile(
-    "\n\016metadata.proto\022\007posixok\"\274\004\n\010Metadata\022\020"
+    "\n\016metadata.proto\022\007posixok\"\252\004\n\010Metadata\022\020"
     "\n\005atime\030\001 \001(\r:\0010\022\r\n\005mtime\030\002 \002(\r\022\r\n\005ctime"
     "\030\003 \002(\r\022\017\n\007id_user\030\004 \002(\r\022\020\n\010id_group\030\005 \002("
-    "\r\022\014\n\004mode\030\006 \002(\r\022\020\n\005flags\030\007 \001(\r:\0010\022\025\n\nlin"
-    "k_count\030\010 \001(\r:\0011\022\017\n\004size\030\t \001(\r:\0010\022\021\n\006blo"
-    "cks\030\n \001(\r:\0010\022\026\n\016data_unique_id\030\013 \001(\t\022#\n\030"
-    "path_permission_verified\030\r \001(\003:\0010\022<\n\017pat"
-    "h_permission\030\016 \003(\0132#.posixok.Metadata.Re"
-    "achabilityEntry\022E\n\030path_permission_child"
-    "ren\030\017 \003(\0132#.posixok.Metadata.Reachabilit"
-    "yEntry\032_\n\021ReachabilityEntry\0220\n\004type\030\001 \002("
-    "\0162\".posixok.Metadata.ReachabilityType\022\013\n"
-    "\003gid\030\002 \001(\r\022\013\n\003uid\030\003 \001(\r\"_\n\020ReachabilityT"
-    "ype\022\007\n\003UID\020\000\022\007\n\003GID\020\001\022\016\n\nUID_OR_GID\020\002\022\013\n"
-    "\007NOT_UID\020\003\022\013\n\007NOT_GID\020\004\022\017\n\013GID_REQ_UID\020\005", 600);
+    "\r\022\014\n\004mode\030\006 \002(\r\022\025\n\nlink_count\030\007 \001(\r:\0011\022\017"
+    "\n\004size\030\010 \001(\r:\0010\022\021\n\006blocks\030\t \001(\r:\0010\022\026\n\016da"
+    "ta_unique_id\030\013 \001(\t\022#\n\030path_permission_ve"
+    "rified\030\r \001(\003:\0010\022<\n\017path_permission\030\016 \003(\013"
+    "2#.posixok.Metadata.ReachabilityEntry\022E\n"
+    "\030path_permission_children\030\017 \003(\0132#.posixo"
+    "k.Metadata.ReachabilityEntry\032_\n\021Reachabi"
+    "lityEntry\0220\n\004type\030\001 \002(\0162\".posixok.Metada"
+    "ta.ReachabilityType\022\013\n\003gid\030\002 \001(\r\022\013\n\003uid\030"
+    "\003 \001(\r\"_\n\020ReachabilityType\022\007\n\003UID\020\000\022\007\n\003GI"
+    "D\020\001\022\016\n\nUID_OR_GID\020\002\022\013\n\007NOT_UID\020\003\022\013\n\007NOT_"
+    "GID\020\004\022\017\n\013GID_REQ_UID\020\005", 582);
   ::google::protobuf::MessageFactory::InternalRegisterGeneratedFile(
     "metadata.proto", &protobuf_RegisterTypes);
   Metadata::default_instance_ = new Metadata();
@@ -481,7 +480,6 @@ const int Metadata::kCtimeFieldNumber;
 const int Metadata::kIdUserFieldNumber;
 const int Metadata::kIdGroupFieldNumber;
 const int Metadata::kModeFieldNumber;
-const int Metadata::kFlagsFieldNumber;
 const int Metadata::kLinkCountFieldNumber;
 const int Metadata::kSizeFieldNumber;
 const int Metadata::kBlocksFieldNumber;
@@ -513,7 +511,6 @@ void Metadata::SharedCtor() {
   id_user_ = 0u;
   id_group_ = 0u;
   mode_ = 0u;
-  flags_ = 0u;
   link_count_ = 1u;
   size_ = 0u;
   blocks_ = 0u;
@@ -563,11 +560,10 @@ void Metadata::Clear() {
     id_user_ = 0u;
     id_group_ = 0u;
     mode_ = 0u;
-    flags_ = 0u;
     link_count_ = 1u;
+    size_ = 0u;
   }
   if (_has_bits_[8 / 32] & (0xffu << (8 % 32))) {
-    size_ = 0u;
     blocks_ = 0u;
     if (has_data_unique_id()) {
       if (data_unique_id_ != &::google::protobuf::internal::kEmptyString) {
@@ -679,28 +675,12 @@ bool Metadata::MergePartialFromCodedStream(
         } else {
           goto handle_uninterpreted;
         }
-        if (input->ExpectTag(56)) goto parse_flags;
+        if (input->ExpectTag(56)) goto parse_link_count;
         break;
       }
 
-      // optional uint32 flags = 7 [default = 0];
+      // optional uint32 link_count = 7 [default = 1];
       case 7: {
-        if (::google::protobuf::internal::WireFormatLite::GetTagWireType(tag) ==
-            ::google::protobuf::internal::WireFormatLite::WIRETYPE_VARINT) {
-         parse_flags:
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::uint32, ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>(
-                 input, &flags_)));
-          set_has_flags();
-        } else {
-          goto handle_uninterpreted;
-        }
-        if (input->ExpectTag(64)) goto parse_link_count;
-        break;
-      }
-
-      // optional uint32 link_count = 8 [default = 1];
-      case 8: {
         if (::google::protobuf::internal::WireFormatLite::GetTagWireType(tag) ==
             ::google::protobuf::internal::WireFormatLite::WIRETYPE_VARINT) {
          parse_link_count:
@@ -711,12 +691,12 @@ bool Metadata::MergePartialFromCodedStream(
         } else {
           goto handle_uninterpreted;
         }
-        if (input->ExpectTag(72)) goto parse_size;
+        if (input->ExpectTag(64)) goto parse_size;
         break;
       }
 
-      // optional uint32 size = 9 [default = 0];
-      case 9: {
+      // optional uint32 size = 8 [default = 0];
+      case 8: {
         if (::google::protobuf::internal::WireFormatLite::GetTagWireType(tag) ==
             ::google::protobuf::internal::WireFormatLite::WIRETYPE_VARINT) {
          parse_size:
@@ -727,12 +707,12 @@ bool Metadata::MergePartialFromCodedStream(
         } else {
           goto handle_uninterpreted;
         }
-        if (input->ExpectTag(80)) goto parse_blocks;
+        if (input->ExpectTag(72)) goto parse_blocks;
         break;
       }
 
-      // optional uint32 blocks = 10 [default = 0];
-      case 10: {
+      // optional uint32 blocks = 9 [default = 0];
+      case 9: {
         if (::google::protobuf::internal::WireFormatLite::GetTagWireType(tag) ==
             ::google::protobuf::internal::WireFormatLite::WIRETYPE_VARINT) {
          parse_blocks:
@@ -858,24 +838,19 @@ void Metadata::SerializeWithCachedSizes(
     ::google::protobuf::internal::WireFormatLite::WriteUInt32(6, this->mode(), output);
   }
 
-  // optional uint32 flags = 7 [default = 0];
-  if (has_flags()) {
-    ::google::protobuf::internal::WireFormatLite::WriteUInt32(7, this->flags(), output);
-  }
-
-  // optional uint32 link_count = 8 [default = 1];
+  // optional uint32 link_count = 7 [default = 1];
   if (has_link_count()) {
-    ::google::protobuf::internal::WireFormatLite::WriteUInt32(8, this->link_count(), output);
+    ::google::protobuf::internal::WireFormatLite::WriteUInt32(7, this->link_count(), output);
   }
 
-  // optional uint32 size = 9 [default = 0];
+  // optional uint32 size = 8 [default = 0];
   if (has_size()) {
-    ::google::protobuf::internal::WireFormatLite::WriteUInt32(9, this->size(), output);
+    ::google::protobuf::internal::WireFormatLite::WriteUInt32(8, this->size(), output);
   }
 
-  // optional uint32 blocks = 10 [default = 0];
+  // optional uint32 blocks = 9 [default = 0];
   if (has_blocks()) {
-    ::google::protobuf::internal::WireFormatLite::WriteUInt32(10, this->blocks(), output);
+    ::google::protobuf::internal::WireFormatLite::WriteUInt32(9, this->blocks(), output);
   }
 
   // optional string data_unique_id = 11;
@@ -942,24 +917,19 @@ void Metadata::SerializeWithCachedSizes(
     target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(6, this->mode(), target);
   }
 
-  // optional uint32 flags = 7 [default = 0];
-  if (has_flags()) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(7, this->flags(), target);
-  }
-
-  // optional uint32 link_count = 8 [default = 1];
+  // optional uint32 link_count = 7 [default = 1];
   if (has_link_count()) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(8, this->link_count(), target);
+    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(7, this->link_count(), target);
   }
 
-  // optional uint32 size = 9 [default = 0];
+  // optional uint32 size = 8 [default = 0];
   if (has_size()) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(9, this->size(), target);
+    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(8, this->size(), target);
   }
 
-  // optional uint32 blocks = 10 [default = 0];
+  // optional uint32 blocks = 9 [default = 0];
   if (has_blocks()) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(10, this->blocks(), target);
+    target = ::google::protobuf::internal::WireFormatLite::WriteUInt32ToArray(9, this->blocks(), target);
   }
 
   // optional string data_unique_id = 11;
@@ -1044,30 +1014,23 @@ int Metadata::ByteSize() const {
           this->mode());
     }
 
-    // optional uint32 flags = 7 [default = 0];
-    if (has_flags()) {
-      total_size += 1 +
-        ::google::protobuf::internal::WireFormatLite::UInt32Size(
-          this->flags());
-    }
-
-    // optional uint32 link_count = 8 [default = 1];
+    // optional uint32 link_count = 7 [default = 1];
     if (has_link_count()) {
       total_size += 1 +
         ::google::protobuf::internal::WireFormatLite::UInt32Size(
           this->link_count());
     }
 
-  }
-  if (_has_bits_[8 / 32] & (0xffu << (8 % 32))) {
-    // optional uint32 size = 9 [default = 0];
+    // optional uint32 size = 8 [default = 0];
     if (has_size()) {
       total_size += 1 +
         ::google::protobuf::internal::WireFormatLite::UInt32Size(
           this->size());
     }
 
-    // optional uint32 blocks = 10 [default = 0];
+  }
+  if (_has_bits_[8 / 32] & (0xffu << (8 % 32))) {
+    // optional uint32 blocks = 9 [default = 0];
     if (has_blocks()) {
       total_size += 1 +
         ::google::protobuf::internal::WireFormatLite::UInt32Size(
@@ -1151,17 +1114,14 @@ void Metadata::MergeFrom(const Metadata& from) {
     if (from.has_mode()) {
       set_mode(from.mode());
     }
-    if (from.has_flags()) {
-      set_flags(from.flags());
-    }
     if (from.has_link_count()) {
       set_link_count(from.link_count());
     }
-  }
-  if (from._has_bits_[8 / 32] & (0xffu << (8 % 32))) {
     if (from.has_size()) {
       set_size(from.size());
     }
+  }
+  if (from._has_bits_[8 / 32] & (0xffu << (8 % 32))) {
     if (from.has_blocks()) {
       set_blocks(from.blocks());
     }
@@ -1207,7 +1167,6 @@ void Metadata::Swap(Metadata* other) {
     std::swap(id_user_, other->id_user_);
     std::swap(id_group_, other->id_group_);
     std::swap(mode_, other->mode_);
-    std::swap(flags_, other->flags_);
     std::swap(link_count_, other->link_count_);
     std::swap(size_, other->size_);
     std::swap(blocks_, other->blocks_);

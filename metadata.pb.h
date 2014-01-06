@@ -290,31 +290,24 @@ class Metadata : public ::google::protobuf::Message {
   inline ::google::protobuf::uint32 mode() const;
   inline void set_mode(::google::protobuf::uint32 value);
 
-  // optional uint32 flags = 7 [default = 0];
-  inline bool has_flags() const;
-  inline void clear_flags();
-  static const int kFlagsFieldNumber = 7;
-  inline ::google::protobuf::uint32 flags() const;
-  inline void set_flags(::google::protobuf::uint32 value);
-
-  // optional uint32 link_count = 8 [default = 1];
+  // optional uint32 link_count = 7 [default = 1];
   inline bool has_link_count() const;
   inline void clear_link_count();
-  static const int kLinkCountFieldNumber = 8;
+  static const int kLinkCountFieldNumber = 7;
   inline ::google::protobuf::uint32 link_count() const;
   inline void set_link_count(::google::protobuf::uint32 value);
 
-  // optional uint32 size = 9 [default = 0];
+  // optional uint32 size = 8 [default = 0];
   inline bool has_size() const;
   inline void clear_size();
-  static const int kSizeFieldNumber = 9;
+  static const int kSizeFieldNumber = 8;
   inline ::google::protobuf::uint32 size() const;
   inline void set_size(::google::protobuf::uint32 value);
 
-  // optional uint32 blocks = 10 [default = 0];
+  // optional uint32 blocks = 9 [default = 0];
   inline bool has_blocks() const;
   inline void clear_blocks();
-  static const int kBlocksFieldNumber = 10;
+  static const int kBlocksFieldNumber = 9;
   inline ::google::protobuf::uint32 blocks() const;
   inline void set_blocks(::google::protobuf::uint32 value);
 
@@ -375,8 +368,6 @@ class Metadata : public ::google::protobuf::Message {
   inline void clear_has_id_group();
   inline void set_has_mode();
   inline void clear_has_mode();
-  inline void set_has_flags();
-  inline void clear_has_flags();
   inline void set_has_link_count();
   inline void clear_has_link_count();
   inline void set_has_size();
@@ -396,17 +387,16 @@ class Metadata : public ::google::protobuf::Message {
   ::google::protobuf::uint32 id_user_;
   ::google::protobuf::uint32 id_group_;
   ::google::protobuf::uint32 mode_;
-  ::google::protobuf::uint32 flags_;
   ::google::protobuf::uint32 link_count_;
   ::google::protobuf::uint32 size_;
-  ::google::protobuf::uint32 blocks_;
   ::std::string* data_unique_id_;
   ::google::protobuf::int64 path_permission_verified_;
   ::google::protobuf::RepeatedPtrField< ::posixok::Metadata_ReachabilityEntry > path_permission_;
   ::google::protobuf::RepeatedPtrField< ::posixok::Metadata_ReachabilityEntry > path_permission_children_;
+  ::google::protobuf::uint32 blocks_;
 
   mutable int _cached_size_;
-  ::google::protobuf::uint32 _has_bits_[(14 + 31) / 32];
+  ::google::protobuf::uint32 _has_bits_[(13 + 31) / 32];
 
   friend void  protobuf_AddDesc_metadata_2eproto();
   friend void protobuf_AssignDesc_metadata_2eproto();
@@ -625,37 +615,15 @@ inline void Metadata::set_mode(::google::protobuf::uint32 value) {
   mode_ = value;
 }
 
-// optional uint32 flags = 7 [default = 0];
-inline bool Metadata::has_flags() const {
+// optional uint32 link_count = 7 [default = 1];
+inline bool Metadata::has_link_count() const {
   return (_has_bits_[0] & 0x00000040u) != 0;
 }
-inline void Metadata::set_has_flags() {
+inline void Metadata::set_has_link_count() {
   _has_bits_[0] |= 0x00000040u;
 }
-inline void Metadata::clear_has_flags() {
-  _has_bits_[0] &= ~0x00000040u;
-}
-inline void Metadata::clear_flags() {
-  flags_ = 0u;
-  clear_has_flags();
-}
-inline ::google::protobuf::uint32 Metadata::flags() const {
-  return flags_;
-}
-inline void Metadata::set_flags(::google::protobuf::uint32 value) {
-  set_has_flags();
-  flags_ = value;
-}
-
-// optional uint32 link_count = 8 [default = 1];
-inline bool Metadata::has_link_count() const {
-  return (_has_bits_[0] & 0x00000080u) != 0;
-}
-inline void Metadata::set_has_link_count() {
-  _has_bits_[0] |= 0x00000080u;
-}
 inline void Metadata::clear_has_link_count() {
-  _has_bits_[0] &= ~0x00000080u;
+  _has_bits_[0] &= ~0x00000040u;
 }
 inline void Metadata::clear_link_count() {
   link_count_ = 1u;
@@ -669,15 +637,15 @@ inline void Metadata::set_link_count(::google::protobuf::uint32 value) {
   link_count_ = value;
 }
 
-// optional uint32 size = 9 [default = 0];
+// optional uint32 size = 8 [default = 0];
 inline bool Metadata::has_size() const {
-  return (_has_bits_[0] & 0x00000100u) != 0;
+  return (_has_bits_[0] & 0x00000080u) != 0;
 }
 inline void Metadata::set_has_size() {
-  _has_bits_[0] |= 0x00000100u;
+  _has_bits_[0] |= 0x00000080u;
 }
 inline void Metadata::clear_has_size() {
-  _has_bits_[0] &= ~0x00000100u;
+  _has_bits_[0] &= ~0x00000080u;
 }
 inline void Metadata::clear_size() {
   size_ = 0u;
@@ -691,15 +659,15 @@ inline void Metadata::set_size(::google::protobuf::uint32 value) {
   size_ = value;
 }
 
-// optional uint32 blocks = 10 [default = 0];
+// optional uint32 blocks = 9 [default = 0];
 inline bool Metadata::has_blocks() const {
-  return (_has_bits_[0] & 0x00000200u) != 0;
+  return (_has_bits_[0] & 0x00000100u) != 0;
 }
 inline void Metadata::set_has_blocks() {
-  _has_bits_[0] |= 0x00000200u;
+  _has_bits_[0] |= 0x00000100u;
 }
 inline void Metadata::clear_has_blocks() {
-  _has_bits_[0] &= ~0x00000200u;
+  _has_bits_[0] &= ~0x00000100u;
 }
 inline void Metadata::clear_blocks() {
   blocks_ = 0u;
@@ -715,13 +683,13 @@ inline void Metadata::set_blocks(::google::protobuf::uint32 value) {
 
 // optional string data_unique_id = 11;
 inline bool Metadata::has_data_unique_id() const {
-  return (_has_bits_[0] & 0x00000400u) != 0;
+  return (_has_bits_[0] & 0x00000200u) != 0;
 }
 inline void Metadata::set_has_data_unique_id() {
-  _has_bits_[0] |= 0x00000400u;
+  _has_bits_[0] |= 0x00000200u;
 }
 inline void Metadata::clear_has_data_unique_id() {
-  _has_bits_[0] &= ~0x00000400u;
+  _has_bits_[0] &= ~0x00000200u;
 }
 inline void Metadata::clear_data_unique_id() {
   if (data_unique_id_ != &::google::protobuf::internal::kEmptyString) {
@@ -785,13 +753,13 @@ inline void Metadata::set_allocated_data_unique_id(::std::string* data_unique_id
 
 // optional int64 path_permission_verified = 13 [default = 0];
 inline bool Metadata::has_path_permission_verified() const {
-  return (_has_bits_[0] & 0x00000800u) != 0;
+  return (_has_bits_[0] & 0x00000400u) != 0;
 }
 inline void Metadata::set_has_path_permission_verified() {
-  _has_bits_[0] |= 0x00000800u;
+  _has_bits_[0] |= 0x00000400u;
 }
 inline void Metadata::clear_has_path_permission_verified() {
-  _has_bits_[0] &= ~0x00000800u;
+  _has_bits_[0] &= ~0x00000400u;
 }
 inline void Metadata::clear_path_permission_verified() {
   path_permission_verified_ = GOOGLE_LONGLONG(0);

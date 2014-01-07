@@ -40,6 +40,8 @@ int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &md
 int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi);
 int pok_getattr (const char *user_path, struct stat *attr);
 int pok_access  (const char *user_path, int mode);
+int pok_chmod 	(const char *user_path, mode_t mode);
+int pok_chown 	(const char *user_path, uid_t uid, gid_t gid);
 
 /* file */
 int pok_create	(const char *user_path, mode_t mode, struct fuse_file_info *fi);
@@ -58,5 +60,8 @@ int pok_mkdir 	(const char *user_path, mode_t mode);
 /* link */
 int pok_symlink (const char *link_destination, const char *user_path);
 int pok_readlink (const char *user_path, char *buffer, size_t size);
+
+/* main */
+int update_pathmapDB();
 
 #endif

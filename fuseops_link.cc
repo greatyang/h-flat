@@ -25,36 +25,7 @@ int pok_readlink (const char *user_path, char *buffer, size_t size)
 	return 0;
 }
 
-static int update_pathmapDB()
-{
-	std::int64_t dbVersion;
-	NamespaceStatus status = PRIV->nspace->getDBVersion(dbVersion);
-	if(status.notOk()){
-		pok_warning("Cannot access database.");
-		return -EINVAL;
-	}
-	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
 
-	/* Sanity */
-	assert(dbVersion >= snapshotVersion);
-
-	/* Nothing to do. */
-	if(dbVersion == snapshotVersion)
-		return 0;
-
-	/* Update */
-	std::list<posixok::db_entry> entries;
-	posixok::db_entry entry;
-	for(std::int64_t v = snapshotVersion+1; v <= dbVersion; v++){
-		status = PRIV->nspace->getDBEntry(v, entry);
-		if(status.notOk()){
-				pok_warning("Cannot access database.");
-				return -EINVAL;
-			}
-		entries.push_back(entry);
-	}
-	return PRIV->pmap->updateSnapshot(entries, snapshotVersion, dbVersion);
-}
 
 /** Create a symbolic link */
 int pok_symlink (const char *link_destination, const char *user_path)

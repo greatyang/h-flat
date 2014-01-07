@@ -1,6 +1,39 @@
 #include "main.h"
 #include "debug.h"
 
+int update_pathmapDB()
+{
+	std::int64_t dbVersion;
+	NamespaceStatus status = PRIV->nspace->getDBVersion(dbVersion);
+	if(status.notOk()){
+		pok_warning("Cannot access database.");
+		return -EINVAL;
+	}
+	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
+
+	/* Sanity */
+	assert(dbVersion >= snapshotVersion);
+
+	if(!dbVersion) pok_debug("Empty on-disk database.");
+
+	/* Nothing to do. */
+	if(dbVersion == snapshotVersion)
+		return 0;
+
+	/* Update */
+	std::list<posixok::db_entry> entries;
+	posixok::db_entry entry;
+	for(std::int64_t v = snapshotVersion+1; v <= dbVersion; v++){
+		status = PRIV->nspace->getDBEntry(v, entry);
+		if(status.notOk()){
+				pok_warning("Cannot access database.");
+				return -EINVAL;
+			}
+		entries.push_back(entry);
+	}
+	return PRIV->pmap->updateSnapshot(entries, snapshotVersion, dbVersion);
+}
+
 
 /**
  * Initialize filesystem
@@ -14,6 +47,7 @@
  */
 void *pok_init (struct fuse_conn_info *conn)
 {
+	update_pathmapDB();
 	return PRIV;
 }
 
@@ -38,6 +72,8 @@ static void init_pok_ops(fuse_operations *ops)
 	ops->getattr 	= pok_getattr;
 	ops->fgetattr	= pok_fgetattr;
 	ops->access		= pok_access;
+	ops->chown		= pok_chown;
+	ops->chmod		= pok_chmod;
 
 	ops->create		= pok_create;
 	ops->unlink		= pok_unlink;
@@ -72,7 +108,6 @@ int main(int argc, char *argv[])
 		pok_error("Exception thrown during mount operation. Reason: %s",e.what());
 		return -1;
 	}
-	pok_debug("0");
 
 	/* Verify that root metadata is available. If it isn't, initialize it. */
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());

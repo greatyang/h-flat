@@ -149,7 +149,7 @@ void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
 		return;
 
 	kinetic::KineticRecord record(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = connection->Put("pathmaDB_version", std::to_string(stored_version), record);
+	status = connection->Put(db_versionname, std::to_string(stored_version), record);
 
 	if(status.versionMismatch()){
 		pok_debug("Encountered version missmatch in fixDBVersionMissmatch. Retrying due to possible race condition. ");
@@ -163,7 +163,7 @@ void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
 
 NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixok::db_entry &entry )
 {
-	std::string key = "pathmapDB_" + std::to_string(version);
+	std::string key = db_basename + std::to_string(version);
 	kinetic::KineticRecord record(entry.SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
 	kinetic::KineticStatus status = connection->Put(key, "", record);
 
@@ -172,7 +172,7 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 
 	/* At this point the update has been successfully completed. We should update the pathmapDB_version record to reflect this change.  */
 	kinetic::KineticRecord vrecord(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = connection->Put("pathmaDB_version", version > 1 ? std::to_string(version-1) : "", vrecord);
+	status = connection->Put(db_versionname, version > 1 ? std::to_string(version-1) : "", vrecord);
 
 	/* A version missmatch can occur if a previous putDBEntry call (possibly from another client) has not updated the pathmapDB_version key.
 	 * This could be due to
@@ -186,7 +186,7 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 
 NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_entry &entry)
 {
-	std::string key = "pathmapDB_" + std::to_string(version);
+	std::string key = db_basename + std::to_string(version);
 	std::string value, keyversion, tag;
 	kinetic::KineticStatus status = connection->Get(key, &value, &keyversion, &tag);
 
@@ -200,7 +200,7 @@ NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_
 NamespaceStatus KineticNamespace::getDBVersion (std::int64_t &version)
 {
 	std::string value, keyversion, tag;
-	kinetic::KineticStatus status = connection->Get("pathmapDB_version", &value, &keyversion, &tag);
+	kinetic::KineticStatus status = connection->Get(db_versionname, &value, &keyversion, &tag);
 
 	if(status.notFound()){
 		version = 0;

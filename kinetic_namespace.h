@@ -23,6 +23,9 @@ private:
     std::unique_ptr<kinetic::KineticConnectionFactory> con_factory;
 	std::unique_ptr<kinetic::KineticConnection> connection;
 
+	const std::string db_basename     = "pathmapDB_";
+	const std::string db_versionname	 = "pathmapDB_version";
+
 private:
 	void fixDBVersionMissmatch(std::int64_t version);
 

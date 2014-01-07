@@ -104,4 +104,42 @@ int pok_access (const char *user_path, int mode)
 }
 
 
+/** Change the permission bits of a file */
+int pok_chmod (const char *user_path, mode_t mode)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if (err){
+		pok_debug("lookup returned error code %d",err);
+		return err;
+		}
+
+	mdi->pbuf()->set_mode(mode);
+	mdi->updateACtime();
+
+	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
+	if(status.notOk())
+		return -EIO;
+	return 0;
+}
+
+/** Change the owner and group of a file */
+int pok_chown (const char *user_path, uid_t uid, gid_t gid)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if (err){
+		pok_debug("lookup returned error code %d",err);
+		return err;
+	}
+
+	mdi->pbuf()->set_id_group(gid);
+	mdi->pbuf()->set_id_user(uid);
+	mdi->updateACtime();
+
+	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
+	if(status.notOk())
+		return -EIO;
+	return 0;
+}
 

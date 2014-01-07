@@ -25,7 +25,7 @@ std::int64_t PathMapDB::getSnapshotVersion() const
 	return snapshotVersion;
 }
 
-bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove, const bool followSymlink) const
+bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool followReuse, const bool followSymlink) const
 {
 	/* Found path in snapshot */ 
 	if (snapshot.count(path))
@@ -49,7 +49,7 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 		 * */
 		if(		( snapshot.at(path).type == TargetType::NONE ) ||
 				( !followSymlink && snapshot.at(path).type == TargetType::LINK ) ||
-				( afterMove && snapshot.at(path).type == TargetType::REUSE )
+				( !followReuse   && snapshot.at(path).type == TargetType::REUSE)
 		)
 		{ /*don't remap*/ }
 		else
@@ -61,13 +61,13 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 	if(pos == std::string::npos)
 		return false;
 	path.erase(pos,std::string::npos);
-	return searchPathRecursive(path, maxTimeStamp, afterMove, true);
+	return searchPathRecursive(path, maxTimeStamp, followReuse, true);
 }
 
 std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTimeStamp, CallingType ctype) const
 {
 	int 		 numLinksFollowed = 0; 
-	bool   		 afterMove = false;
+	bool		 followReuse   = true;
 	bool 		 followSymlink = ctype == CallingType::LOOKUP ? false : true;
 	std::string  temp(user_path);
 	std::string  systemPath(user_path);
@@ -78,7 +78,7 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 		++currentReaders;
 	}	
 	
-	while(searchPathRecursive(temp, maxTimeStamp, afterMove, followSymlink)){
+	while(searchPathRecursive(temp, maxTimeStamp, followReuse, followSymlink)){
 		if(snapshot.at(temp).type == TargetType::LINK){
 			/* Guard against symbolic link loops */
 			if(++numLinksFollowed > MAXSYMLINKS){ 
@@ -86,8 +86,8 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 				break;
 			}
 		}
-		/* Remember if the target is due to a move */
-		afterMove = (snapshot.at(temp).type == TargetType::MOVE) ? true : false;
+		/* Don't follow reuse mapping after a move mapping. */
+		followReuse = (snapshot.at(temp).type == TargetType::MOVE) ? false : true;
 
 		/* Apply mapping to path */ 
 		temp = systemPath.replace(0,temp.size(),snapshot.at(temp).target);
@@ -99,22 +99,20 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 
 int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion)
 {
-	std::lock_guard<std::mutex> locker(lock);
-	while(currentReaders.load())
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-	/* No need to update */
-	if(toVersion <= snapshotVersion)
-		return 0;
-		
 	/* sanity checks */
 	assert(entries.size() == (size_t)(toVersion - fromVersion));
 	assert(fromVersion <= snapshotVersion);
 
-	std::int64_t currentVersion = snapshotVersion;
 
+	pok_debug("Current snapshot version = %d, updating interval [%d , %d]",snapshotVersion,fromVersion,toVersion);
+	/* No need to update */
+	if(toVersion <= snapshotVersion)
+		return 0;
+		
+	std::int64_t currentVersion = snapshotVersion;
 	for (auto& entry : entries){
 		currentVersion++;
+
 		if(currentVersion < fromVersion)
 			continue;
 
@@ -130,12 +128,14 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 				break;
 			default:
 				pok_error("Invalid database entry supplied. Resetting pathmapDB");
+				std::lock_guard<std::mutex> locker(lock);
+				while(currentReaders.load())
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				this->snapshotVersion = 0;
 				this->snapshot.clear();
 				return -EINVAL;
 		}
 	}
-
 	snapshotVersion = toVersion;
 	return 0;
 } 
@@ -188,7 +188,7 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
 	 * mv /a /b  [b->a, a->X]  */ 
 	if(!snapshot.count(origin)){
 		snapshot[destination] = { TargetType::MOVE, origin, 0 }; 
-		snapshot[origin] 	  = { TargetType::REUSE, "/.reuse"+std::to_string(snapshotVersion), 0 }; 
+		snapshot[origin] 	  = { TargetType::REUSE, "|reuse_"+std::to_string(snapshotVersion), 0 };
 	}
 	
 	/* There's an existing mapping with key==origin, update it 

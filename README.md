@@ -4,7 +4,7 @@ POSIX-over-Kinetic. The goal is to be POSIX compliant in a flat namespace while 
 
 
 ## Dependencies
-+ Kinetic-C-Client 
++ [Kinetic-C-Client](https://github.com/Seagate/Kinetic-C-Client)
 + **OSX** [libosxfuse](http://osxfuse.github.io)
 + **Linux** uuid-dev libssl-dev
 

@@ -45,7 +45,6 @@ public:
 	 * minimal required path permission timestamp value is stored in supplied integer. */
 	std::string toSystemPath(const char * user_path, std::int64_t &permissionTimeStamp, CallingType ctype) const;
 
-
 	/* Return current database snapshot version */ 
 	std::int64_t getSnapshotVersion() const;
 	

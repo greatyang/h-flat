@@ -69,11 +69,14 @@ void pok_destroy (void *priv)
 static struct fuse_operations pok_ops;
 static void init_pok_ops(fuse_operations *ops)
 {
-	ops->getattr 	= pok_getattr;
-	ops->fgetattr	= pok_fgetattr;
 	ops->access		= pok_access;
 	ops->chown		= pok_chown;
 	ops->chmod		= pok_chmod;
+
+	ops->getattr 	= pok_getattr;
+	ops->fgetattr	= pok_fgetattr;
+	ops->utimens	= pok_utimens;
+	ops->statfs		= pok_statfs;
 
 	ops->create		= pok_create;
 	ops->unlink		= pok_unlink;
@@ -90,6 +93,9 @@ static void init_pok_ops(fuse_operations *ops)
 
 	ops->read		= pok_read;
 	ops->write		= pok_write;
+	ops->truncate 	= pok_truncate;
+	ops->ftruncate 	= pok_ftruncate;
+
 
 	ops->init		= pok_init;
 	ops->destroy 	= pok_destroy;

@@ -1,6 +1,10 @@
 #include "main.h"
 #include "debug.h"
 
+
+/*  TODO: Design a reasonable system to keep track of allocated data keys. Especially for files with holes.
+ * 		Probably add to data-delete-list on unlink or sth similar (unique data ids so its fine) */
+
 static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, bool write)
 {
 	/* We might have to split the operation across multiple blocks */
@@ -102,3 +106,51 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 	}
 	return rtn;
 }
+
+
+static int truncate(MetadataInfo *mdi, off_t offset)
+{
+	mdi->pbuf()->set_size(offset);
+	mdi->updateACMtime();
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+
+	if(status.notOk())
+		return -EIO;
+	return 0;
+}
+
+
+/** Change the size of a file */
+int pok_truncate (const char *user_path, off_t offset)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if (err){
+		pok_debug("lookup returned error code %d",err);
+		return err;
+	}
+	return truncate(mdi.get(), offset);
+}
+
+/**
+ * Change the size of an open file
+ *
+ * This method is called instead of the truncate() method if the
+ * truncation was invoked from an ftruncate() system call.
+ *
+ * If this method is not implemented or under Linux kernel
+ * versions earlier than 2.6.15, the truncate() method will be
+ * called instead.
+ *
+ * Introduced in version 2.5
+ */
+int pok_ftruncate (const char *user_path, off_t offset, struct fuse_file_info *fi)
+{
+	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
+	if(!mdi){
+		pok_error("Write request for user path '%s' without metadata_info structure", user_path);
+		return -EINVAL;
+	}
+	return truncate(mdi, offset);
+}
+

@@ -36,3 +36,14 @@ void MetadataInfo::updateACtime(){
 	md.set_ctime(now);
 }
 
+
+void MetadataInfo::trackDataVersion(int blockNumber, const std::string &keyVersion)
+{
+	dataVersion[blockNumber] = keyVersion;
+}
+
+std::string MetadataInfo::getDataVersion(int blockNumber)
+{
+	return dataVersion[blockNumber];
+}
+

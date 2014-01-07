@@ -73,17 +73,13 @@ NamespaceStatus KineticNamespace::get( MetadataInfo *mdi, unsigned int blocknumb
 	key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
 
 	kinetic::KineticStatus status = connection->Get(key, value, &version, &tag);
+
+	if(status.ok())
+		mdi->trackDataVersion(blocknumber, version);
+
 	return status;
 }
 
-NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumber, const std::string &value)
-{
-	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
-
-	kinetic::KineticRecord record(value, mdi->getCurrentVersion(), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = connection->Put(key, mdi->getCurrentVersion(), record);
-	return status;
-}
 
 /* Convert passed version string to integer, increment, and pass it back as a string */
 static std::string incr(const std::string &version)
@@ -100,30 +96,22 @@ static std::string incr(const std::string &version)
 	return std::to_string(iversion);
 }
 
-NamespaceStatus KineticNamespace::append( MetadataInfo *mdi, const std::string &value)
+
+NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumber, const std::string &value, const PutModeType type)
 {
-	std::string  data;
-	const 	 int blocksize	= 1024 * 1024;
-	unsigned int blocknumber = ( mdi->pbuf()->size() + value.length() ) / blocksize;
-
-	std::string key, version, tag;
-	key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
-
-	/* get block data */
-	kinetic::KineticStatus status = connection->Get(key, &data, &version, &tag);
-	if(status.notAuthorized()){
-		pok_warning("No authorization to read key.");
-		return status;
+	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	std::string curVersion = "";
+	std::string newVersion = "";
+	if(type == PutModeType::ATOMIC){
+		curVersion = mdi->getDataVersion(blocknumber);
+		newVersion = incr(curVersion);
 	}
 
-	/* update block data */
-	data.append(value);
+	kinetic::KineticRecord record(value, newVersion, "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	kinetic::KineticStatus status = connection->Put(key, curVersion, record);
 
-	/* put block data with changed version number to get atomic behavior. Retry as necessary */
-	kinetic::KineticRecord record(data, incr(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = connection->Put(key, version, record);
-	if(status.versionMismatch())
-		return append(mdi,value);
+	if((type == PutModeType::ATOMIC) && status.ok())
+		mdi->trackDataVersion(blocknumber, newVersion);
 	return status;
 }
 

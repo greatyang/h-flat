@@ -93,7 +93,6 @@ static inline std::string path_to_filename(const std::string &path)
 }
 
 
-#include <bitset>
 /**
  * Create and open a file
  *
@@ -108,8 +107,7 @@ static inline std::string path_to_filename(const std::string &path)
  */
 int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 {
-	std::bitset<32> bmode (mode);
-	pok_trace("Attempting to create file with user path: %s with mode %s. Isdir?: %d",user_path,std::to_string(mode).data(),S_ISDIR(mode));
+	pok_trace("Attempting to create file with user path: %s",user_path);
 	if(fi->fh){
 		// This could be perfectly legal, I am not sure how fuse works... if it is
 		// we need to reference count metadata_info structures.
@@ -137,19 +135,12 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 		return -EINVAL;
 	}
 
-	/* Directory: insert filename with separator and update metadata. */
-	std::string file = path_to_filename(mdi->getSystemPath()).insert(0,"|");
-	status = PRIV->nspace->append(mdi_dir.get(), file);
-	if(status.ok()){
-		mdi_dir->pbuf()->set_size(mdi_dir->pbuf()->size() + file.length());
-		mdi_dir->pbuf()->set_blocks(mdi_dir->pbuf()->size() / (1024*1024) + 1);
-		mdi_dir->updateACMtime();
-		status = PRIV->nspace->putMD(mdi_dir.get());
-	}
-	if(status.notOk()){
+	/* Add filename to directory */
+	err = directory_addName( mdi_dir, path_to_filename(mdi->getSystemPath()) );
+	if(err){
 		/* TODO: delete created key if directory update fails? */
-		pok_warning("Failed updating directory at user path '%s' due to %s",user_path,status.ToString().c_str());
-		return -EINVAL;
+		pok_warning("Failed updating parent directory of user path '%s' ",user_path);
+		return err;
 	}
 
 	// while this isn't pretty, it's probably the best way to use fi->fh
@@ -157,7 +148,6 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 	pok_trace("Successfully created user path %s.",user_path);
 	return 0;
 }
-
 
 /** Release an open file
  *

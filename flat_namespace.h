@@ -38,6 +38,13 @@ public:
 };
 
 
+
+enum class PutModeType {
+	POSIX, 		// last writer wins, just overwrite without version checks
+	ATOMIC 		// only write if remote data version has not been updated since read in by this client
+};
+
+
 /* Interface for the underlying key-value store. It's deliberately high-level: exporting multiple put / get methods enables optimized
  * implementation depending on the type of key being processed while keeping such details out of the file system itself. */
 class FlatNamespace{
@@ -49,14 +56,13 @@ public:
 
 	/* File Data */
 	virtual NamespaceStatus get(	MetadataInfo *mdi, unsigned int blocknumber, std::string *value) = 0;
-	virtual NamespaceStatus put(	MetadataInfo *mdi, unsigned int blocknumber, const std::string &value) = 0;
+	virtual NamespaceStatus put(	MetadataInfo *mdi, unsigned int blocknumber, const std::string &value, const PutModeType type = PutModeType::POSIX) = 0;
 	virtual NamespaceStatus free(   MetadataInfo *mdi, unsigned int blocknumber) = 0;
-	virtual NamespaceStatus append(	MetadataInfo *mdi, const std::string &value) = 0;
 
 	/* Database Handling */
-	virtual NamespaceStatus putDBEntry(		std::int64_t version, const posixok::db_entry &entry) = 0;
-	virtual NamespaceStatus getDBEntry( 	std::int64_t version, posixok::db_entry &entry) = 0;
-	virtual NamespaceStatus getDBVersion( 	std::int64_t &version) = 0;
+	virtual NamespaceStatus putDBEntry(		std::int64_t  versionDB, const posixok::db_entry &entry) = 0;
+	virtual NamespaceStatus getDBEntry( 	std::int64_t  versionDB, posixok::db_entry &entry) = 0;
+	virtual NamespaceStatus getDBVersion( 	std::int64_t &versionDB) = 0;
 
 public:
 	virtual ~FlatNamespace(){};

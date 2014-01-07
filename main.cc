@@ -69,15 +69,6 @@ void pok_destroy (void *priv)
 static struct fuse_operations pok_ops;
 static void init_pok_ops(fuse_operations *ops)
 {
-	ops->access		= pok_access;
-	ops->chown		= pok_chown;
-	ops->chmod		= pok_chmod;
-
-	ops->getattr 	= pok_getattr;
-	ops->fgetattr	= pok_fgetattr;
-	ops->utimens	= pok_utimens;
-	ops->statfs		= pok_statfs;
-
 	ops->create		= pok_create;
 	ops->unlink		= pok_unlink;
 	ops->open		= pok_open;
@@ -88,6 +79,15 @@ static void init_pok_ops(fuse_operations *ops)
 	ops->releasedir = pok_release;
 	ops->readdir	= pok_readdir;
 
+	ops->access		= pok_access;
+	ops->chown		= pok_chown;
+	ops->chmod		= pok_chmod;
+
+	ops->getattr 	= pok_getattr;
+	ops->fgetattr	= pok_fgetattr;
+	ops->utimens	= pok_utimens;
+	ops->statfs		= pok_statfs;
+
 	ops->symlink    = pok_symlink;
 	ops->readlink	= pok_readlink;
 
@@ -95,7 +95,6 @@ static void init_pok_ops(fuse_operations *ops)
 	ops->write		= pok_write;
 	ops->truncate 	= pok_truncate;
 	ops->ftruncate 	= pok_ftruncate;
-
 
 	ops->init		= pok_init;
 	ops->destroy 	= pok_destroy;
@@ -131,15 +130,11 @@ int main(int argc, char *argv[])
 		mdi->pbuf()->set_size(0);
 		mdi->pbuf()->set_path_permission_verified(0);
 		mdi->pbuf()->set_data_unique_id("|");
-
-		NamespaceStatus status = priv->nspace->putMD(mdi.get());
-		if(status.notOk()){
-			pok_error("Failed initializing Namespace");
-			return -1;
-		}
+		status = priv->nspace->putMD(mdi.get());
 	}
-	else if (status.notOk()){
+	if (status.notOk()){
 		pok_error("Error encountered when trying to validate root metadata.");
+		delete priv;
 		return -1;
 	}
 

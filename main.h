@@ -14,6 +14,7 @@
 
 #include "pathmapdb.h"
 #include "metadata_info.h"
+#include "directorydata.pb.h"
 #include "kinetic_namespace.h"
 
 
@@ -23,9 +24,12 @@ struct pok_priv
 	std::unique_ptr<PathMapDB> 	   pmap;	// path permission & remapping
 	std::unique_ptr<FlatNamespace> nspace;	// access storage using flat namespace
 
+	const int blocksize;
+
 	pok_priv():
 		pmap(new PathMapDB()),
-		nspace(new KineticNamespace())
+		nspace(new KineticNamespace()),
+		blocksize(1024 * 1024)
 	{}
 };
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
@@ -36,12 +40,20 @@ struct pok_priv
 int lookup		 (const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
 
+/* directory > also contains some utility functionality used by other fuse operations */
+int directory_addEntry(		const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
+int directory_removeName(	const std::unique_ptr<MetadataInfo> &mdi, 	  std::string filename);
+int directory_addName(		const std::unique_ptr<MetadataInfo> &mdi_dir, std::string filename);
+
+int pok_readdir (const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
+int pok_mkdir 	(const char *user_path, mode_t mode);
+
 /* permission */
 int pok_access  (const char *user_path, int mode);
 int pok_chmod 	(const char *user_path, mode_t mode);
 int pok_chown 	(const char *user_path, uid_t uid, gid_t gid);
 
-/* stat */
+/* attr */
 int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi);
 int pok_getattr (const char *user_path, struct stat *attr);
 int pok_utimens	(const char *user_path, const struct timespec tv[2]);
@@ -58,10 +70,6 @@ int pok_read 	(const char* user_path, char *buf, size_t size, off_t offset, stru
 int pok_write	(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi);
 int pok_ftruncate (const char *user_path, off_t offset, struct fuse_file_info *fi);
 int pok_truncate  (const char *user_path, off_t offset);
-
-/* directory */
-int pok_readdir (const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
-int pok_mkdir 	(const char *user_path, mode_t mode);
 
 /* link */
 int pok_symlink (const char *link_destination, const char *user_path);

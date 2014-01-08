@@ -66,8 +66,6 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
 	mdi->pbuf()->set_mode(mode);
 	mdi->pbuf()->set_data_unique_id(uuid_parsed);
-	if(S_ISDIR(mode))
-		mdi->pbuf()->set_blocks(1);
 
 	/* Inherit path permissions existing for directory */
 	for(int i=0; i<mdi_parent->pbuf()->path_permission_size(); i++){
@@ -77,7 +75,7 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 		e->set_uid (e_dir.uid());
 		e->set_type(e_dir.type());
 	}
-	/* Add path permissions precomputed for directorie's children. */
+	/* Add path permissions precomputed for directory's children. */
 	for(int i=0; i<mdi_parent->pbuf()->path_permission_children_size(); i++){
 		posixok::Metadata::ReachabilityEntry e_dir = mdi_parent->pbuf()->path_permission_children(i);
 		posixok::Metadata::ReachabilityEntry *e    = mdi->pbuf()->add_path_permission();
@@ -87,6 +85,11 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 	}
 	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
 	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
+
+	if(S_ISDIR(mode)){
+		mdi->pbuf()->set_blocks(1);
+		mdi->computePathPermissionChildren();
+	}
 }
 
 

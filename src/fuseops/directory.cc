@@ -85,7 +85,7 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
-	pok_debug("Reading directory at user path %s with %ld allocated blocks and a byte size of %ld",user_path,mdi->pbuf()->blocks(),mdi->pbuf()->size());
+	pok_debug("Reading directory at user path %s with %d allocated blocks and a byte size of %d",user_path,mdi->pbuf()->blocks(),mdi->pbuf()->size());
 
 	std::unordered_map<std::string, int> ncount;
 	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();

@@ -1,7 +1,9 @@
 #include "main.h"
 #include "debug.h"
-
 #include <unistd.h>
+
+#define LOOKUP_REQ(user_path, mdi) {int err=lookup(user_path, mdi); if (err){pok_debug("lookup returned error code %d",err);return err;}}
+
 
 /**
  * Check file access permissions
@@ -19,14 +21,10 @@ int pok_access (const char *user_path, int mode)
 	/* OSX tries to verify access to root a hundred times or so... let's not go too crazy. */
 	if(strlen(user_path)==1)
 		return 0;
-
 	pok_trace("Checking access for user_path '%s'",user_path);
+
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
-		return err;
-	}
+	LOOKUP_REQ(user_path,mdi);
 
 	/* only test for existence of file */
 	if(mode == F_OK)
@@ -51,20 +49,43 @@ int pok_access (const char *user_path, int mode)
 	return -EACCES;
 }
 
+static NamespaceStatus permission_change_dir(std::unique_ptr<MetadataInfo> &mdi, const char *user_path)
+{
+	/* check if the permission change results in a change of path permissions */
+	if(!mdi->computePathPermissionChildren())
+		return NamespaceStatus::makeOk();
+
+	/* add db_entry to permanent storage. */
+	posixok::db_entry entry;
+	entry.set_type(entry.NONE);
+	entry.set_origin(user_path);
+	NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
+
+	if(status.versionMismatch())
+		update_pathmapDB();
+
+	if(status.ok())
+		PRIV->pmap->addPermissionChange(user_path);
+	return status;
+}
+
 
 /** Change the permission bits of a file */
 int pok_chmod (const char *user_path, mode_t mode)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
-		return err;
-		}
+	LOOKUP_REQ(user_path, mdi);
 
 	mdi->pbuf()->set_mode(mode);
 	mdi->updateACtime();
 
+	if(S_ISDIR(mode)){
+		NamespaceStatus s = permission_change_dir(mdi, user_path);
+		if(s.versionMismatch()) /* Retry if database wasn't up to date. */
+			return pok_chmod (user_path, mode);
+		if(s.notOk())
+			return -EIO;
+	}
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk())
 		return -EIO;
@@ -75,16 +96,19 @@ int pok_chmod (const char *user_path, mode_t mode)
 int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
-		return err;
-	}
+	LOOKUP_REQ(user_path, mdi);
 
 	mdi->pbuf()->set_id_group(gid);
 	mdi->pbuf()->set_id_user(uid);
 	mdi->updateACtime();
 
+	if(S_ISDIR(mdi->pbuf()->mode())){
+		NamespaceStatus s = permission_change_dir(mdi, user_path);
+		if(s.versionMismatch()) /* Retry if database wasn't up to date. */
+			return pok_chown (user_path, uid, gid);
+		if(s.notOk())
+			return -EIO;
+	}
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk())
 		return -EIO;

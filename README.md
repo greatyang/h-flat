@@ -11,7 +11,7 @@ POSIX-over-Kinetic. The goal is to be POSIX compliant in a flat namespace while 
 + Install any missing dependencies
 + Run `cmake .` 
 
-  Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory in the POSIX-o-K root directory and call `cmake ..` from there. 
+  Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory anywhere you like and call `cmake <path/to/POSIX-o-K>` from there. 
 + Run `make`
 
 ## Debugging

@@ -13,7 +13,7 @@ private:
 	std::string  systemPath;		// key in flat namespace where metadata is stored
 	std::string  currentVersion;	// current version of metadata key in flat namespace
 
-	std::map<int, std::string> dataVersion; // keep track of key-versions of data keys that have been read in map[blocknum] == keyVersion
+	std::map<int, std::string> dataVersion; // keep track of key-versions of data keys that have been read in // map[blocknum] == keyVersion
 
 public:
 	explicit MetadataInfo(const std::string &systemPath, const std::string &currentVersion):
@@ -30,6 +30,9 @@ public:
 
 	void 		trackDataVersion(int blockNumber, const std::string &keyVersion);
 	std::string getDataVersion  (int blockNumber);
+
+	/* return 'true' if changed, 'false' if unchanged. */
+	bool computePathPermissionChildren();
 
 	const std::string & getSystemPath();
 	const std::string & getCurrentVersion();

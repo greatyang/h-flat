@@ -156,6 +156,7 @@ void PathMapDB::addSoftLink	(std::string origin, std::string destination)
 
 	snapshot[ snapshot.count(origin) ? snapshot[origin].target : origin ] =
 								{TargetType::LINK, std::string(destination), snapshotVersion};
+	printSnapshot();
 }
 	
 void PathMapDB::addPermissionChange(std::string path)
@@ -169,6 +170,7 @@ void PathMapDB::addPermissionChange(std::string path)
 	snapshot[path] = snapshot.count(path) ? 
 	   PMEntry { snapshot[path].type, snapshot[path].target, snapshotVersion } : 
 	   PMEntry { TargetType::NONE, std::string(), snapshotVersion };
+    printSnapshot();
 }
 
 /* Keep in mind that the client validated the operation against the file system at this point. This means: 
@@ -206,6 +208,7 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
 		snapshot.erase(destination);
 		snapshot.erase(origin);
 	}
+ 	printSnapshot();
 }
 
 

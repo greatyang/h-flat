@@ -4,7 +4,7 @@ message db_entry {
 	
 	// Note that there is no REUSE type as in pathmapdb. This type is implicit and is only computed for the 
 	// in-memory hashmap representation of the database. Similarly, there is no permissionTimeStamp as it is 
-	// similarly implicit by the entry database version number.  
+	// similarly implicit by the entry database version number.  [HU, not REALLY.. unless NONE we don't know if it is set] 
 	enum TargetType { 
 		MOVE 	= 1;
 		LINK	= 2;

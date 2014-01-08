@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 		mdi->pbuf()->set_id_group(0);
 		mdi->pbuf()->set_id_user(0);
 		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-		mdi->pbuf()->set_blocks(0);
+		mdi->pbuf()->set_blocks(1);
 		mdi->pbuf()->set_size(0);
 		mdi->pbuf()->set_path_permission_verified(0);
 		mdi->pbuf()->set_data_unique_id("|");

@@ -40,11 +40,8 @@ struct pok_priv
 int lookup		 (const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
 
-/* directory > also contains some utility functionality used by other fuse operations */
+/* directory > also contains addEntry utility functionality used by other fuse operations */
 int directory_addEntry(		const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
-int directory_removeName(	const std::unique_ptr<MetadataInfo> &mdi, 	  std::string filename);
-int directory_addName(		const std::unique_ptr<MetadataInfo> &mdi_dir, std::string filename);
-
 int pok_readdir (const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
 int pok_mkdir 	(const char *user_path, mode_t mode);
 
@@ -77,5 +74,9 @@ int pok_readlink (const char *user_path, char *buffer, size_t size);
 
 /* main */
 int update_pathmapDB();
+inline std::string path_to_filename(const std::string &path)
+{
+	return path.substr(path.find_last_of('/')+1);
+}
 
 #endif

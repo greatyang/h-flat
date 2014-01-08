@@ -12,6 +12,7 @@ package posixok;
 // This explains the entry type and req_version fields. A client will filter out entries that have been added (or removed) 
 // to the directory due to a directory move that is not in its local snapshot as these entries will be tagged with a higher
 // req_version. 
+// SUB entries also allow deferring costs of removing files from large directories to housekeeping. 
 
 message DirectoryEntry {
 	enum Type {

@@ -66,6 +66,8 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
 	mdi->pbuf()->set_mode(mode);
 	mdi->pbuf()->set_data_unique_id(uuid_parsed);
+	if(S_ISDIR(mode))
+		mdi->pbuf()->set_blocks(1);
 
 	/* Inherit path permissions existing for directory */
 	for(int i=0; i<mdi_parent->pbuf()->path_permission_size(); i++){
@@ -85,11 +87,6 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 	}
 	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
 	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
-}
-
-static inline std::string path_to_filename(const std::string &path)
-{
-	return path.substr(path.find_last_of('/')+1);
 }
 
 
@@ -136,7 +133,9 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 	}
 
 	/* Add filename to directory */
-	err = directory_addName( mdi_dir, path_to_filename(mdi->getSystemPath()) );
+	posixok::DirectoryEntry e;
+	e.set_name( path_to_filename(mdi->getSystemPath()) );
+	err = directory_addEntry( mdi_dir, e );
 	if(err){
 		/* TODO: delete created key if directory update fails? */
 		pok_warning("Failed updating parent directory of user path '%s' ",user_path);

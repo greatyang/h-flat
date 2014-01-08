@@ -16,6 +16,10 @@
  */
 int pok_access (const char *user_path, int mode)
 {
+	/* OSX tries to verify access to root a hundred times or so... let's not go too crazy. */
+	if(strlen(user_path)==1)
+		return 0;
+
 	pok_trace("Checking access for user_path '%s'",user_path);
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);

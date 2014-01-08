@@ -16,7 +16,7 @@ int pok_readlink (const char *user_path, char *buffer, size_t size)
 	link_destination = PRIV->pmap->toSystemPath(user_path, pathPermissionTimeStamp, CallingType::READLINK);
 
 	if(link_destination.length() >= size){
-		pok_warning("buffer too small to fit link destination.");
+		pok_debug("buffer too small to fit link destination.");
 		strncpy(buffer, link_destination.c_str(), size);
 		buffer[size-1] = '\0';
 	}
@@ -52,7 +52,11 @@ int pok_symlink (const char *link_destination, const char *user_path)
 
 	/* If 3) failed, undo the previous create. */
 	if(status.notOk()){
-		pok_unlink(user_path);
+		err = pok_unlink(user_path);
+		if(err){
+			pok_error("Failed unlinking created metadata key after failure in database update.");
+			return err;
+		}
 
 		/* snapshot wasn't up-to-date after all. retry */
 		if(status.versionMismatch())

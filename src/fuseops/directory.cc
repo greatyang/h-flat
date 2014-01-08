@@ -6,9 +6,7 @@
 /* Adding an entry to a directory. To remove an entry add an entry with type SUB and let housekeeping handle the rest. */
 int directory_addEntry(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e)
 {
-		std::string value;
-
-	/* */
+	std::string value;
 	NamespaceStatus status = PRIV->nspace->get(mdi.get(), mdi->pbuf()->blocks() - 1 , &value);
 	if(status.notFound()){
 		/* If we have a fresh block that's fine. */

@@ -72,6 +72,9 @@ int pok_truncate  (const char *user_path, off_t offset);
 int pok_symlink (const char *link_destination, const char *user_path);
 int pok_readlink (const char *user_path, char *buffer, size_t size);
 
+/* rename */
+int pok_rename (const char *user_path_from, const char *user_path_to);
+
 /* main */
 int update_pathmapDB();
 inline std::string path_to_filename(const std::string &path)

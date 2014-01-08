@@ -137,8 +137,7 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 	e.set_name( path_to_filename(mdi->getSystemPath()) );
 	err = directory_addEntry( mdi_dir, e );
 	if(err){
-		/* TODO: delete created key if directory update fails? */
-		pok_warning("Failed updating parent directory of user path '%s' ",user_path);
+		pok_error("Failed updating parent directory of user path '%s' ",user_path);
 		return err;
 	}
 

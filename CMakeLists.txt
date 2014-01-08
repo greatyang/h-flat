@@ -77,6 +77,7 @@ add_executable(POSIX-o-K
 	 src/fuseops/file.cc
 	 src/fuseops/link.cc
 	 src/fuseops/permission.cc
+	 src/fuseops/rename.cc
 	 src/generated/database.pb.cc
 	 src/generated/directorydata.pb.cc
 	 src/generated/metadata.pb.cc

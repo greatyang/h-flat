@@ -96,6 +96,8 @@ static void init_pok_ops(fuse_operations *ops)
 	ops->truncate 	= pok_truncate;
 	ops->ftruncate 	= pok_ftruncate;
 
+	ops->rename 	= pok_rename;
+
 	ops->init		= pok_init;
 	ops->destroy 	= pok_destroy;
 }

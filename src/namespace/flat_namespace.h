@@ -55,7 +55,7 @@ public:
 	virtual NamespaceStatus deleteMD( MetadataInfo *mdi ) = 0;
 
 	/* File Data */
-	virtual NamespaceStatus get(	MetadataInfo *mdi, unsigned int blocknumber, std::string *value) = 0;
+	virtual NamespaceStatus get(	MetadataInfo *mdi, unsigned int blocknumber, std::string &value) = 0;
 	virtual NamespaceStatus put(	MetadataInfo *mdi, unsigned int blocknumber, const std::string &value, const PutModeType type = PutModeType::POSIX) = 0;
 	virtual NamespaceStatus free(   MetadataInfo *mdi, unsigned int blocknumber) = 0;
 

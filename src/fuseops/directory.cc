@@ -7,7 +7,7 @@
 int directory_addEntry(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e)
 {
 	std::string value;
-	NamespaceStatus status = PRIV->nspace->get(mdi.get(), mdi->pbuf()->blocks() - 1 , &value);
+	NamespaceStatus status = PRIV->nspace->get(mdi.get(), mdi->pbuf()->blocks() - 1 , value);
 	if(status.notFound()){
 		/* If we have a fresh block that's fine. */
 	}
@@ -93,7 +93,7 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 	for(unsigned int blocknum=0; blocknum < mdi->pbuf()->blocks(); blocknum++)
 	{
 		std::string value;
-		if(PRIV->nspace->get(mdi, blocknum, &value).notOk()){
+		if(PRIV->nspace->get(mdi, blocknum, value).notOk()){
 			pok_warning("Failed obtaining block #%d.", blocknum);
 			continue;
 		}

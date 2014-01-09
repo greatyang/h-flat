@@ -8,7 +8,7 @@ ExternalProject_add(
     kinetic_cpp_client
     PREFIX "vendor"
     GIT_REPOSITORY "git@github.com:Seagate/Kinetic-C-Client.git"
-    GIT_TAG "c146b67611ed3dcf9567e0c6160a8b28a6b83cb2"
+    GIT_TAG "" 
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""
 )

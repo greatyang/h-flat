@@ -2,29 +2,16 @@
 #define KINETIC_NAMESPACE_H_
 
 #include "flat_namespace.h"
+#include "kinetic/connection_handle.h"
 #include <memory>
-
-#include "kinetic/kinetic_connection_factory.h"
-#include "kinetic_connection.h"
-#include "value_factory.h"
-#include "hmac_provider.h"
 
 
 /*
  * Kinetic namespace. Simple one drive / one connection version for now, needs to be extended to be useful in real life.
  */
-
-
-
 class KineticNamespace final : public FlatNamespace {
-
 private:
-	com::seagate::kinetic::HmacProvider 			 hmac_provider;
-    com::seagate::kinetic::ValueFactory 			 value_factory;
-
-    std::unique_ptr<kinetic::KineticConnectionFactory> con_factory;
-	std::unique_ptr<kinetic::KineticConnection> connection;
-
+	std::unique_ptr<kinetic::ConnectionHandle> con;
 	const std::string db_basename    	 = "pathmapDB_";
 	const std::string db_versionname	 = "pathmapDB_version";
 
@@ -38,7 +25,7 @@ public:
 	NamespaceStatus deleteMD(MetadataInfo *mdi);
 
 	/* Data */
-	NamespaceStatus get(	 MetadataInfo *mdi, unsigned int blocknumber, std::string *value);
+	NamespaceStatus get(	 MetadataInfo *mdi, unsigned int blocknumber, std::string &value);
 	NamespaceStatus put(	 MetadataInfo *mdi, unsigned int blocknumber, const std::string &value, const PutModeType type );
 	NamespaceStatus free(    MetadataInfo *mdi, unsigned int blocknumber);
 

@@ -1,11 +1,6 @@
-#include "debug.h"
 #include "kinetic_namespace.h"
-
+#include "debug.h"
 #include "kinetic/kinetic_connection_factory.h"
-#include "kinetic/connection_options.h"
-#include "kinetic/status.h"
-
-#include "protobufutil/message_stream.h"
 
 #include <exception>
 #include <chrono>
@@ -22,16 +17,15 @@ KineticNamespace::KineticNamespace()
 	con_options.user_id  = 1;
 	con_options.hmac_key = "asdfasdf";
 
-    palominolabs::protobufutil::MessageStreamFactory * message_stream_factory = new palominolabs::protobufutil::MessageStreamFactory(NULL, value_factory);
-    con_factory = std::unique_ptr<kinetic::KineticConnectionFactory>(new kinetic::KineticConnectionFactory(hmac_provider, message_stream_factory));
+	kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
 
-	kinetic::KineticConnection *kineticConnection = nullptr;
-	kinetic::Status con = con_factory->NewConnection(con_options, &kineticConnection);
-	if(!con.ok() || !kineticConnection){
-		pok_debug("Unable to connect, Error: %s",con.ToString().c_str());
-		throw std::runtime_error(con.ToString());
+	kinetic::ConnectionHandle *kineticConnection = nullptr;
+	kinetic::Status status = factory.NewConnection(con_options, &kineticConnection);
+	if(!status.ok() || !kineticConnection){
+		pok_debug("Unable to connect, Error: %s",status.ToString().c_str());
+		throw std::runtime_error(status.ToString());
 	}
-	connection = std::unique_ptr<kinetic::KineticConnection>(kineticConnection);
+	con = std::unique_ptr<kinetic::ConnectionHandle>(kineticConnection);
 }
 
 KineticNamespace::~KineticNamespace()
@@ -39,24 +33,26 @@ KineticNamespace::~KineticNamespace()
 }
 
 
-NamespaceStatus KineticNamespace::getMD( MetadataInfo *mdi)
+NamespaceStatus KineticNamespace::getMD(MetadataInfo *mdi)
 {
-	std::string value, version, tag;
-	kinetic::KineticStatus status = connection->Get(mdi->getSystemPath(), &value, &version, &tag);
+	kinetic::KineticRecord *record = nullptr;
+	kinetic::KineticStatus  status = con->blocking().Get(mdi->getSystemPath(), &record);
 
-	if(status.ok())
-		if(!mdi->pbuf()->ParseFromString(value))
-			return NamespaceStatus::makeInvalid();
-
-	mdi->setCurrentVersion(version);
+	if(status.ok()){
+		if(!mdi->pbuf()->ParseFromString(record->value()))
+			status = NamespaceStatus::makeInvalid();
+		else
+			mdi->setCurrentVersion(record->version());
+	}
+	if(record)
+		delete record;
 	return status;
 }
 
 NamespaceStatus KineticNamespace::KineticNamespace::putMD(MetadataInfo *mdi)
 {
-	kinetic::KineticRecord record(mdi->pbuf()->SerializeAsString(), mdi->getCurrentVersion(), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = connection->Put(mdi->getSystemPath(), mdi->getCurrentVersion(), record);
-
+	kinetic::KineticRecord record(mdi->pbuf()->SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	kinetic::KineticStatus status = con->blocking().Put(mdi->getSystemPath(), "", true, record);
 	return status;
 }
 
@@ -67,16 +63,16 @@ NamespaceStatus KineticNamespace::deleteMD( MetadataInfo *mdi )
 }
 
 
-NamespaceStatus KineticNamespace::get( MetadataInfo *mdi, unsigned int blocknumber, std::string *value)
+NamespaceStatus KineticNamespace::get( MetadataInfo *mdi, unsigned int blocknumber, std::string &value)
 {
-	std::string key, version, tag;
-	key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	kinetic::KineticRecord *record = nullptr;
+	kinetic::KineticStatus  status = con->blocking().Get(key, &record);
 
-	kinetic::KineticStatus status = connection->Get(key, value, &version, &tag);
-
-	if(status.ok())
-		mdi->trackDataVersion(blocknumber, version);
-
+	if(status.ok()){
+		mdi->trackDataVersion(blocknumber, record->version());
+		value = record->value();
+	}
 	return status;
 }
 
@@ -84,6 +80,9 @@ NamespaceStatus KineticNamespace::get( MetadataInfo *mdi, unsigned int blocknumb
 /* Convert passed version string to integer, increment, and pass it back as a string */
 static std::string incr(const std::string &version)
 {
+	if(version.empty())
+		return std::to_string(1);
+
 	std::uint64_t iversion;
 	try{
 		iversion = std::stoll(version);
@@ -108,7 +107,7 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 	}
 
 	kinetic::KineticRecord record(value, newVersion, "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = connection->Put(key, curVersion, record);
+	kinetic::KineticStatus status = con->blocking().Put(key, curVersion, type == PutModeType::POSIX ? true : false, record);
 
 	if((type == PutModeType::ATOMIC) && status.ok())
 		mdi->trackDataVersion(blocknumber, newVersion);
@@ -136,8 +135,8 @@ void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
 	if(stored_version > version)
 		return;
 
-	kinetic::KineticRecord record(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = connection->Put(db_versionname, std::to_string(stored_version), record);
+	kinetic::KineticRecord vrecord("", std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	status = con->blocking().Put(db_versionname, std::to_string(stored_version), false , vrecord);
 
 	if(status.versionMismatch()){
 		pok_debug("Encountered version missmatch in fixDBVersionMissmatch. Retrying due to possible race condition. ");
@@ -153,14 +152,14 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 {
 	std::string key = db_basename + std::to_string(version);
 	kinetic::KineticRecord record(entry.SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = connection->Put(key, "", record);
+	kinetic::KineticStatus status = con->blocking().Put(key, "", false, record);
 
 	if(status.notOk())
 		return status;
 
 	/* At this point the update has been successfully completed. We should update the pathmapDB_version record to reflect this change.  */
-	kinetic::KineticRecord vrecord(std::to_string(version), std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = connection->Put(db_versionname, version > 1 ? std::to_string(version-1) : "", vrecord);
+	kinetic::KineticRecord vrecord("", std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	status = con->blocking().Put(db_versionname, version > 1 ? std::to_string(version-1) : "", false, vrecord);
 
 	/* A version missmatch can occur if a previous putDBEntry call (possibly from another client) has not updated the pathmapDB_version key.
 	 * This could be due to
@@ -175,20 +174,21 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_entry &entry)
 {
 	std::string key = db_basename + std::to_string(version);
-	std::string value, keyversion, tag;
-	kinetic::KineticStatus status = connection->Get(key, &value, &keyversion, &tag);
+	kinetic::KineticRecord *record = nullptr;
+	kinetic::KineticStatus  status = con->blocking().Get(key, &record);
 
 	if(status.ok())
-		if(!entry.ParseFromString(value))
-			return NamespaceStatus::makeInvalid();
+		if(!entry.ParseFromString(record->value()))
+			status = NamespaceStatus::makeInvalid();
+
+	if(record) delete record;
 	return status;
 }
 
-
 NamespaceStatus KineticNamespace::getDBVersion (std::int64_t &version)
 {
-	std::string value, keyversion, tag;
-	kinetic::KineticStatus status = connection->Get(db_versionname, &value, &keyversion, &tag);
+	std::string keyVersion;
+	kinetic::KineticStatus status = con->blocking().GetVersion(db_versionname, &keyVersion);
 
 	if(status.notFound()){
 		version = 0;
@@ -198,10 +198,10 @@ NamespaceStatus KineticNamespace::getDBVersion (std::int64_t &version)
 		return status;
 
 	try{
-		version = std::stoll(value);
+		version = std::stoll(keyVersion);
 	}
 	catch(std::exception& e){
-		pok_warning("Exception thrown during conversion of string '%s' to int, resetting key-version to 0. Exception Reason: %s \n .",value.c_str(), e.what());
+		pok_warning("Exception thrown during conversion of string '%s' to int. Exception Reason: %s \n .",keyVersion.c_str(), e.what());
 		return NamespaceStatus::makeInternalError(e.what());
 	}
 	return status;

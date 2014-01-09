@@ -17,13 +17,10 @@ static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, 
 		int	inblocksize		=  sizeleft > blocksize-inblockstart ? blocksize-inblockstart : sizeleft;
 
 		std::string value;
-		NamespaceStatus getD = PRIV->nspace->get(mdi, blocknum, &value);
+		NamespaceStatus getD = PRIV->nspace->get(mdi, blocknum, value);
 
 		/* Should never happen, user shouldn't have been able to open the file. */
-		if(getD.notAuthorized() || getD.notValid()){
-			pok_error("Failure reading data block %s for key = %s due to %s",blocknum, mdi->getSystemPath().c_str(), getD.ToString().c_str());
-			return -EINVAL;
-		}
+		assert(!getD.notAuthorized() && !getD.notValid());
 
 		/* Perfectly fine if file has holes, just fill buffer with zeros in this case. */
 		if(getD.notFound()){

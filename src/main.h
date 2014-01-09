@@ -75,6 +75,11 @@ int pok_readlink (const char *user_path, char *buffer, size_t size);
 /* rename */
 int pok_rename (const char *user_path_from, const char *user_path_to);
 
+/* sync */
+int pok_fsync	(const char *user_path, int datasync, struct fuse_file_info *fi);
+int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi);
+int pok_flush 	(const char *user_path, struct fuse_file_info *fi);
+
 /* main */
 int update_pathmapDB();
 inline std::string path_to_filename(const std::string &path)

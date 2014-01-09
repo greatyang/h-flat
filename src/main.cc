@@ -98,6 +98,10 @@ static void init_pok_ops(fuse_operations *ops)
 
 	ops->rename 	= pok_rename;
 
+	ops->fsync 		= pok_fsync;
+	ops->fsyncdir	= pok_fsyncdir;
+	ops->flush		= pok_flush;
+
 	ops->init		= pok_init;
 	ops->destroy 	= pok_destroy;
 }

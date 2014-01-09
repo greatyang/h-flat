@@ -1,6 +1,6 @@
 #define CATCH_CONFIG_MAIN 
 #include "catch.hpp"
-#include "../pathmapdb.cc"
+#include "../pathmap_db.cc"
 
 /* File System: []
  * Database:    [] */ 

@@ -91,6 +91,6 @@ int pok_statfs (const char *user_path, struct statvfs *s)
 {
 	/* Do we want to keep an inodecount and a blockcount?
 	 * If yes we'd probably update infrequently (e.g. on client unmount)  */
-	s->f_bsize  = 1024*1024;
+	s->f_bsize  = PRIV->blocksize;
 	return 0;
 }

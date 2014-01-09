@@ -1,5 +1,6 @@
 #include "main.h"
 #include "debug.h"
+#include "fuseops.h"
 
 /** Read the target of a symbolic link
  *

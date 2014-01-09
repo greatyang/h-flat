@@ -15,12 +15,23 @@ message Metadata {
 	optional uint32	size		= 8 	[default = 0];	// size in bytes
 	optional uint32	blocks		= 9		[default = 0];	// allocated file system blocks
 
+	message ExtendedAttribute {
+		required string name  = 1; 
+		optional string value = 2;
+	}
+	repeated ExtendedAttribute xattr = 10;
 
 	//////////////////////////////////////////
 	// Flat Namespace Metadata
 	//
-	optional string data_unique_id = 11; 	// base-key to all data fields: we don't want to have to move data when we move metadata 
-
+	message BlockIntervall {
+		required uint32	start = 1;
+		required uint32  end  = 2;
+	}
+	
+	optional string 		data_unique_id 	= 11; 	// base-key to all data fields: we don't want to have to move data when we move metadata 
+	repeated BlockIntervall data_keys		= 12; 	// tracking all allocated data-keys to support deletion of big files with holes without key-range requests
+	
 
 	//////////////////////////////////////////
 	// Path Permission Metadata

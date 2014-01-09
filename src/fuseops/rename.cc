@@ -1,5 +1,6 @@
 #include "main.h"
 #include "debug.h"
+#include "fuseops.h"
 
 /** Rename a file or directory. */
 int pok_rename (const char *user_path_from, const char *user_path_to)

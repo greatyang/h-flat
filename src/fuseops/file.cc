@@ -54,7 +54,7 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
 
 
 
-static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+static void initialize_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
 	uuid_t uuid;
 	uuid_generate(uuid);
@@ -68,30 +68,21 @@ static void init_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_
 	mdi->pbuf()->set_data_unique_id(uuid_parsed);
 
 	/* Inherit path permissions existing for directory */
-	for(int i=0; i<mdi_parent->pbuf()->path_permission_size(); i++){
-		posixok::Metadata::ReachabilityEntry e_dir = mdi_parent->pbuf()->path_permission(i);
-		posixok::Metadata::ReachabilityEntry *e    = mdi->pbuf()->add_path_permission();
-		e->set_gid (e_dir.gid());
-		e->set_uid (e_dir.uid());
-		e->set_type(e_dir.type());
-	}
-	/* Add path permissions precomputed for directory's children. */
-	for(int i=0; i<mdi_parent->pbuf()->path_permission_children_size(); i++){
-		posixok::Metadata::ReachabilityEntry e_dir = mdi_parent->pbuf()->path_permission_children(i);
-		posixok::Metadata::ReachabilityEntry *e    = mdi->pbuf()->add_path_permission();
-		e->set_gid (e_dir.gid());
-		e->set_uid (e_dir.uid());
-		e->set_type(e_dir.type());
-	}
+	mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());
 	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
 	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
+
+	/* Add path permissions precomputed for directory's children. */
+	for(int i=0; i < mdi_parent->pbuf()->path_permission_children_size(); i++){
+		posixok::Metadata::ReachabilityEntry *e = mdi->pbuf()->add_path_permission();
+		e->CopyFrom( mdi_parent->pbuf()->path_permission_children(i) );
+	}
 
 	if(S_ISDIR(mode)){
 		mdi->pbuf()->set_blocks(1);
 		mdi->computePathPermissionChildren();
 	}
 }
-
 
 /**
  * Create and open a file
@@ -128,7 +119,7 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 
 
 	/* File: initialize metadata and write metadata-key to drive*/
-	init_metadata(mdi, mdi_dir, mode);
+	initialize_metadata(mdi, mdi_dir, mode);
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk()){
 		pok_warning("Failed creating key '%s' due to %s",mdi->getSystemPath().c_str());

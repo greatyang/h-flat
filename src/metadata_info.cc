@@ -82,8 +82,8 @@ bool MetadataInfo::computePathPermissionChildren()
 	}
 
 	auto equal = [](const posixok::Metadata_ReachabilityEntry &lhs, const posixok::Metadata_ReachabilityEntry &rhs) -> bool {
-		if(lhs.uid()  != rhs.uid()) return false;
-		if(lhs.gid()  != rhs.gid()) return false;
+		if(lhs.uid()  != rhs.uid())  return false;
+		if(lhs.gid()  != rhs.gid())  return false;
 		if(lhs.type() != rhs.type()) return false;
 		return true;
 	};
@@ -105,10 +105,8 @@ bool MetadataInfo::computePathPermissionChildren()
 	if(changed){
 		md.mutable_path_permission_children()->Clear();
 		for (auto it = v.begin(); it != v.end(); it++){
-			posixok::Metadata_ReachabilityEntry *e = md.mutable_path_permission_children()->Add();
-			e->set_gid((*it).gid());
-			e->set_uid((*it).uid());
-			e->set_type((*it).type());
+			posixok::Metadata_ReachabilityEntry *entry = md.mutable_path_permission_children()->Add();
+			entry->CopyFrom(*it);
 		}
 	}
 	return changed;

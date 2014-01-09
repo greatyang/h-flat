@@ -13,7 +13,8 @@ private:
 	std::string  systemPath;		// key in flat namespace where metadata is stored
 	std::string  currentVersion;	// current version of metadata key in flat namespace
 
-	std::map<int, std::string> dataVersion; // keep track of key-versions of data keys that have been read in // map[blocknum] == keyVersion
+	std::map<int, std::string> dataVersion; // keep track of key-versions of data keys that have been read in
+											// map[blocknum] == keyVersion
 
 public:
 	explicit MetadataInfo(const std::string &systemPath, const std::string &currentVersion):
@@ -23,17 +24,24 @@ public:
 	~MetadataInfo(){};
 
 public:
-	posixok::Metadata * pbuf(); 								// direct access to protobuf structure
+	// initialize md values based on parent
+	void initialize(const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode);
 
+	// direct access to protobuf structure
+	posixok::Metadata * pbuf();
+
+	// convenience functions to update timestamps in protobuf
 	void updateACMtime();
 	void updateACtime();
 
-	void 		trackDataVersion(int blockNumber, const std::string &keyVersion);
-	std::string getDataVersion  (int blockNumber);
-
-	/* return 'true' if changed, 'false' if unchanged. */
+	// contains all the path permission computation
+	// returns 'true' if changed, 'false' if unchanged.
 	bool computePathPermissionChildren();
 
+
+	// get & set
+	void 		trackDataVersion(int blockNumber, const std::string &keyVersion);
+	std::string getDataVersion  (int blockNumber);
 	const std::string & getSystemPath();
 	const std::string & getCurrentVersion();
 	void setSystemPath(const std::string &systemPath);

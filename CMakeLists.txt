@@ -73,11 +73,12 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
 add_executable(POSIX-o-K
 	 src/main.cc
-	 src/lookup.cc
+	 src/util.cc
 	 src/metadata_info.cc
-	 src/pathmapdb.cc
+	 src/pathmap_db.cc
 	 src/namespace/kinetic_namespace.cc
 	 src/fuseops/attr.cc
+	 src/fuseops/xattr.cc
 	 src/fuseops/data.cc
 	 src/fuseops/directory.cc
 	 src/fuseops/file.cc

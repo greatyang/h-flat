@@ -1,6 +1,5 @@
 #ifndef PATHMAPDB_H
 #define PATHMAPDB_H
-
 #include <unordered_map>
 #include <atomic>
 #include <mutex>

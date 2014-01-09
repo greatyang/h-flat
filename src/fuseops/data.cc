@@ -8,7 +8,7 @@
 static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, bool write)
 {
 	/* We might have to split the operation across multiple blocks */
-	const int blocksize	= 1024 * 1024;
+	int blocksize 		= PRIV->blocksize;
 	int sizeleft 		= size;
 	int blocknum    	= offset / blocksize;
 

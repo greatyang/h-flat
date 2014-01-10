@@ -17,7 +17,7 @@ message Metadata {
 
 	message ExtendedAttribute {
 		required string name  = 1; 
-		optional string value = 2;
+		optional bytes  value = 2;
 	}
 	repeated ExtendedAttribute xattr = 10;
 

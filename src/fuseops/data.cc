@@ -16,21 +16,28 @@ static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, 
 		int inblockstart 	=  offset > blocknum * blocksize ? (offset - blocknum * blocksize ) : 0;
 		int	inblocksize		=  sizeleft > blocksize-inblockstart ? blocksize-inblockstart : sizeleft;
 
+		pok_trace("Trying to write %d bytes [of total %d] at offset %d in block %d.",
+				inblocksize, size, inblockstart, blocknum);
+
 		std::string value;
-		NamespaceStatus getD = PRIV->nspace->get(mdi, blocknum, value);
+		NamespaceStatus status = PRIV->nspace->get(mdi, blocknum, value);
 
-		/* Should never happen, user shouldn't have been able to open the file. */
-		assert(!getD.notAuthorized() && !getD.notValid());
-
-		/* Perfectly fine if file has holes, just fill buffer with zeros in this case. */
-		if(getD.notFound()){
-			value.resize(blocksize);
-			value.replace(0,blocksize,blocksize,'0');
-		}
+		/* Should never happen, user shouldn't have been able to open the file.
+		 * status.notFound() is perfectly fine though if file has holes, just fill
+		 * buffer with zeros in this case. */
+		assert(!status.notAuthorized() && !status.notValid());
+		value.resize(blocksize,'0');
 
 		if(write){
+			try{
 			value.replace(inblockstart, inblocksize, buf);
-			PRIV->nspace->put(mdi, blocknum, value);
+			}catch(std::exception& e){
+				pok_error("Exception thrown trying to replace byte range [%d,%d] in string Reason: %s",
+						inblockstart, inblocksize, e.what());
+				return -EINVAL;
+			}
+			if(PRIV->nspace->put(mdi, blocknum, value).notOk())
+				return -EIO;
 		}
 		else{
 			memcpy(buf+size-sizeleft, value.data() + inblockstart, inblocksize);
@@ -85,14 +92,13 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 		pok_error("Write request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
-	pok_trace("writing %d bytes at offset %d to user path %s",size, offset, user_path);
 	int rtn = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
 
 	/* update metadata on success */
 	if(rtn>0){
 		size_t newsize = std::max((std::uint64_t)offset+size,(std::uint64_t)mdi->pbuf()->size());
 		mdi->pbuf()->set_size(newsize);
-		mdi->pbuf()->set_blocks(newsize / 1024*1024 + 1);
+		mdi->pbuf()->set_blocks((newsize / PRIV->blocksize) + 1);
 		mdi->updateACMtime();
 
 		NamespaceStatus status = PRIV->nspace->putMD(mdi);

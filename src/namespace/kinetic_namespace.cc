@@ -35,7 +35,7 @@ KineticNamespace::~KineticNamespace()
 
 NamespaceStatus KineticNamespace::getMD(MetadataInfo *mdi)
 {
-	kinetic::KineticRecord *record = nullptr;
+	std::unique_ptr<kinetic::KineticRecord> record;
 	kinetic::KineticStatus  status = con->blocking().Get(mdi->getSystemPath(), &record);
 
 	if(status.ok()){
@@ -44,8 +44,6 @@ NamespaceStatus KineticNamespace::getMD(MetadataInfo *mdi)
 		else
 			mdi->setCurrentVersion(record->version());
 	}
-	if(record)
-		delete record;
 	return status;
 }
 
@@ -66,9 +64,8 @@ NamespaceStatus KineticNamespace::deleteMD( MetadataInfo *mdi )
 NamespaceStatus KineticNamespace::get( MetadataInfo *mdi, unsigned int blocknumber, std::string &value)
 {
 	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
-	kinetic::KineticRecord *record = nullptr;
+	std::unique_ptr<kinetic::KineticRecord> record;
 	kinetic::KineticStatus  status = con->blocking().Get(key, &record);
-
 	if(status.ok()){
 		mdi->trackDataVersion(blocknumber, record->version());
 		value = record->value();
@@ -176,14 +173,12 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_entry &entry)
 {
 	std::string key = db_basename + std::to_string(version);
-	kinetic::KineticRecord *record = nullptr;
+	std::unique_ptr<kinetic::KineticRecord> record;
 	kinetic::KineticStatus  status = con->blocking().Get(key, &record);
-
 	if(status.ok())
 		if(!entry.ParseFromString(record->value()))
 			status = NamespaceStatus::makeInvalid();
 
-	if(record) delete record;
 	return status;
 }
 

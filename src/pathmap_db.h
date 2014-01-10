@@ -56,6 +56,10 @@ public:
 	void addDirectoryMove	(std::string origin, std::string destination);
 	void addSoftLink	 	(std::string origin, std::string destination);
 	void addPermissionChange(std::string path);
+	void addUnlink  		(std::string path);
+
+	/* Used to decide if a mapping has to be removed when a directory or link is deleted. */
+	bool hasMapping (std::string path);
 
 	/* DEBUG ONLY */ 
 	void printSnapshot() const; 

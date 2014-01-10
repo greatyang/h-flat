@@ -16,7 +16,7 @@ private:
 	const std::string db_versionname	 = "pathmapDB_version";
 
 private:
-	void fixDBVersionMissmatch(std::int64_t version);
+	NamespaceStatus updateDBVersionKey (std::int64_t version);
 
 public:
 	/* Metadata */

@@ -97,9 +97,11 @@ int update_pathmapDB()
 	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
 
 	/* Sanity */
-	assert(dbVersion >= snapshotVersion);
-
-	if(!dbVersion) pok_debug("Empty on-disk database.");
+	//assert(dbVersion >= snapshotVersion);
+	if(dbVersion<snapshotVersion){
+		pok_error("Read in dbVersion: %d, local snapshotVersion %d. ");
+		return -EINVAL;
+	}
 
 	/* Nothing to do. */
 	if(dbVersion == snapshotVersion)

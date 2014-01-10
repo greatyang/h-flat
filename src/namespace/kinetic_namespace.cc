@@ -118,12 +118,12 @@ NamespaceStatus KineticNamespace::free(MetadataInfo *mdi, unsigned int blocknumb
 	kinetic::KineticStatus status = con->blocking().Delete(key,"",true);
 	return status;
 }
-
+/*
 void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
 {
-	/* Get the value and see what's what ... if it still hasn't been updated, assume the other client died. If it has been
+Get the value and see what's what ... if it still hasn't been updated, assume the other client died. If it has been
 	 * updated beyond the current version (this client might have lost network connection for a while), accept the situation.
-	 */
+
 	std::int64_t stored_version;
 	kinetic::KineticStatus status = getDBVersion(stored_version);
 	if(status.notOk()){
@@ -146,6 +146,19 @@ void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )
 	if(status.notOk())
 		pok_warning("Failed to set 'pathmapDB_version' key after successfully putting pathmdb entry.");
 }
+*/
+
+NamespaceStatus KineticNamespace::updateDBVersionKey( std::int64_t version)
+{
+	kinetic::KineticRecord record("empty", std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	NamespaceStatus status = con->blocking().Put(db_versionname, "", true, record);
+
+	pok_debug("Trying to update dbVersionKey to version %d returned: '%s'",version,status.ToString().c_str());
+
+	//status = con->blocking().Put(db_versionname, std::to_string(version-1), false, vrecord);
+	return status;
+}
+
 
 NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixok::db_entry &entry )
 {
@@ -157,17 +170,7 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 		return status;
 
 	/* At this point the update has been successfully completed. We should update the pathmapDB_version record to reflect this change.  */
-	kinetic::KineticRecord vrecord("", std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	status = con->blocking().Put(db_versionname, version > 1 ? std::to_string(version-1) : "", false, vrecord);
-
-	/* A version missmatch can occur if a previous putDBEntry call (possibly from another client) has not updated the pathmapDB_version key.
-	 * This could be due to
-	 * 	a) a simple race condition
-	 * 	b) an error that occurred after the previous entry was put (e.g. loss of network connection) */
-	if(status.versionMismatch())
-		fixDBVersionMissmatch( version );
-
-	return NamespaceStatus::makeOk();
+	return updateDBVersionKey( version );
 }
 
 NamespaceStatus KineticNamespace::getDBEntry( std::int64_t version, posixok::db_entry &entry)
@@ -196,6 +199,7 @@ NamespaceStatus KineticNamespace::getDBVersion (std::int64_t &version)
 
 	try{
 		version = std::stoll(keyVersion);
+		pok_debug("Converted version-key '%s' to integer value '%d'",keyVersion.c_str(),version);
 	}
 	catch(std::exception& e){
 		pok_warning("Exception thrown during conversion of string '%s' to int. Exception Reason: %s \n .",keyVersion.c_str(), e.what());

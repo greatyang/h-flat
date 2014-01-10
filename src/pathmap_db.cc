@@ -58,6 +58,12 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 	
 	/* Remove last path component and continue if possible */
 	auto pos = path.find_last_of("/");
+
+	/* Take this opportunity to check for component-by-component POSIX name compliance. */
+	if(path.size()-1-pos > NAME_MAX){
+		maxTimeStamp = -ENAMETOOLONG;
+		return false;
+	}
 	if(pos == std::string::npos)
 		return false;
 	path.erase(pos,std::string::npos);
@@ -72,6 +78,12 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 	std::string  temp(user_path);
 	std::string  systemPath(user_path);
 	maxTimeStamp = 0;
+
+	/* Take this opportunity to check for path POSIX name compliance. */
+	if(temp.size() > PATH_MAX){
+		maxTimeStamp = -ENAMETOOLONG;
+		return systemPath;
+	}
 
 	{  
 		std::lock_guard<std::mutex> locker(lock);
@@ -126,6 +138,8 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 			case posixok::db_entry_TargetType_NONE:
 				addPermissionChange(entry.origin());
 				break;
+			case posixok::db_entry_TargetType_REMOVED:
+				addUnlink(entry.origin());
 			default:
 				pok_error("Invalid database entry supplied. Resetting pathmapDB");
 				std::lock_guard<std::mutex> locker(lock);
@@ -151,8 +165,14 @@ void PathMapDB::addSoftLink	(std::string origin, std::string destination)
 
 	/* Keep possibly existing reverse move mapping in order to enable lookups on the inode of the 
 	 * symbolic link. */ 
-	if(snapshot.count(origin))
+	if(snapshot.count(origin)){
+		if(snapshot[origin].type != TargetType::REUSE){
+			printSnapshot();
+			pok_error("Attempting to add link \n %s->%s \n when there is already a mapping of type %d from \n%s->%s",
+					origin.data(),destination.data(), snapshot[origin].type, origin.data(), snapshot[origin].target.data());
+		}
 		assert(snapshot[origin].type == TargetType::REUSE);
+	}
 
 	snapshot[ snapshot.count(origin) ? snapshot[origin].target : origin ] =
 								{TargetType::LINK, std::string(destination), snapshotVersion};
@@ -211,6 +231,22 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
  	printSnapshot();
 }
 
+void PathMapDB::addUnlink(std::string path)
+{
+	std::lock_guard<std::mutex> locker(lock);
+		while(currentReaders.load())
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	snapshotVersion++;
+
+	assert(snapshot.count(path));
+	snapshot.erase(path);
+}
+
+bool PathMapDB::hasMapping(std::string path)
+{
+	return snapshot.count(path);
+}
 
 void PathMapDB::printSnapshot() const
 {

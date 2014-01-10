@@ -2,13 +2,15 @@ package posixok;
 
 message db_entry {
 	
-	// Note that there is no REUSE type as in pathmapdb. This type is implicit and is only computed for the 
-	// in-memory hashmap representation of the database. Similarly, there is no permissionTimeStamp as it is 
-	// similarly implicit by the entry database version number.  [because NONE entries aren't merged in db_entry list] 
+	// Note that the db_entry is different from entries pathmap_db. 
+	// There is no REUSE TargetType as in pathmapdb: This type is implicit and is only computed for the in-memory hashmap representation of the database
+	// There is an additional REMOVED TargetType to indicate that a mapping has been removed ( because the directory / link it referred to has been removed from the fs). 
+	// There is no permissionTimeStamp as it is similarly implicit by the entry database version number [because NONE entries aren't merged in db_entry list] 
 	enum TargetType { 
 		MOVE 	= 1;
 		LINK	= 2;
 		NONE	= 3;
+		REMOVED = 4; 
 	};
 	
 	required string 	origin					= 1;

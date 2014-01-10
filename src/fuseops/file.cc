@@ -30,10 +30,28 @@ int pok_unlink(const char *user_path)
 	e.set_name(path_to_filename(user_path));
 	e.set_type(e.SUB);
 	err = directory_addEntry(mdi_dir, e);
-	if(err)
-		pok_error("Unrecoverable error in unlink operation. File system might be corrupt.");
+
+	/* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
+	 * 	mkdir a   mv a b 	rmdir b */
+	if(!err)
+	if(PRIV->pmap->hasMapping(user_path)){
+
+		do{
+			err = update_pathmapDB();
+
+			posixok::db_entry entry;
+			entry.set_type(posixok::db_entry_TargetType_REMOVED);
+			entry.set_origin(user_path);
+			status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
+		}while(status.versionMismatch());
+
+		if(status.ok())
+			PRIV->pmap->addUnlink(user_path);
+	}
 
 	/* TODO: Hand over all data keys to Housekeeping. */
+	if(err)
+		pok_error("Encountered error past the point of no return. File System might be corrupt.");
 	return err;
 }
 

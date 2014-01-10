@@ -42,6 +42,7 @@ static void init_pok_ops(fuse_operations *ops)
 
 	ops->mkdir		= pok_mkdir;
 	ops->opendir	= pok_open;
+	ops->rmdir		= pok_unlink;
 	ops->releasedir = pok_release;
 	ops->readdir	= pok_readdir;
 

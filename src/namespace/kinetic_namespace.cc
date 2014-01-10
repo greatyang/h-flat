@@ -59,7 +59,7 @@ NamespaceStatus KineticNamespace::KineticNamespace::putMD(MetadataInfo *mdi)
 
 NamespaceStatus KineticNamespace::deleteMD( MetadataInfo *mdi )
 {
-	return NamespaceStatus::makeInternalError("No blocking delete implemented in Kinetic-C-Client at the moment.");
+	return con->blocking().Delete(mdi->getSystemPath(),"",true);
 }
 
 
@@ -115,9 +115,11 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 }
 
 
-NamespaceStatus KineticNamespace::free( MetadataInfo *mdi, unsigned int blocknumber)
+NamespaceStatus KineticNamespace::free(MetadataInfo *mdi, unsigned int blocknumber)
 {
-	return NamespaceStatus::makeInternalError("No blocking delete implemented in Kinetic-C-Client at the moment.");
+	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	kinetic::KineticStatus status = con->blocking().Delete(key,"",true);
+	return status;
 }
 
 void KineticNamespace::fixDBVersionMissmatch( std::int64_t version )

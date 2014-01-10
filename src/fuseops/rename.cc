@@ -5,7 +5,7 @@
 /** Rename a file or directory. */
 int pok_rename (const char *user_path_from, const char *user_path_to)
 {
-	pok_debug("Rename '%s' to '%s'", user_path_from, user_path_to);
+	pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
 
 	/* Lookup metadata of supplied paths and their directories.
 	 * Except user_path_to everything has to exist, user_path_to has
@@ -63,7 +63,8 @@ int pok_rename (const char *user_path_from, const char *user_path_to)
 		NamespaceStatus status = PRIV->nspace->deleteMD( mdifrom.get() );
 		if(status.notOk())
 			return -EIO;
-		mdifrom->setSystemPath( dir_mdito->getSystemPath()+"/"+path_to_filename(user_path_to));
+		std::string keyname = dir_mdito->getSystemPath() + (dir_mdito->getSystemPath().size() == 1 ? "" : "/") + path_to_filename(user_path_to);
+		mdifrom->setSystemPath(keyname);
 		status = PRIV->nspace->putMD( mdifrom.get() );
 		if(status.notOk())
 			err = -EIO;

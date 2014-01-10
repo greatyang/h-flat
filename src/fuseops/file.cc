@@ -5,14 +5,36 @@
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
-	pok_debug("Attempting to remove file with user path: %s",user_path);
+	pok_trace("Attempting to remove file with user path: %s",user_path);
 
+	/* Lookup metadata of supplied path and its directory. */
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
 	if (err)
 		return err;
 
-	return -ENOSYS;
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	err = lookup_parent(user_path, mdi_dir);
+	if (err)
+		return err;
+
+	/* Delete Metadata Key*/
+	NamespaceStatus status = PRIV->nspace->deleteMD(mdi.get());
+	if(status.notOk()){
+		pok_warning("Failed deleting Metadata Key");
+		return -EIO;
+	}
+
+	/* Remove associated directory entry. */
+	posixok::DirectoryEntry e;
+	e.set_name(path_to_filename(user_path));
+	e.set_type(e.SUB);
+	err = directory_addEntry(mdi_dir, e);
+	if(err)
+		pok_error("Unrecoverable error in unlink operation. File system might be corrupt.");
+
+	/* TODO: Hand over all data keys to Housekeeping. */
+	return err;
 }
 
 /** File open operation

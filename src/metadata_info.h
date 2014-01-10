@@ -24,9 +24,6 @@ public:
 	~MetadataInfo(){};
 
 public:
-	// initialize md values based on parent
-	void initialize(const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode);
-
 	// direct access to protobuf structure
 	posixok::Metadata * pbuf();
 
@@ -37,7 +34,6 @@ public:
 	// contains all the path permission computation
 	// returns 'true' if changed, 'false' if unchanged.
 	bool computePathPermissionChildren();
-
 
 	// get & set
 	void 		trackDataVersion(int blockNumber, const std::string &keyVersion);

@@ -1,6 +1,9 @@
 #include "main.h"
 #include "debug.h"
 #include <sys/xattr.h>
+#ifndef ENOATTR
+# define ENOATTR ENODATA        /* No such attribute */
+#endif
 
 
 /* xattr_flags:

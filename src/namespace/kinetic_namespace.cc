@@ -1,13 +1,13 @@
 #include "kinetic_namespace.h"
 #include "debug.h"
+
 #include "kinetic/kinetic_connection_factory.h"
+#include "kinetic/kinetic_connection.h"
 
 #include <exception>
 #include <chrono>
 #include <thread>
 
-
-using palominolabs::protobufutil::MessageStreamFactory;
 
 KineticNamespace::KineticNamespace()
 {
@@ -50,14 +50,14 @@ NamespaceStatus KineticNamespace::getMD(MetadataInfo *mdi)
 NamespaceStatus KineticNamespace::KineticNamespace::putMD(MetadataInfo *mdi)
 {
 	kinetic::KineticRecord record(mdi->pbuf()->SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = con->blocking().Put(mdi->getSystemPath(), "", true, record);
+	kinetic::KineticStatus status = con->blocking().Put(mdi->getSystemPath(), "", kinetic::IGNORE_VERSION, record);
 	return status;
 }
 
 
 NamespaceStatus KineticNamespace::deleteMD( MetadataInfo *mdi )
 {
-	return con->blocking().Delete(mdi->getSystemPath(),"",true);
+	return con->blocking().Delete(mdi->getSystemPath(),"",kinetic::IGNORE_VERSION);
 }
 
 
@@ -104,7 +104,7 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 	}
 
 	kinetic::KineticRecord record(value, newVersion, "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = con->blocking().Put(key, curVersion, type == PutModeType::POSIX ? true : false, record);
+	kinetic::KineticStatus status = con->blocking().Put(key, curVersion, type == PutModeType::POSIX ? kinetic::IGNORE_VERSION : kinetic::REQUIRE_SAME_VERSION, record);
 
 	if((type == PutModeType::ATOMIC) && status.ok())
 		mdi->trackDataVersion(blocknumber, newVersion);
@@ -115,7 +115,7 @@ NamespaceStatus KineticNamespace::put( MetadataInfo *mdi, unsigned int blocknumb
 NamespaceStatus KineticNamespace::free(MetadataInfo *mdi, unsigned int blocknumber)
 {
 	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
-	kinetic::KineticStatus status = con->blocking().Delete(key,"",true);
+	kinetic::KineticStatus status = con->blocking().Delete(key,"",kinetic::IGNORE_VERSION);
 	return status;
 }
 /*
@@ -151,7 +151,7 @@ Get the value and see what's what ... if it still hasn't been updated, assume th
 NamespaceStatus KineticNamespace::updateDBVersionKey( std::int64_t version)
 {
 	kinetic::KineticRecord record("empty", std::to_string(version), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	NamespaceStatus status = con->blocking().Put(db_versionname, "", true, record);
+	NamespaceStatus status = con->blocking().Put(db_versionname, "", kinetic::IGNORE_VERSION, record);
 
 	pok_debug("Trying to update dbVersionKey to version %d returned: '%s'",version,status.ToString().c_str());
 
@@ -164,7 +164,7 @@ NamespaceStatus KineticNamespace::putDBEntry( std::int64_t version, const posixo
 {
 	std::string key = db_basename + std::to_string(version);
 	kinetic::KineticRecord record(entry.SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	kinetic::KineticStatus status = con->blocking().Put(key, "", false, record);
+	kinetic::KineticStatus status = con->blocking().Put(key, "", kinetic::REQUIRE_SAME_VERSION, record);
 
 	if(status.notOk())
 		return status;

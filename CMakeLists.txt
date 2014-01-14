@@ -5,7 +5,7 @@ set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-o
 
 include(ExternalProject)
 
-option(USE_LOCAL_KINETIC_CLIENT "Uses the kinetic client at the KINETIC_CLIENT_PATH variable instead of downloading library from Git" OFF)
+option(USE_LOCAL_KINETIC_CLIENT "Uses the kinetic client at the KINETIC_CLIENT_PATH variable instead of downloading library from Git" ON)
 if(USE_LOCAL_KINETIC_CLIENT)
    set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/Kinetic-C-Client")
 else(USE_LOCAL_KINETIC_CLIENT)

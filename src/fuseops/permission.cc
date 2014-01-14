@@ -21,7 +21,8 @@ int pok_access (const char *user_path, int mode)
 	/* OSX tries to verify access to root a hundred times or so... let's not go too crazy. */
 	if(strlen(user_path)==1)
 		return 0;
-	pok_trace("Checking access for user_path '%s'",user_path);
+	if(fuse_get_context()->uid == 0)
+		return 0;
 
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	LOOKUP_REQ(user_path,mdi);
@@ -46,6 +47,7 @@ int pok_access (const char *user_path, int mode)
 		if ( (mode & mdi->pbuf()->mode() >> 6) == umode )
 			return 0;
 	}
+	pok_trace("Access for user_path '%s' NOT GRANTED",user_path);
 	return -EACCES;
 }
 
@@ -76,6 +78,13 @@ int pok_chmod (const char *user_path, mode_t mode)
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	LOOKUP_REQ(user_path, mdi);
 
+	pok_trace("Changing mode for user_path %s from %d to %d",user_path, mdi->pbuf()->mode(), mode);
+
+	/* POSIX: return EPERM if not root or owner. */
+	if(fuse_get_context()->uid)
+		if(fuse_get_context()->uid != mdi->pbuf()->id_user())
+			return -EPERM;
+
 	mdi->pbuf()->set_mode(mode);
 	mdi->updateACtime();
 
@@ -98,8 +107,21 @@ int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	LOOKUP_REQ(user_path, mdi);
 
-	mdi->pbuf()->set_id_group(gid);
-	mdi->pbuf()->set_id_user(uid);
+	pok_trace("Changing owner / group for user_path %s from %d:%d to %d:%d   fuse_context: %d:%d ",user_path,
+			mdi->pbuf()->id_user(), mdi->pbuf()->id_group(), uid, gid,
+			fuse_get_context()->uid,fuse_get_context()->gid);
+
+	if(uid != (uid_t)-1)
+		if(fuse_get_context()->uid)
+			return -EPERM;
+	if(gid != (gid_t)-1)
+		if(fuse_get_context()->uid && fuse_get_context()->uid != fuse_get_context()->uid)
+			return -EPERM;
+
+	if(gid != (gid_t)-1)
+		mdi->pbuf()->set_id_group(gid);
+	if(uid != (uid_t)-1)
+		mdi->pbuf()->set_id_user(uid);
 	mdi->updateACtime();
 
 	if(S_ISDIR(mdi->pbuf()->mode())){
@@ -112,6 +134,7 @@ int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk())
 		return -EIO;
+	pok_trace("		-> success");
 	return 0;
 }
 

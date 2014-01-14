@@ -1,6 +1,7 @@
 #include "main.h"
 #include "debug.h"
 #include <sys/types.h>
+#include <sys/param.h>
 
 static void fillattr(struct stat *attr, MetadataInfo * mdi)
 {
@@ -29,13 +30,13 @@ static void fillattr(struct stat *attr, MetadataInfo * mdi)
  */
 int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi)
 {
-	pok_debug("Getting attribtues of user path %s",user_path);
 	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
 	if(!mdi){
 		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
 	fillattr(attr,mdi);
+	pok_trace("Got attributes for user path %s  user:group=%d,%d  mode=%d",user_path, attr->st_uid, attr->st_gid, attr->st_mode);
 	return 0;
 }
 
@@ -47,14 +48,12 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
  */
 int pok_getattr(const char *user_path, struct stat *attr)
 {
-	pok_debug("Getting attribtues of user path %s",user_path);
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
+	if (err)
 		return err;
-	}
 	fillattr(attr,mdi.get());
+	pok_trace("Got attributes for user path %s  user:group=%d,%d  mode=%d",user_path, attr->st_uid, attr->st_gid, attr->st_mode);
 	return 0;
 }
 
@@ -68,10 +67,9 @@ int pok_utimens	(const char *user_path, const struct timespec tv[2])
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
+	if (err)
 		return err;
-	}
+
 	mdi->pbuf()->set_atime(	tv[0].tv_sec );
 	mdi->pbuf()->set_mtime( tv[1].tv_sec );
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
@@ -91,6 +89,7 @@ int pok_statfs (const char *user_path, struct statvfs *s)
 {
 	/* Do we want to keep an inodecount and a blockcount?
 	 * If yes we'd probably update infrequently (e.g. on client unmount)  */
-	s->f_bsize  = PRIV->blocksize;
+	s->f_bsize   = PRIV->blocksize;
+	s->f_namemax = NAME_MAX;
 	return 0;
 }

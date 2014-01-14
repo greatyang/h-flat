@@ -36,8 +36,10 @@ int pok_ftruncate (const char *user_path, off_t offset, struct fuse_file_info *f
 int pok_truncate  (const char *user_path, off_t offset);
 
 /* link */
-int pok_symlink (const char *link_destination, const char *user_path);
+int pok_symlink  (const char *target, const char *origin);
+int pok_hardlink (const char *target, const char *origin);
 int pok_readlink (const char *user_path, char *buffer, size_t size);
+
 
 /* rename */
 int pok_rename (const char *user_path_from, const char *user_path_to);

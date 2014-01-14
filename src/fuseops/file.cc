@@ -1,6 +1,6 @@
 #include "main.h"
 #include "debug.h"
-#include <uuid/uuid.h>
+
 
 /** Remove a file */
 int pok_unlink(const char *user_path)
@@ -18,10 +18,15 @@ int pok_unlink(const char *user_path)
 	if (err)
 		return err;
 
-	/* Delete Metadata Key*/
-	NamespaceStatus status = PRIV->nspace->deleteMD(mdi.get());
+	/* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1);
+	NamespaceStatus status = NamespaceStatus::makeInvalid();
+	if(mdi->pbuf()->link_count())
+		status = PRIV->nspace->putMD(mdi.get());
+	else
+		status = PRIV->nspace->deleteMD(mdi.get());
 	if(status.notOk()){
-		pok_warning("Failed deleting Metadata Key");
+		pok_warning("Failed putting / deleting Metadata Key");
 		return -EIO;
 	}
 
@@ -93,37 +98,6 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
 }
 
 
-
-static void initialize_metadata(std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
-{
-	uuid_t uuid;
-	uuid_generate(uuid);
-	char uuid_parsed[100];
-	uuid_unparse(uuid, uuid_parsed);
-
-	mdi->updateACMtime();
-	mdi->pbuf()->set_id_group(fuse_get_context()->gid);
-	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
-	mdi->pbuf()->set_mode(mode);
-	mdi->pbuf()->set_data_unique_id(uuid_parsed);
-
-	/* Inherit path permissions existing for directory */
-	mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());
-	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
-	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
-
-	/* Add path permissions precomputed for directory's children. */
-	for(int i=0; i < mdi_parent->pbuf()->path_permission_children_size(); i++){
-		posixok::Metadata::ReachabilityEntry *e = mdi->pbuf()->add_path_permission();
-		e->CopyFrom( mdi_parent->pbuf()->path_permission_children(i) );
-	}
-
-	if(S_ISDIR(mode)){
-		mdi->pbuf()->set_blocks(1);
-		mdi->computePathPermissionChildren();
-	}
-}
-
 /**
  * Create and open a file
  *
@@ -146,34 +120,9 @@ int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 		return -EINVAL;
 	}
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if(!err)
-		return -EEXIST;
-	if (err != -ENOENT)
-		return err;
-
-	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-	err = lookup_parent(user_path, mdi_dir);
+	int err = create_from_mdi(user_path, mode, mdi);
 	if(err)
 		return err;
-
-
-	/* File: initialize metadata and write metadata-key to drive*/
-	initialize_metadata(mdi, mdi_dir, mode);
-	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
-	if(status.notOk()){
-		pok_warning("Failed creating key '%s' due to %s",mdi->getSystemPath().c_str());
-		return -EINVAL;
-	}
-
-	/* Add filename to directory */
-	posixok::DirectoryEntry e;
-	e.set_name( path_to_filename(mdi->getSystemPath()) );
-	err = directory_addEntry( mdi_dir, e );
-	if(err){
-		pok_error("Failed updating parent directory of user path '%s' ",user_path);
-		return err;
-	}
 
 	// while this isn't pretty, it's probably the best way to use fi->fh
 	fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());

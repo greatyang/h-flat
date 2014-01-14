@@ -67,6 +67,7 @@ static void init_pok_ops(fuse_operations *ops)
 
 	ops->symlink    = pok_symlink;
 	ops->readlink	= pok_readlink;
+	ops->link		= pok_hardlink;
 
 	ops->read		= pok_read;
 	ops->write		= pok_write;

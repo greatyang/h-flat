@@ -10,9 +10,16 @@ POSIX-over-Kinetic. The goal is to be POSIX compliant in a flat namespace while 
 ## Initial Setup
 + Install any missing dependencies
 + Run `cmake .` 
-
-  Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory anywhere you like and call `cmake <path/to/POSIX-o-K>` from there. 
++ + Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory anywhere you like and call `cmake <path/to/POSIX-o-K>` from there. 
 + Run `make`
 
-## Debugging
-For easy debugging run the file system single threaded & in the foreground `./POSIX-o-K -s -f /mountpoint`
+## Running
+At the moment the file system expects a LC2 simulator instance with default values to be running on localhost. Mounting will not be successful if this is not the case.
+To mount run the executable given the mountpoint as a parameter. Some flags interesting for debugging: 
+
++ -s single threaded mode
++ -f foreground mode: sends all debug to std out 
++ -d debug mode: fuse lists internal function calls in addition to pok_debug output
++ -o mount options, note that *allow_other* is required for POSIX compliant behavior
+
+Example: `./POSIX-o-K -s -f -o allow_other /mountpoint` 

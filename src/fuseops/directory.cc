@@ -6,15 +6,11 @@
 /** Create a directory */
 int pok_mkdir 		(const char *user_path, mode_t mode)
 {
-	struct fuse_file_info fi;
-	fi.fh = fi.flags = fi.lock_owner = fi.direct_io = 0;
-
-	mode |= S_IFDIR;
-	int err = pok_create(user_path, mode, &fi);
-	if(err)
-		return err;
-	pok_release(user_path, &fi);
-	return 0;
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = create_from_mdi(user_path, mode | S_IFDIR, mdi);
+	if(!err)
+		pok_trace("Created directory @ user path: %s",user_path);
+	return err;
 }
 
 /** Read directory

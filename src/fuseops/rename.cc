@@ -59,7 +59,10 @@ int pok_rename (const char *user_path_from, const char *user_path_to)
 		req_snapshotVersion = PRIV->pmap->getSnapshotVersion();
 	}
 	else{
-		/* Move the metadata-key: delete old location, create at new location. */
+		/* Move the metadata-key: delete old location, create at new location.
+		   TODO: Handle moving hardlinks */
+		if(mdifrom->pbuf()->is_hardlink_target())
+			return -ENOSYS;
 		NamespaceStatus status = PRIV->nspace->deleteMD( mdifrom.get() );
 		if(status.notOk())
 			return -EIO;

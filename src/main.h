@@ -38,7 +38,9 @@ struct pok_priv
 /* util > these are utility functions provided to the various path based fuse operations. */
 int lookup				(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent		(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
+int create_from_mdi		(const char *user_path, mode_t mode, const std::unique_ptr<MetadataInfo> &mdi);
 int directory_addEntry	(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
+
 int update_pathmapDB();
 inline std::string path_to_filename(const std::string &path) { return path.substr(path.find_last_of('/')+1); }
 

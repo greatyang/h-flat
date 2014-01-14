@@ -22,7 +22,7 @@ message Metadata {
 	repeated ExtendedAttribute xattr = 10;
 
 	//////////////////////////////////////////
-	// Flat Namespace Metadata
+	// Additional Metadata
 	//
 	message BlockIntervall {
 		required uint32	start = 1;
@@ -32,7 +32,9 @@ message Metadata {
 	optional string 		data_unique_id 	= 11; 	// base-key to all data fields: we don't want to have to move data when we move metadata 
 	repeated BlockIntervall data_keys		= 12; 	// tracking all allocated data-keys to support deletion of big files with holes without key-range requests
 	
-
+	optional bool			is_hardlink_target = 13 [default = false];	// hardlinks need some extra love to work in a path-based lookup system.
+																		// could squeeze this information into 'mode', but let's just not mess with the POSIX values
+		
 	//////////////////////////////////////////
 	// Path Permission Metadata
 	//
@@ -49,8 +51,8 @@ message Metadata {
 		optional uint32 gid			   = 2;
 		optional uint32 uid			   = 3;
 	}
-	optional int64	path_permission_verified   = 13 [default = 0];		// pathmapdb version path permissions have been verified against
-	repeated ReachabilityEntry path_permission = 14; 					// a set of reachability entries specifying the path permissions
-	repeated ReachabilityEntry path_permission_children = 15;			// only for directories: store restrictions introduced by this directory so that children do not have to recompute
+	optional int64	path_permission_verified   = 15 [default = 0];		// pathmapdb version path permissions have been verified against
+	repeated ReachabilityEntry path_permission = 16; 					// a set of reachability entries specifying the path permissions
+	repeated ReachabilityEntry path_permission_children = 17;			// only for directories: store restrictions introduced by this directory so that children do not have to recompute
 	
 }

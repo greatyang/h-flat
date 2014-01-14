@@ -113,58 +113,37 @@ int pok_hardlink (const char *target, const char *origin)
 		if(status.notOk())
 			return -EIO;
 
-		mdi_target->setSystemPath(uuid_parsed);
+		/* add to in-memory hashmap */
+		PRIV->pmap->addSoftLink(entry.origin(), entry.target());
+
+
+		/* Move Metadata to entry->target. */
+		status = PRIV->nspace->deleteMD(mdi_target.get());
+		mdi_target->setSystemPath(entry.target());
 		mdi_target->pbuf()->set_is_hardlink_target(true);
-		status = PRIV->nspace->putMD(mdi_target.get());
+		if(status.ok())
+			status = PRIV->nspace->putMD(mdi_target.get());
 		if(status.notOk()){
 			pok_error("Failed putting updated hardlink metadata after successful db update. FS might be corrupt.");
 			return -EIO;
 		}
 	}
 	
-	/* 2) do a normal create (adds name to directory, creates metadata key) */
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	err = create_from_mdi(origin, S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH, mdi);
-	if(err)
-		return err;
-
-	/* 3) add db_entry to permanent storage. */
+	/* add db_entry to permanent storage. */
 	posixok::db_entry entry;
 	entry.set_type(posixok::db_entry_TargetType_LINK);
 	entry.set_origin(origin);
 	entry.set_target(target);
 	NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
 
-	/* If 3) failed, undo the previous create. */
-	if(status.notOk()){
-		err = pok_unlink(origin);
-		if(err){
-			pok_error("Failed unlinking created metadata key after failure in database update. File System might be corrupt.");
-			return err;
-		}
-
-		/* snapshot wasn't up-to-date after all. retry */
-		if(status.versionMismatch())
-			return pok_symlink(target, origin);
-
-		pok_warning("Failed putting DBEntry, cannot create symlink: %s -> %s",origin,target);
-		return -EINVAL;
-	}
-
-	/* 4) add to in-memory hashmap */
-	PRIV->pmap->addSoftLink(origin, target);
-	
-	
-	
-	
-
-	/* Create a link from the new name & update the linkcounter of the metadata. */
-	err = pok_symlink(mdi_target->getSystemPath().c_str(), origin);
-	if(err)
-		return err;
+	/* retry on version missmatch */
+	if(status.versionMismatch())
+		return pok_hardlink(target, origin);
+	if(status.notOk())
+		return -EIO;
 
 	mdi_target->pbuf()->set_link_count(mdi_target->pbuf()->link_count());
-	NamespaceStatus status = PRIV->nspace->putMD(mdi_target.get());
+	status = PRIV->nspace->putMD(mdi_target.get());
 	if(status.notOk()){
 		pok_error("Failed increasing metadata link_count after successfully creating link");
 		return -EIO;

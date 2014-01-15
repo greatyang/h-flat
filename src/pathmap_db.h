@@ -8,13 +8,13 @@
 #include "database.pb.h"
 
 /* There are slight differences in handling path mapping depending on if a terminating symbolic link should
- * be followed (readlink, open) or not (getattr). */
+ * be followed (open) or not (readlink). */
 enum class CallingType { LOOKUP, READLINK };
 
 class PathMapDB final
 {
 private:
-	enum class TargetType { MOVE, REUSE, LINK, NONE };
+	enum class TargetType { MOVE, REUSE, SYMLINK, HARDLINK, NONE };
 	struct PMEntry{
 		TargetType   type; 
 		std::string  target; 
@@ -55,6 +55,7 @@ public:
 	 * a successful update of the remote database (as an alternative of calling updateSnapshot()). */
 	void addDirectoryMove	(std::string origin, std::string destination);
 	void addSoftLink	 	(std::string origin, std::string destination);
+	void addHardLink		(std::string origin, std::string destination);
 	void addPermissionChange(std::string path);
 	void addUnlink  		(std::string path);
 

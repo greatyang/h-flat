@@ -8,9 +8,10 @@ message db_entry {
 	// There is no permissionTimeStamp as it is similarly implicit by the entry database version number [because NONE entries aren't merged in db_entry list] 
 	enum TargetType { 
 		MOVE 	= 1;
-		LINK	= 2;
-		NONE	= 3;
-		REMOVED = 4; 
+		SYMLINK	= 2;
+		HARDLINK= 3;
+		NONE	= 4;
+		REMOVED = 5; 
 	};
 	
 	required string 	origin					= 1;

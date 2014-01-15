@@ -7,12 +7,13 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi)
 	std::string key, value, version;
 	std::int64_t pathPermissionTimeStamp = 0;
 
-	pok_trace("Called for user_path %s.",user_path);
-
 	/* Step 1: Transform user path to system path and obtain required path permission timestamp */
 	key = PRIV->pmap->toSystemPath(user_path, pathPermissionTimeStamp, CallingType::LOOKUP);
 	if(pathPermissionTimeStamp < 0)
 		return pathPermissionTimeStamp;
+
+	if(key.compare(user_path))
+		pok_trace("Remapped user path %s to system path %s ",user_path, key.c_str());
 
 	/* Step 2: Get metadata from flat namespace */
 	mdi->setSystemPath(key);
@@ -91,54 +92,24 @@ int directory_addEntry(const std::unique_ptr<MetadataInfo> &mdi, const posixok::
 }
 
 
-int update_pathmapDB()
-{
-	std::int64_t dbVersion;
-	NamespaceStatus status = PRIV->nspace->getDBVersion(dbVersion);
-	if(status.notOk()){
-		pok_warning("Cannot access database.");
-		return -EINVAL;
-	}
-	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
 
-	/* Sanity */
-	//assert(dbVersion >= snapshotVersion);
-	if(dbVersion<snapshotVersion){
-		pok_error("Read in dbVersion: %d, local snapshotVersion %d. ");
-		return -EINVAL;
-	}
-
-	/* Nothing to do. */
-	if(dbVersion == snapshotVersion)
-		return 0;
-
-	/* Update */
-	std::list<posixok::db_entry> entries;
-	posixok::db_entry entry;
-	for(std::int64_t v = snapshotVersion+1; v <= dbVersion; v++){
-		status = PRIV->nspace->getDBEntry(v, entry);
-		if(status.notOk()){
-				pok_warning("Cannot access database.");
-				return -EINVAL;
-			}
-		entries.push_back(entry);
-	}
-	return PRIV->pmap->updateSnapshot(entries, snapshotVersion, dbVersion);
-}
-
-
-static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+std::string uuid_get(void)
 {
 	uuid_t uuid;
 	uuid_generate(uuid);
 	char uuid_parsed[100];
 	uuid_unparse(uuid, uuid_parsed);
+	return std::string(uuid_parsed);
+}
 
+
+static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+{
 	mdi->updateACMtime();
 	mdi->pbuf()->set_id_group(fuse_get_context()->gid);
 	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
 	mdi->pbuf()->set_mode(mode);
-	mdi->pbuf()->set_data_unique_id(uuid_parsed);
+	mdi->pbuf()->set_data_unique_id(uuid_get());
 
 	/* Inherit path permissions existing for directory */
 	mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());

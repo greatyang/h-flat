@@ -13,6 +13,14 @@ static int llconfig = 0;
 #define pok_warning(message...) pok_printlog(3, __FUNCTION__, __FILE__, __LINE__, ## message)
 #define pok_error(message...)   pok_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message)
 
+#define kill_compound_fail() { 																	\
+pok_error(	"Unrecoverable File System Error. \n "												\
+			"Failed undoing a compound file system operation that suceeded only partially. \n"	\
+			"Killing myself now. Goodbye.");													\
+delete PRIV;																					\
+std::exit(EXIT_FAILURE);																		\
+}
+
 
 static void pok_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
 {

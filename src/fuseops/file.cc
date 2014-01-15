@@ -1,12 +1,8 @@
 #include "main.h"
 #include "debug.h"
 
-
-/** Remove a file */
-int pok_unlink(const char *user_path)
+static int unlink_fsdo(const char *user_path)
 {
-	pok_trace("Attempting to remove file with user path: %s",user_path);
-
 	/* Lookup metadata of supplied path and its directory. */
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
@@ -21,8 +17,10 @@ int pok_unlink(const char *user_path)
 	/* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
 	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1);
 	NamespaceStatus status = NamespaceStatus::makeInvalid();
-	if(mdi->pbuf()->link_count())
+	if(mdi->pbuf()->link_count()){
+		assert(mdi->pbuf()->is_hardlink_target());
 		status = PRIV->nspace->putMD(mdi.get());
+	}
 	else
 		status = PRIV->nspace->deleteMD(mdi.get());
 	if(status.notOk()){
@@ -36,28 +34,62 @@ int pok_unlink(const char *user_path)
 	e.set_type(e.SUB);
 	err = directory_addEntry(mdi_dir, e);
 
-	/* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
-	 * 	mkdir a   mv a b 	rmdir b */
-	if(!err)
-	if(PRIV->pmap->hasMapping(user_path)){
-
-		do{
-			err = update_pathmapDB();
-
-			posixok::db_entry entry;
-			entry.set_type(posixok::db_entry_TargetType_REMOVED);
-			entry.set_origin(user_path);
-			status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
-		}while(status.versionMismatch());
-
-		if(status.ok())
-			PRIV->pmap->addUnlink(user_path);
+	/* PARTIAL UNDO */
+	if(err){
+		mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1);
+		status = PRIV->nspace->putMD(mdi.get());
+		if(status.notOk())
+			kill_compound_fail();
 	}
-
-	/* TODO: Hand over all data keys to Housekeeping. */
-	if(err)
-		pok_error("Encountered error past the point of no return. File System might be corrupt.");
 	return err;
+}
+
+static int unlink_fsundo(const char *user_path, MetadataInfo *mdi)
+{
+	assert(mdi);
+
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	int err = lookup_parent(user_path, mdi_dir);
+	if (err)
+		return err;
+
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1);
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+	if(status.notOk())
+		return -EIO;
+
+	/* Add associated directory entry. */
+	posixok::DirectoryEntry e;
+	e.set_name(path_to_filename(user_path));
+	e.set_type(e.ADD);
+	return directory_addEntry(mdi_dir, e);
+}
+
+/** Remove a file */
+int pok_unlink(const char *user_path)
+{
+	/* TODO: Hand over all data keys to Housekeeping after a sucessfull unlink operation. */
+	pok_trace("Attempting to remove file with user path: %s",user_path);
+
+	if(PRIV->pmap->hasMapping(user_path)){
+		/* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
+			 * 	mkdir a   mv a b 	rmdir b */
+		posixok::db_entry entry;
+		entry.set_type(posixok::db_entry_TargetType_REMOVED);
+		entry.set_origin(user_path);
+
+		/* Lookup metadata of supplied path in case the operation needs to be undone. */
+		std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+		int err = lookup(user_path, mdi);
+		if (err)
+			return err;
+
+		return database_operation(
+				std::bind(unlink_fsdo,  user_path),
+				std::bind(unlink_fsundo,user_path, mdi.get()),
+				entry);
+	}
+	return unlink_fsdo(user_path);
 }
 
 /** File open operation

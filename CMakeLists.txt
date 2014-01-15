@@ -76,6 +76,7 @@ add_executable(POSIX-o-K
 	 src/util.cc
 	 src/metadata_info.cc
 	 src/pathmap_db.cc
+	 src/util_database.cc
 	 src/namespace/kinetic_namespace.cc
 	 src/fuseops/attr.cc
 	 src/fuseops/xattr.cc

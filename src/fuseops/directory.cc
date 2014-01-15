@@ -73,8 +73,9 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 
 	for (auto& element : ncount) {
 		assert(element.second == 0 || element.second == 1);
-		if(element.second == 1)
-			filldir(buffer, element.first.c_str(), NULL, 0);
+		if(element.second == 1){
+		  filldir(buffer, element.first.c_str(), NULL, 0);
+		}
 	}
 	return 0;
 }

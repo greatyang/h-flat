@@ -37,9 +37,8 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 		 *
 		 * 1) A TargetType::NONE mapping does not have a destination
 		 *
-		 * 2) A TargetType::LINK mapping that is at the very end of the full path should only be followed if the mapping is requested by
+		 * 2) A TargetType::SYMLINK mapping that is at the very end of the full path should only be followed if the mapping is requested by
 		 * the fuse readlink function. Otherwise every lookup of the link (e.g. 'ls' of parent directory) would go straight to the destination.
-		 *
 		 *
 		 * 2) A reuse entry after a move entry should be ignored to prevent invalid remaps.
 		 * Example: mv a b, ln -s a l >> [ b->a, a->*a, l->a ]
@@ -48,7 +47,7 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 		 *
 		 * */
 		if(		( snapshot.at(path).type == TargetType::NONE ) ||
-				( !followSymlink && snapshot.at(path).type == TargetType::LINK ) ||
+				( !followSymlink && snapshot.at(path).type == TargetType::SYMLINK ) ||
 				( !followReuse   && snapshot.at(path).type == TargetType::REUSE)
 		)
 		{ /*don't remap*/ }
@@ -91,7 +90,7 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 	}	
 	
 	while(searchPathRecursive(temp, maxTimeStamp, followReuse, followSymlink)){
-		if(snapshot.at(temp).type == TargetType::LINK){
+		if(snapshot.at(temp).type == TargetType::SYMLINK){
 			/* Guard against symbolic link loops */
 			if(++numLinksFollowed > MAXSYMLINKS){ 
 				maxTimeStamp = -ELOOP;
@@ -129,17 +128,21 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 			continue;
 
 		switch(entry.type()){
-			case posixok::db_entry_TargetType_LINK:
-				addSoftLink(entry.origin(), entry.target());
-				break;
 			case posixok::db_entry_TargetType_MOVE:
 				addDirectoryMove(entry.origin(), entry.target());
+				break;
+			case posixok::db_entry_TargetType_SYMLINK:
+				addSoftLink(entry.origin(), entry.target());
+				break;
+			case posixok::db_entry_TargetType_HARDLINK:
+				addHardLink(entry.origin(), entry.target());
 				break;
 			case posixok::db_entry_TargetType_NONE:
 				addPermissionChange(entry.origin());
 				break;
 			case posixok::db_entry_TargetType_REMOVED:
 				addUnlink(entry.origin());
+				break;
 			default:
 				pok_error("Invalid database entry supplied. Resetting pathmapDB");
 				std::lock_guard<std::mutex> locker(lock);
@@ -163,19 +166,29 @@ void PathMapDB::addSoftLink	(std::string origin, std::string destination)
 
 	snapshotVersion++;
 
-	/* Keep possibly existing reverse move mapping in order to enable lookups on the inode of the 
-	 * symbolic link. */ 
-	if(snapshot.count(origin)){
-		if(snapshot[origin].type != TargetType::REUSE){
-			printSnapshot();
-			pok_error("Attempting to add link \n %s->%s \n when there is already a mapping of type %d from \n%s->%s",
-					origin.data(),destination.data(), snapshot[origin].type, origin.data(), snapshot[origin].target.data());
-		}
+	if(snapshot.count(origin))
 		assert(snapshot[origin].type == TargetType::REUSE);
-	}
 
+	/* Keep possibly existing reuse move mapping in order to enable lookups on the inode of the
+	 * symbolic link. */ 
 	snapshot[ snapshot.count(origin) ? snapshot[origin].target : origin ] =
-								{TargetType::LINK, std::string(destination), snapshotVersion};
+								{TargetType::SYMLINK, std::string(destination), 0};
+	printSnapshot();
+}
+
+void PathMapDB::addHardLink	(std::string origin, std::string destination)
+{
+	std::lock_guard<std::mutex> locker(lock);
+	while(currentReaders.load())
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	snapshotVersion++;
+
+	if(snapshot.count(origin))
+		assert(snapshot[origin].type == TargetType::REUSE);
+
+	/* Differently from softlinks we can safely overwrite a possibly existing REUSE entry. */
+	snapshot[ origin ] = {TargetType::HARDLINK, std::string(destination), 0};
 	printSnapshot();
 }
 	
@@ -241,6 +254,7 @@ void PathMapDB::addUnlink(std::string path)
 
 	assert(snapshot.count(path));
 	snapshot.erase(path);
+ 	printSnapshot();
 }
 
 bool PathMapDB::hasMapping(std::string path)
@@ -253,10 +267,11 @@ void PathMapDB::printSnapshot() const
 	/* print entries in the form " key->target [type,timestamp] " */
 	auto typeToString = [](TargetType t) -> std::string { 
 	  switch(t){
-		  case TargetType::MOVE:  return "MOVE";
-		  case TargetType::REUSE: return "REUSE";
-		  case TargetType::LINK:  return "LINK";
-		  case TargetType::NONE:  return "NONE";
+		  case TargetType::MOVE:  	 return "MOVE";
+		  case TargetType::REUSE: 	 return "REUSE";
+		  case TargetType::SYMLINK:  return "SYMLINK";
+		  case TargetType::HARDLINK: return "HARDLINK";
+		  case TargetType::NONE:  	 return "NONE";
 		  }
 	   return "INVALID";
    };	

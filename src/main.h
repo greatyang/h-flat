@@ -11,6 +11,7 @@
 #include <fuse/fuse.h>
 
 #include <memory>
+#include <functional>
 
 #include "pathmap_db.h"
 #include "kinetic_namespace.h"
@@ -40,10 +41,11 @@ int lookup				(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent		(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
 int create_from_mdi		(const char *user_path, mode_t mode, const std::unique_ptr<MetadataInfo> &mdi);
 int directory_addEntry	(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
-
-int update_pathmapDB();
+std::string uuid_get	(void);
 inline std::string path_to_filename(const std::string &path) { return path.substr(path.find_last_of('/')+1); }
 
-
+/* util_database */
+int database_update(void);
+int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsfun_undo, posixok::db_entry &entry);
 
 #endif

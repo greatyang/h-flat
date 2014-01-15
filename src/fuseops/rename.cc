@@ -38,7 +38,7 @@ int pok_rename (const char *user_path_from, const char *user_path_to)
 	if(S_ISDIR(mdifrom->pbuf()->mode())){
 
 		/* 1) ensure that database is up-to-date, update if necessary */
-		int err = update_pathmapDB();
+		int err = database_update();
 		if(err)
 			return err;
 

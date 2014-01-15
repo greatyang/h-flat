@@ -3,6 +3,8 @@
 #include <sys/types.h>
 #include <sys/param.h>
 
+int i = 10;
+
 static void fillattr(struct stat *attr, MetadataInfo * mdi)
 {
 	attr->st_atime = mdi->pbuf()->atime();
@@ -14,6 +16,9 @@ static void fillattr(struct stat *attr, MetadataInfo * mdi)
 	attr->st_nlink = mdi->pbuf()->link_count();
 	attr->st_size  = mdi->pbuf()->size();
 	attr->st_blocks= mdi->pbuf()->blocks();
+
+	/* not setting st_ino, fuse will create its own inodes...
+	 * ... that does mean that hardlinks will show up with different inode numbers though. */
 }
 
 /**
@@ -50,8 +55,10 @@ int pok_getattr(const char *user_path, struct stat *attr)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
-	if (err)
+	if (err){
+		pok_trace("No attributes for user path %s",user_path);
 		return err;
+	}
 	fillattr(attr,mdi.get());
 	pok_trace("Got attributes for user path %s  user:group=%d,%d  mode=%d",user_path, attr->st_uid, attr->st_gid, attr->st_mode);
 	return 0;

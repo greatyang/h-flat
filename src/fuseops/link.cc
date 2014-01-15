@@ -1,7 +1,8 @@
 #include "main.h"
 #include "debug.h"
 #include "fuseops.h"
-#include <uuid/uuid.h>
+
+
 
 /** Read the target of a symbolic link
  *
@@ -28,125 +29,144 @@ int pok_readlink (const char *user_path, char *buffer, size_t size)
 }
 
 
+static int symlink_fsdo(const char *origin)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	return create_from_mdi(origin, S_IFLNK | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH, mdi);
+}
 
 /** Create a symbolic link */
 int pok_symlink (const char *target, const char *origin)
 {
-	/* 1) ensure that database is up-to-date, update if necessary */
-	int err = update_pathmapDB();
-	if(err)
-		return err;
-
-	/* 2) do a normal create (adds name to directory, creates metadata key) */
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	err = create_from_mdi(origin, S_IFLNK | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH, mdi);
-	if(err)
-		return err;
-
-	/* 3) add db_entry to permanent storage. */
 	posixok::db_entry entry;
-	entry.set_type(posixok::db_entry_TargetType_LINK);
+	entry.set_type(entry.SYMLINK);
 	entry.set_origin(origin);
 	entry.set_target(target);
-	NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
 
-	/* If 3) failed, undo the previous create. */
-	if(status.notOk()){
-		err = pok_unlink(origin);
-		if(err){
-			pok_error("Failed unlinking created metadata key after failure in database update. File System might be corrupt.");
-			return err;
-		}
+	return database_operation(
+			std::bind(symlink_fsdo, origin),
+			std::bind(pok_unlink,origin),
+			entry);
+}
 
-		/* snapshot wasn't up-to-date after all. retry */
-		if(status.versionMismatch())
-			return pok_symlink(target, origin);
-
-		pok_warning("Failed putting DBEntry, cannot create symlink: %s -> %s",origin,target);
+static int md_key_move (std::string keyFrom, std::string keyTo)
+{
+	/* get md key */
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo(keyFrom, ""));
+	NamespaceStatus status = PRIV->nspace->getMD(mdi.get());
+	if(status.notFound())
+		return -ENOENT;
+	if(status.notValid())
 		return -EINVAL;
-	}
+	if(status.notAuthorized())
+		return -EPERM;
 
-	/* 4) add to in-memory hashmap */
-	PRIV->pmap->addSoftLink(origin, target);
+	/* remove md key from original location */
+	status = PRIV->nspace->deleteMD(mdi.get());
+	if(status.notOk())
+		return -EIO;
+
+	/* store md key at new location */
+	mdi->setSystemPath(keyTo);
+	if(keyTo.compare(0,8,"hardlink_",0,8) == 0)
+		mdi->pbuf()->set_is_hardlink_target(true);
+	status = PRIV->nspace->putMD(mdi.get());
+
+	/* try to recover if encountering a compound failure. */
+	if(status.notOk()){
+		mdi->setSystemPath(keyFrom);
+		if(keyFrom.compare(0,8,"hardlink_",0,8) != 0)
+			mdi->pbuf()->set_is_hardlink_target(false);
+		NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
+		if(status.notOk())
+			kill_compound_fail();
+		return -EIO;
+	}
 	return 0;
+}
+
+static int hardlink_fsdo(MetadataInfo *mdi, const char *user_path_origin)
+{
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	int err = lookup_parent(user_path_origin, mdi_dir);
+	if(err)
+		return err;
+
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1 );
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+	if(status.notOk())
+		return -EIO;
+
+	posixok::DirectoryEntry de;
+	de.set_name(path_to_filename(user_path_origin));
+	err = directory_addEntry(mdi_dir, de);
+
+	/* Failed adding directory entry
+	 * 	-> UNDO linkcount increase */
+	if(err){
+		mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1 );
+		NamespaceStatus status = PRIV->nspace->putMD(mdi);
+		if(status.notOk())
+			kill_compound_fail();
+	}
+	return err;
+}
+
+static int hardlink_fsundo(MetadataInfo *mdi, const char *user_path_origin)
+{
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	int err = lookup_parent(user_path_origin, mdi_dir);
+	if(err)
+		return err;
+
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() -1 );
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+	if(status.notOk())
+		return -EIO;
+
+	posixok::DirectoryEntry de;
+	de.set_name(path_to_filename(user_path_origin));
+	de.set_type(de.SUB);
+	return directory_addEntry(mdi_dir, de);
 }
 
 
 /** Create a hard link to a file */
-
-/* The link mechanism used for softlinks (using pathmap_db) can be used for hardlinks.
- * However: move the metadata of the hardlink to a UUID-key
- * 		    so that all names can be unlinked / moved / etc independently without affecting other names.
- */
 int pok_hardlink (const char *target, const char *origin)
 {
-	/* ensure that database is up-to-date, update if necessary */
-	int err = update_pathmapDB();
-	if(err)
-		return err;
-
-	std::unique_ptr<MetadataInfo> mdi_target(new MetadataInfo());
-    err = lookup(target, mdi_target);
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(target, mdi);
 	if (err)
 		return err;
-	assert(!S_ISDIR(mdi_target->pbuf()->mode()));
+	assert(!S_ISDIR(mdi->pbuf()->mode()));
 
+	pok_trace("Requested hardlink from user path %s to file at user_path %s.", origin, target);
 
-	/* The target of a hardlink has to be a hardlink_target.
-	 * If this isn't the case, make it so. */
-	if(! mdi_target->pbuf()->is_hardlink_target() ){
-		uuid_t uuid;
-		uuid_generate(uuid);
-		char uuid_parsed[100];
-		uuid_unparse(uuid, uuid_parsed);
-
-		/* add db_entry to permanent storage. */
+	/* If the target metadata is not already a hardlink_target, make it so. */
+	if(! mdi->pbuf()->is_hardlink_target() ){
 		posixok::db_entry entry;
-		entry.set_type(posixok::db_entry_TargetType_LINK);
+		entry.set_type(entry.HARDLINK);
 		entry.set_origin(target);
-		entry.set_target(uuid_parsed);
-		NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
+		entry.set_target("hardlink_"+uuid_get());
 
-		/* retry on version missmatch */
-		if(status.versionMismatch())
-			return pok_hardlink(target, origin);
-		if(status.notOk())
-			return -EIO;
+		int err = database_operation(
+				std::bind(md_key_move, mdi->getSystemPath(), entry.target()),
+				std::bind(md_key_move, entry.target(), mdi->getSystemPath()),
+				entry);
+		if(err)
+			return err;
 
-		/* add to in-memory hashmap */
-		PRIV->pmap->addSoftLink(entry.origin(), entry.target());
-
-
-		/* Move Metadata to entry->target. */
-		status = PRIV->nspace->deleteMD(mdi_target.get());
-		mdi_target->setSystemPath(entry.target());
-		mdi_target->pbuf()->set_is_hardlink_target(true);
-		if(status.ok())
-			status = PRIV->nspace->putMD(mdi_target.get());
-		if(status.notOk()){
-			pok_error("Failed putting updated hardlink metadata after successful db update. FS might be corrupt.");
-			return -EIO;
-		}
+		mdi->setSystemPath(entry.target());
+		mdi->pbuf()->set_is_hardlink_target(true);
 	}
-	
-	/* add db_entry to permanent storage. */
+
 	posixok::db_entry entry;
-	entry.set_type(posixok::db_entry_TargetType_LINK);
+	entry.set_type(entry.HARDLINK);
 	entry.set_origin(origin);
-	entry.set_target(target);
-	NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
+	entry.set_target(mdi->getSystemPath());
 
-	/* retry on version missmatch */
-	if(status.versionMismatch())
-		return pok_hardlink(target, origin);
-	if(status.notOk())
-		return -EIO;
-
-	mdi_target->pbuf()->set_link_count(mdi_target->pbuf()->link_count());
-	status = PRIV->nspace->putMD(mdi_target.get());
-	if(status.notOk()){
-		pok_error("Failed increasing metadata link_count after successfully creating link");
-		return -EIO;
-	}
-	return 0;
+	return database_operation(
+			std::bind(hardlink_fsdo,   mdi.get(), origin),
+			std::bind(hardlink_fsundo, mdi.get(), origin),
+			entry);
 }

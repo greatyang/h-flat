@@ -2,9 +2,6 @@
 #include "debug.h"
 #include <unistd.h>
 
-#define LOOKUP_REQ(user_path, mdi) {int err=lookup(user_path, mdi); if (err){pok_debug("lookup returned error code %d",err);return err;}}
-
-
 /**
  * Check file access permissions
  *
@@ -25,7 +22,9 @@ int pok_access (const char *user_path, int mode)
 		return 0;
 
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	LOOKUP_REQ(user_path,mdi);
+	int err = lookup(user_path, mdi);
+	if (err)
+		return err;
 
 	/* only test for existence of file */
 	if(mode == F_OK)
@@ -51,61 +50,63 @@ int pok_access (const char *user_path, int mode)
 	return -EACCES;
 }
 
-static NamespaceStatus permission_change_dir(std::unique_ptr<MetadataInfo> &mdi, const char *user_path)
+
+static int do_permission_change(const std::unique_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
 {
-	/* check if the permission change results in a change of path permissions */
-	if(!mdi->computePathPermissionChildren())
-		return NamespaceStatus::makeOk();
-
-	/* add db_entry to permanent storage. */
-	posixok::db_entry entry;
-	entry.set_type(entry.NONE);
-	entry.set_origin(user_path);
-	NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
-
-	if(status.versionMismatch())
-		update_pathmapDB();
-
-	if(status.ok())
-		PRIV->pmap->addPermissionChange(user_path);
-	return status;
-}
-
-
-/** Change the permission bits of a file */
-int pok_chmod (const char *user_path, mode_t mode)
-{
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	LOOKUP_REQ(user_path, mdi);
-
-	pok_trace("Changing mode for user_path %s from %d to %d",user_path, mdi->pbuf()->mode(), mode);
-
-	/* POSIX: return EPERM if not root or owner. */
-	if(fuse_get_context()->uid)
-		if(fuse_get_context()->uid != mdi->pbuf()->id_user())
-			return -EPERM;
-
+	mdi->pbuf()->set_id_group(gid);
+	mdi->pbuf()->set_id_user(uid);
 	mdi->pbuf()->set_mode(mode);
 	mdi->updateACtime();
-
-	if(S_ISDIR(mode)){
-		NamespaceStatus s = permission_change_dir(mdi, user_path);
-		if(s.versionMismatch()) /* Retry if database wasn't up to date. */
-			return pok_chmod (user_path, mode);
-		if(s.notOk())
-			return -EIO;
-	}
 	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
 	if(status.notOk())
 		return -EIO;
 	return 0;
 }
 
+static int do_permission_change_lookup(const char *user_path, mode_t mode, uid_t uid, gid_t gid)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if (err)
+		return err;
+	return do_permission_change(mdi, mode, uid, gid);
+}
+
+/** Change the permission bits of a file */
+int pok_chmod (const char *user_path, mode_t mode)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if (err)
+		return err;
+
+	pok_trace("Changing mode for user_path %s from %d to %d",user_path, mdi->pbuf()->mode(), mode);
+
+	/* POSIX: return EPERM if not root or owner. */
+	if(fuse_get_context()->uid) 	if(fuse_get_context()->uid != mdi->pbuf()->id_user()) return -EPERM;
+
+	if(S_ISDIR(mode) && mdi->computePathPermissionChildren()){
+		posixok::db_entry entry;
+		entry.set_type(entry.NONE);
+		entry.set_origin(user_path);
+
+		mode_t old_mode = mdi->pbuf()->mode();
+		err = database_operation(
+				std::bind(do_permission_change_lookup, user_path, mode, 	 mdi->pbuf()->id_user(), mdi->pbuf()->id_group()),
+				std::bind(do_permission_change_lookup, user_path, old_mode, mdi->pbuf()->id_user(), mdi->pbuf()->id_group()),
+				entry);
+		return err;
+	}
+	return do_permission_change(mdi, mode,  mdi->pbuf()->id_user(), mdi->pbuf()->id_group());
+}
+
 /** Change the owner and group of a file */
 int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	LOOKUP_REQ(user_path, mdi);
+	int err = lookup(user_path, mdi);
+	if (err)
+		return err;
 
 	pok_trace("Changing owner / group for user_path %s from %d:%d to %d:%d   fuse_context: %d:%d ",user_path,
 			mdi->pbuf()->id_user(), mdi->pbuf()->id_group(), uid, gid,
@@ -118,23 +119,22 @@ int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 		if(fuse_get_context()->uid && fuse_get_context()->uid != fuse_get_context()->uid)
 			return -EPERM;
 
-	if(gid != (gid_t)-1)
-		mdi->pbuf()->set_id_group(gid);
-	if(uid != (uid_t)-1)
-		mdi->pbuf()->set_id_user(uid);
-	mdi->updateACtime();
+	if(gid	== (gid_t)-1) gid = mdi->pbuf()->id_group();
+	if(uid  == (uid_t)-1) uid = mdi->pbuf()->id_user();
 
-	if(S_ISDIR(mdi->pbuf()->mode())){
-		NamespaceStatus s = permission_change_dir(mdi, user_path);
-		if(s.versionMismatch()) /* Retry if database wasn't up to date. */
-			return pok_chown (user_path, uid, gid);
-		if(s.notOk())
-			return -EIO;
+	if(S_ISDIR(mdi->pbuf()->mode()) && mdi->computePathPermissionChildren()){
+		posixok::db_entry entry;
+		entry.set_type(entry.NONE);
+		entry.set_origin(user_path);
+
+		uid_t old_uid = mdi->pbuf()->id_user();
+		gid_t old_gid = mdi->pbuf()->id_group();
+		err = database_operation(
+				std::bind(do_permission_change_lookup, user_path, mdi->pbuf()->mode(), uid, gid),
+				std::bind(do_permission_change_lookup, user_path, mdi->pbuf()->mode(), old_uid, old_gid),
+				entry);
+		return err;
 	}
-	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
-	if(status.notOk())
-		return -EIO;
-	pok_trace("		-> success");
-	return 0;
+	return  do_permission_change(mdi, mdi->pbuf()->mode(), uid, gid);
 }
 

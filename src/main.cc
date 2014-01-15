@@ -14,7 +14,7 @@
  */
 void *pok_init (struct fuse_conn_info *conn)
 {
-	update_pathmapDB();
+	database_update();
 	return PRIV;
 }
 

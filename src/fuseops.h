@@ -40,7 +40,6 @@ int pok_symlink  (const char *target, const char *origin);
 int pok_hardlink (const char *target, const char *origin);
 int pok_readlink (const char *user_path, char *buffer, size_t size);
 
-
 /* rename */
 int pok_rename (const char *user_path_from, const char *user_path_to);
 
@@ -49,4 +48,6 @@ int pok_fsync	(const char *user_path, int datasync, struct fuse_file_info *fi);
 int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi);
 int pok_flush 	(const char *user_path, struct fuse_file_info *fi);
 
+/* main */
+void pok_destroy(void *priv);
 #endif

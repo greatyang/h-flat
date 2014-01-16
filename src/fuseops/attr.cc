@@ -3,9 +3,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 
-int i = 10;
-
-static void fillattr(struct stat *attr, MetadataInfo * mdi)
+static void fillattr(struct stat *attr, MetadataInfo *mdi)
 {
 	attr->st_atime = mdi->pbuf()->atime();
 	attr->st_mtime = mdi->pbuf()->mtime();
@@ -17,7 +15,7 @@ static void fillattr(struct stat *attr, MetadataInfo * mdi)
 	attr->st_size  = mdi->pbuf()->size();
 	attr->st_blocks= mdi->pbuf()->blocks();
 
-	/* not setting st_ino, fuse will create its own inodes...
+	/* not setting st_ino, fuse will create its own inodes
 	 * ... that does mean that hardlinks will show up with different inode numbers though. */
 }
 

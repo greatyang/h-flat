@@ -1,6 +1,37 @@
 #include "main.h"
 #include "debug.h"
-#include <unistd.h>
+
+
+int check_access(MetadataInfo *mdi, int mode)
+{
+	/* root does as (s)he pleases */
+	if(fuse_get_context()->uid == 0)
+		return 0;
+	/* only test for existence of file */
+	if(mode == F_OK)
+		return 0;
+
+	unsigned int umode = mode;
+	/* test user */
+	if(mdi->pbuf()->id_user() == fuse_get_context()->uid){
+		if ( (mode & mdi->pbuf()->mode() >> 6) == umode )
+			return 0;
+		else
+			return -EACCES;
+	}
+	/* test group */
+	if(mdi->pbuf()->id_group() == fuse_get_context()->gid){
+		if ( (mode & mdi->pbuf()->mode() >> 3) == umode )
+			return 0;
+		else
+			return -EACCES;
+	}
+	/* test other */
+	if ( (mode & mdi->pbuf()->mode()) == umode )
+		return 0;
+	return -EACCES;
+
+}
 
 /**
  * Check file access permissions
@@ -18,6 +49,9 @@ int pok_access (const char *user_path, int mode)
 	/* OSX tries to verify access to root a hundred times or so... let's not go too crazy. */
 	if(strlen(user_path)==1)
 		return 0;
+
+	pok_trace("ACCESS CHECKIN'");
+
 	if(fuse_get_context()->uid == 0)
 		return 0;
 
@@ -26,28 +60,7 @@ int pok_access (const char *user_path, int mode)
 	if (err)
 		return err;
 
-	/* only test for existence of file */
-	if(mode == F_OK)
-		return 0;
-
-	unsigned int umode = mode;
-	/* test other */
-	if ( (mode & mdi->pbuf()->mode()) == umode )
-		return 0;
-	/* test group */
-	if(mdi->pbuf()->id_group() == fuse_get_context()->gid){
-		pok_trace("checking group...");
-		if ( (mode & mdi->pbuf()->mode() >> 3) == umode )
-			return 0;
-	}
-	/* test user */
-	if(mdi->pbuf()->id_user() == fuse_get_context()->uid){
-		pok_trace("checking user...");
-		if ( (mode & mdi->pbuf()->mode() >> 6) == umode )
-			return 0;
-	}
-	pok_trace("Access for user_path '%s' NOT GRANTED",user_path);
-	return -EACCES;
+	return check_access(mdi.get(), mode);
 }
 
 
@@ -82,8 +95,9 @@ int pok_chmod (const char *user_path, mode_t mode)
 
 	pok_trace("Changing mode for user_path %s from %d to %d",user_path, mdi->pbuf()->mode(), mode);
 
-	/* POSIX: return EPERM if not root or owner. */
-	if(fuse_get_context()->uid) 	if(fuse_get_context()->uid != mdi->pbuf()->id_user()) return -EPERM;
+	if(fuse_get_context()->uid && fuse_get_context()->uid != mdi->pbuf()->id_user())
+		return -EPERM;
+
 
 	if(S_ISDIR(mode) && mdi->computePathPermissionChildren()){
 		posixok::db_entry entry;
@@ -92,7 +106,7 @@ int pok_chmod (const char *user_path, mode_t mode)
 
 		mode_t old_mode = mdi->pbuf()->mode();
 		err = database_operation(
-				std::bind(do_permission_change_lookup, user_path, mode, 	 mdi->pbuf()->id_user(), mdi->pbuf()->id_group()),
+				std::bind(do_permission_change_lookup, user_path, mode, 	mdi->pbuf()->id_user(), mdi->pbuf()->id_group()),
 				std::bind(do_permission_change_lookup, user_path, old_mode, mdi->pbuf()->id_user(), mdi->pbuf()->id_group()),
 				entry);
 		return err;
@@ -112,15 +126,17 @@ int pok_chown (const char *user_path, uid_t uid, gid_t gid)
 			mdi->pbuf()->id_user(), mdi->pbuf()->id_group(), uid, gid,
 			fuse_get_context()->uid,fuse_get_context()->gid);
 
-	if(uid != (uid_t)-1)
-		if(fuse_get_context()->uid)
-			return -EPERM;
-	if(gid != (gid_t)-1)
-		if(fuse_get_context()->uid && fuse_get_context()->uid != fuse_get_context()->uid)
-			return -EPERM;
+	/* Only the root user can change the owner of a file.
+	 * You can change the group of a file only if you are a root user or if you own the file.
+	 * If you own the file but are not a root user, you can change the group only to a group of which you are a member.
+	 *
+	 * TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system.
+	 * */
+	if(uid == (uid_t)-1) uid = mdi->pbuf()->id_user();
+	else if(fuse_get_context()->uid) return -EPERM;
+	if(gid == (gid_t)-1) gid = mdi->pbuf()->id_group();
+	else if(fuse_get_context()->uid && fuse_get_context()->uid != mdi->pbuf()->id_user()) return -EPERM;
 
-	if(gid	== (gid_t)-1) gid = mdi->pbuf()->id_group();
-	if(uid  == (uid_t)-1) uid = mdi->pbuf()->id_user();
 
 	if(S_ISDIR(mdi->pbuf()->mode()) && mdi->computePathPermissionChildren()){
 		posixok::db_entry entry;

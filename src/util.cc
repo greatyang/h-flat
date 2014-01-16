@@ -109,6 +109,9 @@ static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const 
 	mdi->pbuf()->set_id_group(fuse_get_context()->gid);
 	mdi->pbuf()->set_id_user (fuse_get_context()->uid);
 	mdi->pbuf()->set_mode(mode);
+
+	/* If a data unique id is already set somewhere else, don't overwrite */
+	if(! mdi->pbuf()->has_data_unique_id())
 	mdi->pbuf()->set_data_unique_id(uuid_get());
 
 	/* Inherit path permissions existing for directory */
@@ -129,7 +132,7 @@ static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const 
 }
 
 /* Create metadata-key and add its name to parent directory. This function is used by all
- * fuseops that want to create a file (create, symlink, link)  */
+ * fuseops that want to create a file (create, symlink, link)... */
 int create_from_mdi(const char *user_path, mode_t mode, const std::unique_ptr<MetadataInfo> &mdi)
 {
 	int err = lookup(user_path, mdi);
@@ -153,7 +156,7 @@ int create_from_mdi(const char *user_path, mode_t mode, const std::unique_ptr<Me
 
 	/* Add filename to directory */
 	posixok::DirectoryEntry e;
-	e.set_name( path_to_filename(mdi->getSystemPath()) );
+	e.set_name( path_to_filename(user_path) );
 	err = directory_addEntry( mdi_dir, e );
 	if(err){
 		pok_error("Failed updating parent directory of user path '%s' ",user_path);
@@ -161,3 +164,5 @@ int create_from_mdi(const char *user_path, mode_t mode, const std::unique_ptr<Me
 	}
 	return 0;
 }
+
+

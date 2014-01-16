@@ -13,6 +13,28 @@ int pok_mkdir 		(const char *user_path, mode_t mode)
 	return err;
 }
 
+/** Remove a directory */
+int pok_rmdir (const char *user_path)
+{
+	/* Update database so that all directory entries will be counted by readdir. */
+	database_update();
+
+	struct fuse_file_info fi;
+	fi.fh = 0;
+
+	int err = pok_open(user_path, &fi);
+	if(err)
+		return err;
+	int num_entries = pok_readdir(user_path, 0, 0, 0, &fi);
+	pok_release(user_path, &fi);
+
+	if(num_entries)
+		return -ENOTEMPTY;
+
+	return pok_unlink(user_path);
+}
+
+
 /** Read directory
  *
  * This supersedes the old getdir() interface.  New applications
@@ -41,6 +63,10 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
+	if(check_access(mdi, R_OK)) // ls requires read permission
+		return -EACCES;
+
+
 	pok_debug("Reading directory at user path %s with %d allocated blocks and a byte size of %d",user_path,mdi->pbuf()->blocks(),mdi->pbuf()->size());
 
 	std::unordered_map<std::string, int> ncount;
@@ -71,11 +97,16 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 		}
 	}
 
+	int num_elements = 0;
+
 	for (auto& element : ncount) {
 		assert(element.second == 0 || element.second == 1);
 		if(element.second == 1){
-		  filldir(buffer, element.first.c_str(), NULL, 0);
+			/* We want to (ab)use this function in rmdir to check if this directory is empty. */
+			if(!filldir) num_elements++;
+			else
+				filldir(buffer, element.first.c_str(), NULL, 0);
 		}
 	}
-	return 0;
+	return num_elements;
 }

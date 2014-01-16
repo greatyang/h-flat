@@ -20,7 +20,7 @@ TEST_CASE( "init+sanity", "[pathmapdb]" ) {
 }
 
 /* Assume initially existing directories /x and /x/a */ 
-TEST_CASE( "Rename", "[pathmapdb]" ) {
+TEST_CASE( "rename-circular", "[pathmapdb]" ) {
    std::unique_ptr<PathMapDB> db(new PathMapDB);
  
    std::string userPath, systemPath;
@@ -53,8 +53,6 @@ TEST_CASE( "Rename", "[pathmapdb]" ) {
 	*******************/
    //db->printSnapshot();
 
-
-
    /* move /x/c /x/a */
    db->addDirectoryMove("/x/c", "/x/a");
    REQUIRE(db->getSnapshotVersion() == 3);
@@ -74,3 +72,18 @@ TEST_CASE( "Rename", "[pathmapdb]" ) {
 
 }
 
+TEST_CASE( "rename-reuse", "[pathmapdb]" ) {
+   std::unique_ptr<PathMapDB> db(new PathMapDB);
+
+   std::string userPath, systemPath;
+   std::int64_t pathPermissionTimeStamp;
+
+
+   db->addDirectoryMove("/a", "/b");
+   /* b->a, a->reuse */
+
+   systemPath = db->toSystemPath("/a", pathPermissionTimeStamp, CallingType::LOOKUP);
+   db->addDirectoryMove("/a", "/c");
+   REQUIRE(systemPath == db->toSystemPath("/c", pathPermissionTimeStamp, CallingType::LOOKUP));
+   REQUIRE(db->toSystemPath("/a", pathPermissionTimeStamp, CallingType::LOOKUP) != "/a");
+}

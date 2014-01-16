@@ -2,8 +2,6 @@
 #include "debug.h"
 #include "fuseops.h"
 
-
-
 /** Read the target of a symbolic link
  *
  * The buffer should be filled with a null terminated string.  The
@@ -28,7 +26,6 @@ int pok_readlink (const char *user_path, char *buffer, size_t size)
 	return 0;
 }
 
-
 static int symlink_fsdo(const char *origin)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
@@ -48,6 +45,52 @@ int pok_symlink (const char *target, const char *origin)
 			std::bind(pok_unlink,origin),
 			entry);
 }
+
+
+static int hardlink_fsdo(MetadataInfo *mdi, const char *user_path_origin)
+{
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	int err = lookup_parent(user_path_origin, mdi_dir);
+	if(err)
+		return err;
+
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1 );
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+	if(status.notOk())
+		return -EIO;
+
+	posixok::DirectoryEntry de;
+	de.set_name(path_to_filename(user_path_origin));
+	err = directory_addEntry(mdi_dir, de);
+
+	/* Failed adding directory entry -> UNDO linkcount increase */
+	if(err){
+		mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1 );
+		NamespaceStatus status = PRIV->nspace->putMD(mdi);
+		if(status.notOk())
+			kill_compound_fail();
+	}
+	return err;
+}
+
+static int hardlink_fsundo(MetadataInfo *mdi, const char *user_path_origin)
+{
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	int err = lookup_parent(user_path_origin, mdi_dir);
+	if(err)
+		return err;
+
+	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() -1 );
+	NamespaceStatus status = PRIV->nspace->putMD(mdi);
+	if(status.notOk())
+		return -EIO;
+
+	posixok::DirectoryEntry de;
+	de.set_name(path_to_filename(user_path_origin));
+	de.set_type(de.SUB);
+	return directory_addEntry(mdi_dir, de);
+}
+
 
 static int md_key_move (std::string keyFrom, std::string keyTo)
 {
@@ -85,52 +128,13 @@ static int md_key_move (std::string keyFrom, std::string keyTo)
 	return 0;
 }
 
-static int hardlink_fsdo(MetadataInfo *mdi, const char *user_path_origin)
-{
-	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-	int err = lookup_parent(user_path_origin, mdi_dir);
-	if(err)
-		return err;
-
-	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1 );
-	NamespaceStatus status = PRIV->nspace->putMD(mdi);
-	if(status.notOk())
-		return -EIO;
-
-	posixok::DirectoryEntry de;
-	de.set_name(path_to_filename(user_path_origin));
-	err = directory_addEntry(mdi_dir, de);
-
-	/* Failed adding directory entry
-	 * 	-> UNDO linkcount increase */
-	if(err){
-		mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1 );
-		NamespaceStatus status = PRIV->nspace->putMD(mdi);
-		if(status.notOk())
-			kill_compound_fail();
-	}
-	return err;
-}
-
-static int hardlink_fsundo(MetadataInfo *mdi, const char *user_path_origin)
-{
-	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-	int err = lookup_parent(user_path_origin, mdi_dir);
-	if(err)
-		return err;
-
-	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() -1 );
-	NamespaceStatus status = PRIV->nspace->putMD(mdi);
-	if(status.notOk())
-		return -EIO;
-
-	posixok::DirectoryEntry de;
-	de.set_name(path_to_filename(user_path_origin));
-	de.set_type(de.SUB);
-	return directory_addEntry(mdi_dir, de);
-}
 
 
+/*  Please note: Hardlinks could be alternatively implemented without using the database:
+ *		indirection-metadata at the name-locations (possible because no directories are hardlinks)
+ *		which is followed inside the file system would do the same trick.
+ *		Although with 1 additional drive access each lookup.
+ */
 /** Create a hard link to a file */
 int pok_hardlink (const char *target, const char *origin)
 {

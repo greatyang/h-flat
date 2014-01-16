@@ -9,7 +9,7 @@
 
 #define FUSE_USE_VERSION 26
 #include <fuse/fuse.h>
-
+#include <unistd.h>
 #include <memory>
 #include <functional>
 
@@ -24,12 +24,19 @@ struct pok_priv
 	std::unique_ptr<PathMapDB> 	   pmap;	// path permission & remapping
 	std::unique_ptr<FlatNamespace> nspace;	// access storage using flat namespace
 //  std::unique_ptr<HouseKeeper>   ursula;  // cleans, polishes and so on
+
+	/* superblock like information */
 	const int blocksize;
+
+	/* other state information */
+	bool multiclient;						// hint if other clients are expected to update the file system concurrently
+											// mainly used to decide how optimistic database updates should be performed
 
 	pok_priv():
 		pmap(new PathMapDB()),
 		nspace(new KineticNamespace()),
-		blocksize(1024 * 1024)
+		blocksize(1024 * 1024),
+		multiclient(false)
 	{}
 };
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
@@ -41,11 +48,15 @@ int lookup				(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
 int lookup_parent		(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
 int create_from_mdi		(const char *user_path, mode_t mode, const std::unique_ptr<MetadataInfo> &mdi);
 int directory_addEntry	(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
+
 std::string uuid_get	(void);
 inline std::string path_to_filename(const std::string &path) { return path.substr(path.find_last_of('/')+1); }
 
 /* util_database */
 int database_update(void);
 int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsfun_undo, posixok::db_entry &entry);
+
+/* fuseops_permission */
+int check_access(MetadataInfo *mdi, int mode);
 
 #endif

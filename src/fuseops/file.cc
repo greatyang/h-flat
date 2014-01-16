@@ -14,6 +14,15 @@ static int unlink_fsdo(const char *user_path)
 	if (err)
 		return err;
 
+	/* Removing a file requires write + execute permission on directory. */
+	if(check_access(mdi_dir.get(), W_OK | X_OK))
+		return -EACCES;
+	/* If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course). */
+	if(  fuse_get_context()->uid &&	(mdi_dir->pbuf()->mode() & S_ISVTX) &&
+		(fuse_get_context()->uid != mdi_dir->pbuf()->id_user()) &&
+		(fuse_get_context()->uid != mdi->pbuf()->id_user()) )
+		return -EACCES;
+
 	/* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
 	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1);
 	NamespaceStatus status = NamespaceStatus::makeInvalid();
@@ -111,18 +120,25 @@ int pok_unlink(const char *user_path)
  */
 int pok_open(const char *user_path, struct fuse_file_info *fi)
 {
-	pok_debug("Attempting to open file with user path: %s",user_path);
+	pok_trace("Attempting to open file with user path: %s",user_path);
 	if(fi->fh){
 		// This could be perfectly legal, I am not sure how fuse works... if it is
 		// we need to reference count metadata_info structures.
 		pok_error("File handle supplied when attempting to open user path %s",user_path);
 		return -EINVAL;
 	}
-
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
 	if (err)
 		return err;
+
+	int access = fi->flags & O_ACCMODE;
+	if(access == O_RDONLY) err = check_access(mdi.get(), R_OK);
+	if(access == O_WRONLY) err = check_access(mdi.get(), W_OK);
+	if(access == O_RDWR)   err = check_access(mdi.get(), R_OK | W_OK);
+	if(err)
+		return err;
+
 
 	// while this isn't pretty, it's probably the best way to use fi->fh
 	fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
@@ -185,4 +201,16 @@ int pok_release (const char *user_path, struct fuse_file_info *fi)
 		fi->fh = 0;
 	}
 	return 0;
+}
+
+/** Create a file node
+ *
+ * This is called for creation of all non-directory, non-symlink
+ * nodes.  If the filesystem defines a create() method, then for
+ * regular files that will be called instead.
+ */
+int pok_mknod(const char* user_path, mode_t mode, dev_t rdev)
+{
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	return create_from_mdi(user_path, mode , mdi);
 }

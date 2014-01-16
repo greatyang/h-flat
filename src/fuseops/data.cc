@@ -1,6 +1,6 @@
 #include "main.h"
 #include "debug.h"
-
+#include <unistd.h>
 
 /*  TODO: Design a reasonable system to keep track of allocated data keys. Especially for files with holes.
  * 		Probably add to data-delete-list on unlink or sth similar (unique data ids so its fine) */
@@ -113,6 +113,12 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 
 static int truncate(MetadataInfo *mdi, off_t offset)
 {
+	if(check_access(mdi, W_OK))
+		return -EACCES;
+
+	if(offset > std::numeric_limits<std::uint32_t>::max())
+		return -EFBIG;
+
 	mdi->pbuf()->set_size(offset);
 	mdi->updateACMtime();
 	NamespaceStatus status = PRIV->nspace->putMD(mdi);

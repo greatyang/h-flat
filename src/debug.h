@@ -31,6 +31,7 @@ static void pok_printlog(const int loglevel, const char* fun, const char* file, 
 	struct tm * timeinfo = localtime ( &rawtime );
 	printf("[%d:%d:%d] ",timeinfo->tm_hour,timeinfo->tm_min,timeinfo->tm_sec);
 
+	if(loglevel==2)	printf("\e[0;37m DEBUG ");
 	if(loglevel==3)	printf("\e[0;33m WARNING ");
 	if(loglevel==4) printf("\e[0;31m ERROR ");
 

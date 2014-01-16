@@ -2,8 +2,9 @@
 #define POK_FUSUOPS_H_
 
 /* directory */
-int pok_readdir (const char *user_path, void *, fuse_fill_dir_t, off_t, struct fuse_file_info *fi);
+int pok_readdir (const char *user_path, void *buffer, fuse_fill_dir_t filldir, off_t offset, struct fuse_file_info *fi);
 int pok_mkdir 	(const char *user_path, mode_t mode);
+int pok_rmdir 	(const char *user_path);
 
 /* permission */
 int pok_access  (const char *user_path, int mode);
@@ -28,6 +29,7 @@ int pok_create	(const char *user_path, mode_t mode, struct fuse_file_info *fi);
 int pok_unlink	(const char *user_path);
 int pok_open	(const char *user_path, struct fuse_file_info *fi);
 int pok_release (const char *user_path, struct fuse_file_info *fi);
+int pok_mknod	(const char* user_path, mode_t mode, dev_t rdev);
 
 /* data */
 int pok_read 	(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi);

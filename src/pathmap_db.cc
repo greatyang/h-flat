@@ -226,12 +226,21 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
 		snapshot[origin] 	  = { TargetType::REUSE, "|reuse_"+std::to_string(snapshotVersion), 0 };
 	}
 	
-	/* There's an existing mapping with key==origin, update it 
-	 * mv /a /b [b->a, a->X] 
-	 * mv /b /c [c->a, a->X] */
+	/* There's an existing mapping with key==origin, update it. If existing mapping is of type REUSE a new REUSE mapping has to be generated.
+	 * mv /a /b [b->a, a->X1]
+	 * mv /b /c [c->a, a->X1]
+	 * mv /a /d [c->a, d->X1, a->X2]
+	 */
 	else{
+		TargetType type = snapshot[origin].type;
+		assert(type == TargetType::MOVE || type == TargetType::REUSE);
+
 		snapshot[destination] = { TargetType::MOVE, snapshot[origin].target, snapshot[origin].permissionTimeStamp };
-		snapshot.erase(origin);	
+
+		if(type == TargetType::REUSE)
+			snapshot[origin].target = "|reuse_"+std::to_string(snapshotVersion);
+		else
+			snapshot.erase(origin);
 	}
  
 	/* Special case: Circular move 

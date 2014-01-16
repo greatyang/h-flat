@@ -1,11 +1,10 @@
 #include "main.h"
 #include "debug.h"
 #include "fuseops.h"
+#include <sys/param.h>
 
-/** Rename a file or directory. */
-int pok_rename (const char *user_path_from, const char *user_path_to)
+static int move_directory_entry(const char *user_path_from, const char *user_path_to)
 {
-	pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
 
 	/* Lookup metadata of supplied paths and their directories.
 	 * Except user_path_to everything has to exist, user_path_to has
@@ -16,76 +15,86 @@ int pok_rename (const char *user_path_from, const char *user_path_to)
 	if (err)
 		return err;
 
-	std::unique_ptr<MetadataInfo> mdifrom(new MetadataInfo());
-	err = lookup(user_path_from, mdifrom);
-	if (err)
-		return err;
-
 	std::unique_ptr<MetadataInfo> dir_mdito(new MetadataInfo());
 	err = lookup_parent(user_path_to, dir_mdito);
 	if (err)
 		return err;
 
-	err = pok_unlink(user_path_to);
-	if (err && err != -ENOENT)
-		return err;
+	std::int64_t req_snapshotVersion = PRIV->pmap->getSnapshotVersion()+1;
 
-
-	std::int64_t req_snapshotVersion = 0;
-	err = 0;
-
-	/* Different handling of rename for directories / everything else */
-	if(S_ISDIR(mdifrom->pbuf()->mode())){
-
-		/* 1) ensure that database is up-to-date, update if necessary */
-		int err = database_update();
-		if(err)
-			return err;
-
-		/* 2) add db_entry to permanent storage. */
-		posixok::db_entry entry;
-		entry.set_type(entry.MOVE);
-		entry.set_origin(user_path_from);
-		entry.set_target(user_path_to);
-		NamespaceStatus status = PRIV->nspace->putDBEntry(PRIV->pmap->getSnapshotVersion()+1, entry);
-
-		/* 3) Retry everything (including lookup) if somebody overwrote since our db-update. */
-		if(status.versionMismatch())
-				return pok_rename(user_path_from, user_path_to);
-		if(status.notOk())
-			return -EIO;
-
-		PRIV->pmap->addDirectoryMove(user_path_from, user_path_to);
-		req_snapshotVersion = PRIV->pmap->getSnapshotVersion();
-	}
-	else{
-		/* Move the metadata-key: delete old location, create at new location.
-		   TODO: Handle moving hardlinks */
-		if(mdifrom->pbuf()->is_hardlink_target())
-			return -ENOSYS;
-		NamespaceStatus status = PRIV->nspace->deleteMD( mdifrom.get() );
-		if(status.notOk())
-			return -EIO;
-		std::string keyname = dir_mdito->getSystemPath() + (dir_mdito->getSystemPath().size() == 1 ? "" : "/") + path_to_filename(user_path_to);
-		mdifrom->setSystemPath(keyname);
-		status = PRIV->nspace->putMD( mdifrom.get() );
-		if(status.notOk())
-			err = -EIO;
-	}
-
-	/* For both directory and file moves we need to update the parent directories */
+	/* remove old directory entry */
 	posixok::DirectoryEntry e;
 	e.set_name(path_to_filename(user_path_from));
 	e.set_type(e.SUB);
 	e.set_req_version(req_snapshotVersion);
-	if(!err) err = directory_addEntry(dir_mdifrom, e);
+	err = directory_addEntry(dir_mdifrom, e);
+	if (err)
+		return err;
 
+	/* add new directory entry */
 	e.set_name(path_to_filename(user_path_to));
 	e.set_type(e.ADD);
 	e.set_req_version(req_snapshotVersion);
-	if(!err) err = directory_addEntry(dir_mdito, e);
+	err = directory_addEntry(dir_mdito, e);
 
-	if(err)
-		pok_error("Unrecoverable error in rename operation. File system might be corrupt.");
 	return err;
+}
+
+
+/** Rename a file or directory. */
+int pok_rename (const char *user_path_from, const char *user_path_to)
+{
+	pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
+
+	/* Lookup to-be-moved metadata in order to decide what to do. */
+	std::unique_ptr<MetadataInfo> mdi_from(new MetadataInfo());
+	int err = lookup(user_path_from, mdi_from);
+	if (err)
+		return err;
+
+	/* unlink target name if it exists */
+	int unlinked = err = pok_unlink(user_path_to);
+	if (unlinked && unlinked != -ENOENT)
+		return unlinked;
+
+	/* Moving a directory. */
+	if(S_ISDIR(mdi_from->pbuf()->mode())){
+		posixok::db_entry entry;
+		entry.set_type(entry.MOVE);
+		entry.set_origin(user_path_from);
+		entry.set_target(user_path_to);
+
+		err = database_operation(
+				std::bind(move_directory_entry, user_path_from, user_path_to),
+				std::bind(move_directory_entry, user_path_to, user_path_from),
+				entry);
+		if(!err || unlinked != -ENOENT)
+			return err;
+		kill_compound_fail(); // we have unlinked something but failed with the move operation
+	}
+
+	/* For non-directorys there's 2 steps:
+	 *   a) create new softlink / hardlink / regular file
+	 *   b) unlink old name */
+	if(S_ISLNK(mdi_from->pbuf()->mode())) {
+		char buffer[PATH_MAX];
+		err = pok_readlink(user_path_from, buffer, PATH_MAX);
+		if(!err) err = pok_symlink (buffer, user_path_to);
+	}
+	else if(mdi_from->pbuf()->is_hardlink_target())	{
+		err = pok_hardlink (mdi_from->getSystemPath().c_str(), user_path_to);
+	}
+	else {
+		err = create_from_mdi(user_path_to, mdi_from->pbuf()->mode(), mdi_from);
+	}
+
+	if(err && unlinked == -ENOENT)
+		kill_compound_fail(); // we have unlinked something but failed with the move operation
+
+	/* unlink old name link */
+	err = pok_unlink  (user_path_from);
+	if (err)
+		kill_compound_fail(); // we have created something but failed with the move operation
+
+	return 0;
 }

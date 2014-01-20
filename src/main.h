@@ -14,49 +14,58 @@
 #include <functional>
 
 #include "pathmap_db.h"
-#include "kinetic_namespace.h"
 #include "metadata_info.h"
-#include "directorydata.pb.h"
+#include "kinetic_namespace.h"
 
 /* Private file-system wide data, accessible from anywhere. */
 struct pok_priv
 {
-	std::unique_ptr<PathMapDB> 	   pmap;	// path permission & remapping
-	std::unique_ptr<FlatNamespace> nspace;	// access storage using flat namespace
-//  std::unique_ptr<HouseKeeper>   ursula;  // cleans, polishes and so on
+	std::unique_ptr<PathMapDB> 	   		pmap;	// path permission & remapping
+	std::unique_ptr<KineticNamespace> 	kinetic;
 
 	/* superblock like information */
-	const int blocksize;
-
-	/* other state information */
-	bool multiclient;						// hint if other clients are expected to update the file system concurrently
-											// mainly used to decide how optimistic database updates should be performed
+	bool 			multiclient;
+	std::int32_t 	blocksize;
+	std::int64_t  	inum_base;
+	std::uint16_t 	inum_counter;
+	std::mutex 		lock;
 
 	pok_priv():
 		pmap(new PathMapDB()),
-		nspace(new KineticNamespace()),
+		kinetic(new SimpleKineticNamespace()),
+
+		multiclient(false),
 		blocksize(1024 * 1024),
-		multiclient(false)
+		inum_base(0),
+		inum_counter(10),
+		lock()
 	{}
 };
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
 
 
-
-/* util > these are utility functions provided to the various path based fuse operations. */
-int lookup				(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi);
+/* lookup > these are utility functions provided to the various path based fuse operations. */
+int lookup				(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool handle_special_inodes = true);
 int lookup_parent		(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
-int create_from_mdi		(const char *user_path, mode_t mode, const std::unique_ptr<MetadataInfo> &mdi);
-int directory_addEntry	(const std::unique_ptr<MetadataInfo> &mdi, const posixok::DirectoryEntry &e);
 
-std::string uuid_get	(void);
-inline std::string path_to_filename(const std::string &path) { return path.substr(path.find_last_of('/')+1); }
+/* directory */
+int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename);
+int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename);
 
-/* util_database */
+/* permission */
+int check_access(MetadataInfo *mdi, int mode);
+
+/* database */
 int database_update(void);
 int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsfun_undo, posixok::db_entry &entry);
 
-/* fuseops_permission */
-int check_access(MetadataInfo *mdi, int mode);
+/* general utility functions */
+namespace util{
+	ino_t 			generate_inode_number(void);
+	std::string 	generate_uuid(void);
+	std::int64_t 	to_int64(const std::string &version_string);
+	std::string 	path_to_filename(const std::string &path);
+}
+
 
 #endif

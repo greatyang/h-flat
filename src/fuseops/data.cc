@@ -1,13 +1,11 @@
 #include "main.h"
 #include "debug.h"
+#include "kinetic_helper.h"
 #include <unistd.h>
-
-/*  TODO: Design a reasonable system to keep track of allocated data keys. Especially for files with holes.
- * 		Probably add to data-delete-list on unlink or sth similar (unique data ids so its fine) */
 
 static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, bool write)
 {
-	/* We might have to split the operation across multiple blocks */
+	/* might have to split the operation across multiple blocks */
 	int blocksize 		= PRIV->blocksize;
 	int sizeleft 		= size;
 	int blocknum    	= offset / blocksize;
@@ -16,32 +14,17 @@ static int readwrite (char *buf, size_t size, off_t offset, MetadataInfo * mdi, 
 		int inblockstart 	=  offset > blocknum * blocksize ? (offset - blocknum * blocksize ) : 0;
 		int	inblocksize		=  sizeleft > blocksize-inblockstart ? blocksize-inblockstart : sizeleft;
 
-		pok_trace("Trying to write %d bytes [of total %d] at offset %d in block %d.",
-				inblocksize, size, inblockstart, blocknum);
+		if(!mdi->hasDataInfo(blocknum))
+			if(int err = get_data(mdi, blocknum))
+				return err;
 
-		std::string value;
-		NamespaceStatus status = PRIV->nspace->get(mdi, blocknum, value);
-
-		/* Should never happen, user shouldn't have been able to open the file.
-		 * status.notFound() is perfectly fine though if file has holes, just fill
-		 * buffer with zeros in this case. */
-		assert(!status.notAuthorized() && !status.notValid());
-		value.resize(blocksize,'0');
-
+		DataInfo *di = mdi->getDataInfo(blocknum);
 		if(write){
-			try{
-			value.replace(inblockstart, inblocksize, buf);
-			}catch(std::exception& e){
-				pok_error("Exception thrown trying to replace byte range [%d,%d] in string Reason: %s",
-						inblockstart, inblocksize, e.what());
-				return -EINVAL;
-			}
-			if(PRIV->nspace->put(mdi, blocknum, value).notOk())
-				return -EIO;
+			di->updateData(buf,inblockstart,inblocksize);
+			put_data(mdi,blocknum);
 		}
-		else{
-			memcpy(buf+size-sizeleft, value.data() + inblockstart, inblocksize);
-		}
+		else
+			memcpy(buf+size-sizeleft, di->data().data() + inblockstart, inblocksize);
 
 		sizeleft -= inblocksize;
 		blocknum++;
@@ -65,14 +48,13 @@ int pok_read (const char* user_path, char *buf, size_t size, off_t offset, struc
 {
 	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
 	if(!mdi){
-		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
+		pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
 	if(offset+size > mdi->pbuf()->size()){
 		pok_trace("Attempting to read beyond EOF for user path %s",user_path);
 		return 0;
 	}
-	pok_trace("reading from user path %s",user_path);
 	return readwrite(buf, size, offset, mdi, false);
 }
 
@@ -89,7 +71,7 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 {
 	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
 	if(!mdi){
-		pok_error("Write request for user path '%s' without metadata_info structure", user_path);
+		pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
 	int rtn = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
@@ -101,11 +83,7 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 		mdi->pbuf()->set_blocks((newsize / PRIV->blocksize) + 1);
 		mdi->updateACMtime();
 
-		NamespaceStatus status = PRIV->nspace->putMD(mdi);
-		if(status.notOk()){
-			pok_warning("Failed putting metadata key '%s' due to %s",mdi->getSystemPath().c_str(), status.ToString().c_str());
-			return -EINVAL;
-		}
+		rtn = put_metadata(mdi);
 	}
 	return rtn;
 }
@@ -121,11 +99,7 @@ static int truncate(MetadataInfo *mdi, off_t offset)
 
 	mdi->pbuf()->set_size(offset);
 	mdi->updateACMtime();
-	NamespaceStatus status = PRIV->nspace->putMD(mdi);
-
-	if(status.notOk())
-		return -EIO;
-	return 0;
+	return put_metadata(mdi);
 }
 
 
@@ -133,11 +107,8 @@ static int truncate(MetadataInfo *mdi, off_t offset)
 int pok_truncate (const char *user_path, off_t offset)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err){
-		pok_debug("lookup returned error code %d",err);
+	if(int err = lookup(user_path, mdi))
 		return err;
-	}
 	return truncate(mdi.get(), offset);
 }
 
@@ -157,7 +128,7 @@ int pok_ftruncate (const char *user_path, off_t offset, struct fuse_file_info *f
 {
 	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
 	if(!mdi){
-		pok_error("Write request for user path '%s' without metadata_info structure", user_path);
+		pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
 	return truncate(mdi, offset);

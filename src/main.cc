@@ -1,6 +1,7 @@
 #include "main.h"
 #include "debug.h"
 #include "fuseops.h"
+#include "kinetic_helper.h"
 
 /**
  * Initialize filesystem
@@ -13,7 +14,44 @@
  * Changed in version 2.6
  */
 void *pok_init (struct fuse_conn_info *conn)
-{
+
+{	/* Setup values required for inode generation. */
+	const std::string inode_base_key = "igen";
+	std::string keyVersion;
+
+	KineticStatus status = PRIV->kinetic->GetVersion(inode_base_key, &keyVersion);
+	if(status.ok())
+		PRIV->inum_base = util::to_int64(keyVersion);
+	else if(status.notFound())
+		PRIV->inum_base = 0;
+	else
+		pok_error("Error encountered obtaining inode generation numbers.");
+
+
+	KineticRecord empty("",std::to_string(PRIV->inum_base+1),"",com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	status = PRIV->kinetic->Put(inode_base_key, PRIV->inum_base ? std::to_string(PRIV->inum_base) : "", WriteMode::REQUIRE_SAME_VERSION, empty);
+	if(status.notOk())
+		pok_error("Failed increasing inode base key.");
+
+	/* Verify that root metadata is available. If it isn't, initialize it. */
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	mdi->setSystemPath("/");
+	int err = get_metadata(mdi.get());
+	if (err == -ENOENT){
+		pok_trace("Initialzing root metadata.");
+		mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
+		mdi->updateACMtime();
+		mdi->pbuf()->set_uid(0);
+		mdi->pbuf()->set_gid(0);
+		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+		mdi->pbuf()->set_path_permission_verified(0);
+		mdi->pbuf()->set_inode_number(++PRIV->inum_counter);
+		mdi->pbuf()->set_data_unique_id(util::generate_uuid());
+		err = create_metadata(mdi.get());
+	}
+	if(err)
+		pok_error("Error encountered validating root metadata.");
+
 	database_update();
 	return PRIV;
 }
@@ -35,7 +73,7 @@ void pok_destroy (void *priv)
 static struct fuse_operations pok_ops;
 static void init_pok_ops(fuse_operations *ops)
 {
-	ops->create		= pok_create;
+	ops->create		= pok_fcreate;
 	ops->unlink		= pok_unlink;
 	ops->open		= pok_open;
 	ops->release	= pok_release;
@@ -94,34 +132,8 @@ int main(int argc, char *argv[])
 	try{
 		 priv = new pok_priv();
 	}
-	catch(std::exception& e){
+	catch(std::exception& e)
 		pok_error("Exception thrown during mount operation. Reason: %s",e.what());
-		return -1;
-	}
-
-	/* Verify that root metadata is available. If it isn't, initialize it. */
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	mdi->setSystemPath("/");
-	NamespaceStatus status = priv->nspace->getMD(mdi.get());
-
-	if (status.notFound()){
-		pok_trace("Initialzing root metadata.");
-
-		mdi->updateACMtime();
-		mdi->pbuf()->set_id_group(0);
-		mdi->pbuf()->set_id_user(0);
-		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-		mdi->pbuf()->set_blocks(1);
-		mdi->pbuf()->set_size(0);
-		mdi->pbuf()->set_path_permission_verified(0);
-		mdi->pbuf()->set_data_unique_id("|");
-		status = priv->nspace->putMD(mdi.get());
-	}
-	if (status.notOk()){
-		pok_error("Error encountered when trying to validate root metadata.");
-		delete priv;
-		return -1;
-	}
 
 	return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

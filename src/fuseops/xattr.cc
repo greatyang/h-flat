@@ -1,5 +1,6 @@
 #include "main.h"
 #include "debug.h"
+#include "kinetic_helper.h"
 #include <sys/xattr.h>
 #ifndef ENOATTR
 # define ENOATTR ENODATA        /* No such attribute */
@@ -40,10 +41,7 @@ int pok_setxattr (const char *user_path, const char *attr_name, const char *attr
 	xattr->set_name(attr_name);
 	xattr->set_value(attr_value, attr_size);
 
-	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
-	if(!status.ok())
-		return -EIO;
-	return 0;
+	return put_metadata(mdi.get());
 }
 
 int pok_setxattr_apple (const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags, uint32_t position){
@@ -54,8 +52,6 @@ int pok_setxattr_apple (const char *user_path, const char *attr_name, const char
 /** Get extended attributes */
 int pok_getxattr (const char *user_path, const char *attr_name, char *attr_value, size_t attr_size)
 {
-	pok_trace("Getting extended attributes for user path %s.",user_path);
-
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
 	if(err)
@@ -108,10 +104,7 @@ int pok_removexattr (const char *user_path, const char *attr_name)
 	for(int i=0; i < mdi->pbuf()->xattr_size(); i++) {
 		if(! mdi->pbuf()->xattr(i).name().compare(attr_name) ) {
 			mdi->pbuf()->mutable_xattr()->DeleteSubrange(i,1);
-			NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
-			if(!status.ok())
-				return -EIO;
-			return 0;
+			return put_metadata(mdi.get());
 		}
 	}
 	return -ENOATTR;
@@ -120,8 +113,6 @@ int pok_removexattr (const char *user_path, const char *attr_name)
 /** List extended attributes */
 int pok_listxattr (const char *user_path, char *buffer, size_t size)
 {
-	pok_trace("Listing extended attributes for user path %s.",user_path);
-
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	int err = lookup(user_path, mdi);
 	if(err)

@@ -134,9 +134,6 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 			case posixok::db_entry_TargetType_SYMLINK:
 				addSoftLink(entry.origin(), entry.target());
 				break;
-			case posixok::db_entry_TargetType_HARDLINK:
-				addHardLink(entry.origin(), entry.target());
-				break;
 			case posixok::db_entry_TargetType_NONE:
 				addPermissionChange(entry.origin());
 				break;
@@ -144,12 +141,12 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 				addUnlink(entry.origin());
 				break;
 			default:
-				pok_error("Invalid database entry supplied. Resetting pathmapDB");
+				pok_warning("Invalid database entry supplied. Resetting pathmapDB");
 				std::lock_guard<std::mutex> locker(lock);
 				while(currentReaders.load())
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
-				this->snapshotVersion = 0;
 				this->snapshot.clear();
+				this->snapshotVersion = 0;
 				return -EINVAL;
 		}
 	}
@@ -176,21 +173,6 @@ void PathMapDB::addSoftLink	(std::string origin, std::string destination)
 	printSnapshot();
 }
 
-void PathMapDB::addHardLink	(std::string origin, std::string destination)
-{
-	std::lock_guard<std::mutex> locker(lock);
-	while(currentReaders.load())
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-	snapshotVersion++;
-
-	if(snapshot.count(origin))
-		assert(snapshot[origin].type == TargetType::REUSE);
-
-	/* Differently from softlinks we can safely overwrite a possibly existing REUSE entry. */
-	snapshot[ origin ] = {TargetType::HARDLINK, std::string(destination), 0};
-	printSnapshot();
-}
 	
 void PathMapDB::addPermissionChange(std::string path)
 {
@@ -279,7 +261,6 @@ void PathMapDB::printSnapshot() const
 		  case TargetType::MOVE:  	 return "MOVE";
 		  case TargetType::REUSE: 	 return "REUSE";
 		  case TargetType::SYMLINK:  return "SYMLINK";
-		  case TargetType::HARDLINK: return "HARDLINK";
 		  case TargetType::NONE:  	 return "NONE";
 		  }
 	   return "INVALID";

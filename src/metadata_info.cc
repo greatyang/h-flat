@@ -1,6 +1,25 @@
 #include "metadata_info.h"
 #include <chrono>
 #include <sys/stat.h>
+#include <errno.h>
+
+MetadataInfo::MetadataInfo():
+	systemPath(),
+	currentVersion(0)
+{
+}
+
+MetadataInfo::MetadataInfo(const std::string &key):
+	systemPath(key),
+	currentVersion(0)
+{
+
+}
+
+MetadataInfo::~MetadataInfo()
+{
+
+}
 
 
 posixok::Metadata * MetadataInfo::pbuf(){
@@ -11,15 +30,15 @@ const std::string & MetadataInfo::getSystemPath(){
 	return systemPath;
 }
 
-const std::string & MetadataInfo::getCurrentVersion(){
-	return currentVersion;
-}
-
 void MetadataInfo::setSystemPath(const std::string &path){
 	systemPath=path;
 }
 
-void MetadataInfo::setCurrentVersion(const std::string &version){
+std::int64_t MetadataInfo::getCurrentVersion(){
+	return currentVersion;
+}
+
+void MetadataInfo::setCurrentVersion(std::int64_t version){
 	currentVersion=version;
 }
 
@@ -38,15 +57,36 @@ void MetadataInfo::updateACtime(){
 	md.set_ctime(now);
 }
 
-
-void MetadataInfo::trackDataVersion(int blockNumber, const std::string &keyVersion)
+int MetadataInfo::mergeMetadataChanges(const posixok::Metadata *const fresh)
 {
-	dataVersion[blockNumber] = keyVersion;
+	md.set_atime ( std::max( md.atime(), fresh->atime() ) );
+	md.set_mtime ( std::max( md.mtime(), fresh->mtime() ) );
+	md.set_ctime ( std::max( md.ctime(), fresh->ctime() ) );
+
+	return -ENOSYS;
 }
 
-std::string MetadataInfo::getDataVersion(int blockNumber)
+DataInfo * MetadataInfo::getDataInfo(std::uint32_t block_number)
 {
-	return dataVersion[blockNumber];
+	assert(datablocks.count(block_number));
+	return &datablocks[block_number];
+}
+
+void MetadataInfo::setDataInfo (std::uint32_t block_number, const DataInfo &di)
+{
+	datablocks[block_number]=di;
+}
+
+
+bool MetadataInfo::hasDataInfo (std::uint32_t block_number)
+{
+	return datablocks.count(block_number);
+}
+
+void MetadataInfo::forgetDataInfo(std::uint32_t block_number)
+{
+	assert(datablocks.count(block_number));
+	datablocks.erase(block_number);
 }
 
 
@@ -59,8 +99,8 @@ bool MetadataInfo::computePathPermissionChildren()
 
 	std::vector<posixok::Metadata_ReachabilityEntry> v;
 	posixok::Metadata_ReachabilityEntry e;
-	e.set_uid(md.id_user());
-	e.set_gid(md.id_group());
+	e.set_uid(md.uid());
+	e.set_gid(md.gid());
 	auto addEntry = [&v,&e](posixok::Metadata_ReachabilityType type) -> void {
 		e.set_type(type);
 		v.push_back(e);

@@ -1,27 +1,20 @@
 /* In-memory metadata representation. */
-
 #ifndef METADATA_INFO_H_
 #define METADATA_INFO_H_
-
-
 #include "metadata.pb.h"
+#include "data_info.h"
+#include <map>
 
-class MetadataInfo final{
-
-private:
+class MetadataInfo final {
 	posixok::Metadata md;
 	std::string  systemPath;		// key in flat namespace where metadata is stored
-	std::string  currentVersion;	// current version of metadata key in flat namespace
-
-	std::map<int, std::string> dataVersion; // keep track of key-versions of data keys that have been read in
-											// map[blocknum] == keyVersion
+	std::int64_t currentVersion;	// current version of metadata key in flat namespace
+	std::map<std::uint32_t, DataInfo> datablocks; 	// all read-in data blocks
 
 public:
-	explicit MetadataInfo(const std::string &systemPath, const std::string &currentVersion):
-	md(),systemPath(systemPath), currentVersion(currentVersion){};
-	explicit MetadataInfo():
-	md(),systemPath(), currentVersion(){};
-	~MetadataInfo(){};
+	explicit MetadataInfo();
+	explicit MetadataInfo(const std::string &key);
+	~MetadataInfo();
 
 public:
 	// direct access to protobuf structure
@@ -31,17 +24,22 @@ public:
 	void updateACMtime();
 	void updateACtime();
 
-	// contains all the path permission computation
-	// returns 'true' if changed, 'false' if unchanged.
+	// contains all the path permission computation, returns 'true' if changed, 'false' if unchanged.
 	bool computePathPermissionChildren();
 
-	// get & set
-	void 		trackDataVersion(int blockNumber, const std::string &keyVersion);
-	std::string getDataVersion  (int blockNumber);
-	const std::string & getSystemPath();
-	const std::string & getCurrentVersion();
+	// merge local changes with the supplied metadata structure
+	int mergeMetadataChanges(const posixok::Metadata *const fresh);
+
+	bool      hasDataInfo	(std::uint32_t block_number);
+	DataInfo *getDataInfo	(std::uint32_t block_number);
+	void 	  setDataInfo	(std::uint32_t block_number, const DataInfo &di);
+	void	  forgetDataInfo(std::uint32_t block_number);
+
+	const std::string &getSystemPath();
 	void setSystemPath(const std::string &systemPath);
-	void setCurrentVersion(const std::string &currentVersion);
+
+	std::int64_t getCurrentVersion();
+	void setCurrentVersion(std::int64_t version);
 };
 
 

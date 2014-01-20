@@ -25,7 +25,8 @@ int pok_getxattr_apple (const char *user_path, const char *attr_name, char *attr
 int pok_removexattr (const char *user_path, const char *attr_name);int pok_listxattr (const char *user_path, char *buffer, size_t size);
 
 /* file */
-int pok_create	(const char *user_path, mode_t mode, struct fuse_file_info *fi);
+int pok_create  (const char *user_path, mode_t mode);
+int pok_fcreate	(const char *user_path, mode_t mode, struct fuse_file_info *fi);
 int pok_unlink	(const char *user_path);
 int pok_open	(const char *user_path, struct fuse_file_info *fi);
 int pok_release (const char *user_path, struct fuse_file_info *fi);

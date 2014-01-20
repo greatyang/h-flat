@@ -1,5 +1,6 @@
 #include "main.h"
 #include "debug.h"
+#include "kinetic_helper.h"
 /* No Functionality in here yet... shouldn't be needed unless we start some caching / buffering somewhere */
 
 /** Synchronize file contents
@@ -11,7 +12,14 @@
  */
 int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
-	pok_trace("Called!");
+	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
+	if(!mdi){
+		pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
+		return -EINVAL;
+	}
+	pok_debug("TODO: implement dirty data flushing. ");
+	if(!datasync)
+		put_metadata(mdi);
 	return 0;
 }
 
@@ -24,7 +32,12 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
  */
 int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
-	pok_trace("Called!");
+	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
+	if(!mdi){
+		pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
+		return -EINVAL;
+	}
+	put_metadata(mdi);
 	return 0;
 }
 
@@ -53,6 +66,6 @@ int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
 	 */
 int pok_flush (const char *user_path, struct fuse_file_info *fi)
 {
-	pok_trace("Called!");
+	/* This seems like too much of a random place to do much of anything. */
 	return 0;
 }

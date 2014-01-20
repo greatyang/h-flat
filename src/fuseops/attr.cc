@@ -1,22 +1,22 @@
 #include "main.h"
 #include "debug.h"
+#include "kinetic_helper.h"
 #include <sys/types.h>
 #include <sys/param.h>
 
 static void fillattr(struct stat *attr, MetadataInfo *mdi)
 {
+	attr->st_ino   = mdi->pbuf()->inode_number();
 	attr->st_atime = mdi->pbuf()->atime();
 	attr->st_mtime = mdi->pbuf()->mtime();
 	attr->st_ctime = mdi->pbuf()->ctime();
-	attr->st_uid   = mdi->pbuf()->id_user();
-	attr->st_gid   = mdi->pbuf()->id_group();
+	attr->st_uid   = mdi->pbuf()->uid();
+	attr->st_gid   = mdi->pbuf()->gid();
 	attr->st_mode  = mdi->pbuf()->mode();
 	attr->st_nlink = mdi->pbuf()->link_count();
 	attr->st_size  = mdi->pbuf()->size();
 	attr->st_blocks= mdi->pbuf()->blocks();
-
-	/* not setting st_ino, fuse will create its own inodes
-	 * ... that does mean that hardlinks will show up with different inode numbers though. */
+	attr->st_blksize = PRIV->blocksize;
 }
 
 /**
@@ -35,11 +35,10 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
 {
 	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
 	if(!mdi){
-		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
+		pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
 		return -EINVAL;
 	}
 	fillattr(attr,mdi);
-	pok_trace("Got attributes for user path %s  user:group=%d,%d  mode=%d",user_path, attr->st_uid, attr->st_gid, attr->st_mode);
 	return 0;
 }
 
@@ -52,13 +51,10 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
 int pok_getattr(const char *user_path, struct stat *attr)
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err){
-		pok_trace("No attributes for user path %s",user_path);
+	if( int err = lookup(user_path, mdi) )
 		return err;
-	}
+
 	fillattr(attr,mdi.get());
-	pok_trace("Got attributes for user path %s  user:group=%d,%d  mode=%d",user_path, attr->st_uid, attr->st_gid, attr->st_mode);
 	return 0;
 }
 
@@ -71,16 +67,12 @@ int pok_getattr(const char *user_path, struct stat *attr)
 int pok_utimens	(const char *user_path, const struct timespec tv[2])
 {
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err)
+	if( int err = lookup(user_path, mdi) )
 		return err;
 
 	mdi->pbuf()->set_atime(	tv[0].tv_sec );
 	mdi->pbuf()->set_mtime( tv[1].tv_sec );
-	NamespaceStatus status = PRIV->nspace->putMD(mdi.get());
-	if(status.notOk())
-		return -EIO;
-	return 0;
+	return put_metadata(mdi.get());
 }
 
 /** Get file system statistics
@@ -92,9 +84,20 @@ int pok_utimens	(const char *user_path, const struct timespec tv[2])
  */
 int pok_statfs (const char *user_path, struct statvfs *s)
 {
-	/* Do we want to keep an inodecount and a blockcount?
-	 * If yes we'd probably update infrequently (e.g. on client unmount)  */
-	s->f_bsize   = PRIV->blocksize;
-	s->f_namemax = NAME_MAX;
+	kinetic::Capacity cap;
+	KineticStatus status = PRIV->kinetic->Capacity(cap);
+	if(status.notOk())
+		return -EIO;
+
+	s->f_bsize   = PRIV->blocksize;						/* File system block size */
+	s->f_blocks  = (fsblkcnt_t) cap.total_bytes;		/* Blocks on FS in units of f_frsize */
+	s->f_bavail  = (fsblkcnt_t) cap.remaining_bytes;	/* Free blocks */
+	s->f_bfree	 = (fsblkcnt_t) cap.remaining_bytes;	/* Blocks available to non-root */
+
+	s->f_namemax = NAME_MAX;			/* Max file name length */
+
+	s->f_files   = UINT16_MAX;			/* Total inodes */
+	s->f_ffree   = UINT16_MAX;			/* Free inodes */
+
 	return 0;
 }

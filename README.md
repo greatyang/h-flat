@@ -10,7 +10,7 @@ POSIX-over-Kinetic. The goal is to be POSIX compliant in a flat namespace while 
 ## Initial Setup
 + Install any missing dependencies
 + Run `cmake .` 
-+ + Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory anywhere you like and call `cmake <path/to/POSIX-o-K>` from there. 
+ + Tip: Alternatively build out-of-source to stop polluting the sources with cmake generated files. Simply create a build directory anywhere you like and call `cmake <path/to/POSIX-o-K>` from there. 
 + Run `make`
 
 ## Running
@@ -20,6 +20,6 @@ To mount run the executable given the mountpoint as a parameter. Some flags inte
 + -s single threaded mode
 + -f foreground mode: sends all debug to std out 
 + -d debug mode: fuse lists internal function calls in addition to pok_debug output
-+ -o mount options, note that *allow_other* is required for POSIX compliant behavior
++ -o mount options, note that *allow_other* and *use_ino* fuse mount options are required for POSIX compliant behavior
 
-Example: `./POSIX-o-K -s -f -o allow_other /mountpoint` 
+Example: `./POSIX-o-K -s -f -o allow_other,use_ino /mountpoint` 

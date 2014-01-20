@@ -1,42 +1,50 @@
 #ifndef KINETIC_NAMESPACE_H_
 #define KINETIC_NAMESPACE_H_
+#include "kinetic/kinetic.h"
 
-#include "flat_namespace.h"
-#include "kinetic/connection_handle.h"
-#include <memory>
-
-
-/*
- * Kinetic namespace. Simple one drive / one connection version for now, needs to be extended to be useful in real life.
+/* Kinetic Namespace
+ *
+ * Exposing partial kinetic API. From the file system view there is just a single namespace, no matter how
+ * many drives are used. All clustering & distribution logic should therefore be implemented in a class
+ * inheriting from KineticNamespace.
  */
-class KineticNamespace final : public FlatNamespace {
+using kinetic::KineticStatus;
+using kinetic::KineticRecord;
+using kinetic::WriteMode;
+
+class KineticNamespace {
+public:
+	virtual KineticStatus Get		 (const std::string &key, std::unique_ptr<KineticRecord>* record) = 0;
+	virtual KineticStatus Delete	 (const std::string &key, const std::string& version, WriteMode mode) = 0;
+	virtual KineticStatus Put		 (const std::string &key, const std::string &current_version, WriteMode mode, const KineticRecord& record) = 0;
+	virtual KineticStatus GetVersion (const std::string &key, std::string* version) = 0;
+	virtual KineticStatus GetKeyRange(const std::string &start_key, const std::string &end_key, unsigned int max_results, std::vector<std::string> *keys) = 0;
+	virtual KineticStatus Capacity	 (kinetic::Capacity &cap) = 0;
+
+	virtual ~KineticNamespace(){};
+};
+
+
+
+/* Simple one-drive implementation. */
+class SimpleKineticNamespace final : public KineticNamespace {
 private:
 	std::unique_ptr<kinetic::ConnectionHandle> con;
-	const std::string db_basename    	 = "pathmapDB_";
-	const std::string db_versionname	 = "pathmapDB_version";
 
 private:
-	NamespaceStatus updateDBVersionKey (std::int64_t version);
+	void connect(kinetic::ConnectionOptions options);
 
 public:
-	/* Metadata */
-	NamespaceStatus getMD( 	 MetadataInfo *mdi);
-	NamespaceStatus putMD (  MetadataInfo *mdi);
-	NamespaceStatus deleteMD(MetadataInfo *mdi);
-
-	/* Data */
-	NamespaceStatus get(	 MetadataInfo *mdi, unsigned int blocknumber, std::string &value);
-	NamespaceStatus put(	 MetadataInfo *mdi, unsigned int blocknumber, const std::string &value, const PutModeType type );
-	NamespaceStatus free(    MetadataInfo *mdi, unsigned int blocknumber);
-
-	/* Database Handling */
-	NamespaceStatus getDBEntry( 	std::int64_t version, posixok::db_entry &entry);
-	NamespaceStatus putDBEntry(		std::int64_t version, const posixok::db_entry &entry);
-	NamespaceStatus getDBVersion( 	std::int64_t &version);
-
+	KineticStatus Get		 (const std::string &key, std::unique_ptr<KineticRecord>* record);
+	KineticStatus Delete	 (const std::string &key, const std::string& version, WriteMode mode);
+	KineticStatus Put		 (const std::string &key, const std::string &current_version, WriteMode mode, const KineticRecord& record);
+	KineticStatus GetVersion (const std::string &key, std::string* version);
+	KineticStatus GetKeyRange(const std::string &start_key, const std::string &end_key, unsigned int max_results, std::vector<std::string> *keys);
+	KineticStatus Capacity	 (kinetic::Capacity &cap);
 public:
-	explicit KineticNamespace();
-	~KineticNamespace();
+	explicit SimpleKineticNamespace(kinetic::ConnectionOptions options);
+	explicit SimpleKineticNamespace();
+	~SimpleKineticNamespace();
 };
 
 

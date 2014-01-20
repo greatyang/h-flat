@@ -1,77 +1,71 @@
 #include "main.h"
 #include "debug.h"
+#include "kinetic_helper.h"
+
+using namespace util;
 
 static int unlink_fsdo(const char *user_path)
 {
-	/* Lookup metadata of supplied path and its directory. */
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = lookup(user_path, mdi);
-	if (err)
-		return err;
-
 	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-	err = lookup_parent(user_path, mdi_dir);
-	if (err)
-		return err;
+	int err;
+
+	/* Lookup metadata of supplied path and its directory. */
+			 err = lookup(user_path, mdi);
+	if(!err) err = lookup_parent(user_path, mdi_dir);
+	if( err) return err;
 
 	/* Removing a file requires write + execute permission on directory. */
 	if(check_access(mdi_dir.get(), W_OK | X_OK))
 		return -EACCES;
 	/* If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course). */
 	if(  fuse_get_context()->uid &&	(mdi_dir->pbuf()->mode() & S_ISVTX) &&
-		(fuse_get_context()->uid != mdi_dir->pbuf()->id_user()) &&
-		(fuse_get_context()->uid != mdi->pbuf()->id_user()) )
+		(fuse_get_context()->uid != mdi_dir->pbuf()->uid()) &&
+		(fuse_get_context()->uid != mdi->pbuf()->uid()) )
 		return -EACCES;
 
 	/* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
 	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() - 1);
-	NamespaceStatus status = NamespaceStatus::makeInvalid();
-	if(mdi->pbuf()->link_count()){
-		assert(mdi->pbuf()->is_hardlink_target());
-		status = PRIV->nspace->putMD(mdi.get());
-	}
+	pok_debug("link count after unlink: %d",mdi->pbuf()->link_count());
+	if(mdi->pbuf()->link_count())
+		err = put_metadata(mdi.get());
 	else
-		status = PRIV->nspace->deleteMD(mdi.get());
-	if(status.notOk()){
-		pok_warning("Failed putting / deleting Metadata Key");
-		return -EIO;
+		err = delete_metadata(mdi.get());
+	if(err)
+		return err;
+
+	/* If we got ourselves a hardlink, make sure to delete the corresponding HARDLINK_S forwarding key */
+	if(mdi->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_T){
+		pok_debug("Detected Hardlink Inode");
+		std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
+			err = lookup(user_path, mdi_source, false);
+		if(!err){
+			assert(mdi_source->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_S);
+			err = delete_metadata(mdi_source.get());
+		}
+		if(err)
+			pok_warning("Failed deleting internal hardlink source metadata key after successfully unlinking hardlink target key");
 	}
 
 	/* Remove associated directory entry. */
-	posixok::DirectoryEntry e;
-	e.set_name(path_to_filename(user_path));
-	e.set_type(e.SUB);
-	err = directory_addEntry(mdi_dir, e);
-
-	/* PARTIAL UNDO */
-	if(err){
-		mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1);
-		status = PRIV->nspace->putMD(mdi.get());
-		if(status.notOk())
-			kill_compound_fail();
-	}
+	err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
+	if(err)
+		pok_warning("Failed deleting directory entry after successfully unlinking inode.");
 	return err;
 }
 
 static int unlink_fsundo(const char *user_path, MetadataInfo *mdi)
 {
 	assert(mdi);
-
 	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-	int err = lookup_parent(user_path, mdi_dir);
-	if (err)
+	if( int err = lookup_parent(user_path, mdi_dir) )
 		return err;
 
 	mdi->pbuf()->set_link_count( mdi->pbuf()->link_count() + 1);
-	NamespaceStatus status = PRIV->nspace->putMD(mdi);
-	if(status.notOk())
-		return -EIO;
+	if (int err = put_metadata(mdi))
+		return err;
 
-	/* Add associated directory entry. */
-	posixok::DirectoryEntry e;
-	e.set_name(path_to_filename(user_path));
-	e.set_type(e.ADD);
-	return directory_addEntry(mdi_dir, e);
+	return create_directory_entry(mdi_dir, path_to_filename(user_path));
 }
 
 /** Remove a file */
@@ -145,39 +139,6 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
 	return 0;
 }
 
-
-/**
- * Create and open a file
- *
- * If the file does not exist, first create it with the specified
- * mode, and then open it.
- *
- * If this method is not implemented or under Linux kernel
- * versions earlier than 2.6.15, the mknod() and open() methods
- * will be called instead.
- *
- * Introduced in version 2.5
- */
-int pok_create(const char *user_path, mode_t mode, struct fuse_file_info *fi)
-{
-	pok_trace("Attempting to create file with user path: %s",user_path);
-	if(fi->fh){
-		// This could be perfectly legal, I am not sure how fuse works... if it is
-		// we need to reference count metadata_info structures.
-		pok_error("File handle supplied when attempting to create user path %s",user_path);
-		return -EINVAL;
-	}
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = create_from_mdi(user_path, mode, mdi);
-	if(err)
-		return err;
-
-	// while this isn't pretty, it's probably the best way to use fi->fh
-	fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
-	pok_trace("Successfully created user path %s.",user_path);
-	return 0;
-}
-
 /** Release an open file
  *
  * Release is called when there are no more references to an open
@@ -203,6 +164,99 @@ int pok_release (const char *user_path, struct fuse_file_info *fi)
 	return 0;
 }
 
+static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+{
+	mdi->updateACMtime();
+	mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
+	mdi->pbuf()->set_gid(fuse_get_context()->gid);
+	mdi->pbuf()->set_uid(fuse_get_context()->uid);
+	mdi->pbuf()->set_mode(mode);
+	mdi->pbuf()->set_inode_number(generate_inode_number());
+
+	if(!mdi->pbuf()->has_data_unique_id()) // TODO: remove this once the code requiring such nonsence is gone
+		mdi->pbuf()->set_data_unique_id(generate_uuid());
+
+
+	/* Inherit path permissions existing for directory */
+	mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());
+	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
+	mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
+
+	/* Add path permissions precomputed for directory's children. */
+	for(int i=0; i < mdi_parent->pbuf()->path_permission_children_size(); i++){
+		posixok::Metadata::ReachabilityEntry *e = mdi->pbuf()->add_path_permission();
+		e->CopyFrom( mdi_parent->pbuf()->path_permission_children(i) );
+	}
+
+	if(S_ISDIR(mode)){
+		mdi->computePathPermissionChildren();
+	}
+}
+
+/**
+ * Create and open a file
+ *
+ * If the file does not exist, first create it with the specified
+ * mode, and then open it.
+ *
+ * If this method is not implemented or under Linux kernel
+ * versions earlier than 2.6.15, the mknod() and open() methods
+ * will be called instead.
+ *
+ * Introduced in version 2.5
+ */
+int pok_fcreate(const char *user_path, mode_t mode, struct fuse_file_info *fi)
+{
+	pok_trace("Attempting to create file with user path: %s",user_path);
+	if(fi->fh){
+		// This could be perfectly legal, I am not sure how fuse works... if it is
+		// we need to reference count metadata_info structures.
+		pok_error("File handle supplied when attempting to create user path %s",user_path);
+		return -EINVAL;
+	}
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	int err = lookup(user_path, mdi);
+	if(!err)
+		return -EEXIST;
+	if (err != -ENOENT)
+		return err;
+
+	std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+	err = lookup_parent(user_path, mdi_dir);
+	if(err)
+		return err;
+
+	/* Add filename to directory */
+	err = create_directory_entry(mdi_dir, path_to_filename(user_path));
+	if(err)
+		return err;
+
+	/* initialize metadata and write metadata-key to drive*/
+	initialize_metadata(mdi, mdi_dir, mode);
+	err = create_metadata(mdi.get());
+	if(err){
+		pok_warning("Failed creating metadata key after successfully creating directory-entry key. \n"
+					"Dangling directory entry!");
+		return err;
+	}
+
+	// while this isn't pretty, it's probably the best way to use fi->fh
+	fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
+	pok_trace("Successfully created user path %s.",user_path);
+	return 0;
+}
+
+
+int pok_create(const char *user_path, mode_t mode)
+{
+	struct fuse_file_info fi;
+	fi.fh = 0;
+	if( int err = pok_fcreate(user_path, mode, &fi))
+		return err;
+	pok_release(user_path, &fi);
+	return 0;
+}
+
 /** Create a file node
  *
  * This is called for creation of all non-directory, non-symlink
@@ -211,6 +265,5 @@ int pok_release (const char *user_path, struct fuse_file_info *fi)
  */
 int pok_mknod(const char* user_path, mode_t mode, dev_t rdev)
 {
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	return create_from_mdi(user_path, mode , mdi);
+	return pok_create(user_path, mode);
 }

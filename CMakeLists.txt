@@ -42,6 +42,7 @@ set(LIBRARY_DEPENDENCIES
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libssl.a
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libcrypto.a
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libprotobuf.a
+    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/src/gtest/libgtest.a
     ${CMAKE_THREAD_LIBS_INIT}
     dl
 )
@@ -65,19 +66,22 @@ set(PROTO_GEN ${POSIX-o-K_SOURCE_DIR}/src/generated)
 set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/host/bin/protoc")
 add_custom_command(
     COMMENT "Compiling protobuf files"
-    OUTPUT  {PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc {PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc ${PROTO_GEN}/directorydata.pb.h ${PROTO_GEN}/directorydata.pb.cc
+    OUTPUT  {PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc {PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc
     COMMAND mkdir -p ${PROTO_GEN} && ${PROTOC_PATH} -I=${POSIX-o-K_SOURCE_DIR}/src/proto --cpp_out=${PROTO_GEN} ${POSIX-o-K_SOURCE_DIR}/src/proto/*.proto 
 )
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
 
 add_executable(POSIX-o-K
+	 src/namespace/simple_kinetic_namespace.cc
+	 src/namespace/kinetic_helper.cc
 	 src/main.cc
 	 src/util.cc
+     src/lookup.cc
 	 src/metadata_info.cc
+	 src/data_info.cc
 	 src/pathmap_db.cc
 	 src/util_database.cc
-	 src/namespace/kinetic_namespace.cc
 	 src/fuseops/attr.cc
 	 src/fuseops/xattr.cc
 	 src/fuseops/data.cc
@@ -88,18 +92,35 @@ add_executable(POSIX-o-K
 	 src/fuseops/rename.cc
 	 src/fuseops/sync.cc
 	 src/generated/database.pb.cc
-	 src/generated/directorydata.pb.cc
 	 src/generated/metadata.pb.cc
 )
-
 add_dependencies(POSIX-o-K
 	kinetic_cpp_client
 )
-
 target_link_libraries(POSIX-o-K
     ${LIBRARY_DEPENDENCIES}
 )
 
+
 add_executable(pok_test
-    src/test/test_pathmapdb.cc
+    src/test/pok_test.cc
+    src/test/pathmap_db_test.cc
+    
+    src/pathmap_db.cc
+    src/generated/database.pb.cc
+    
+    src/test/kinetic_helper_test.cc
+
+    src/util.cc
+    src/namespace/simple_kinetic_namespace.cc
+    src/metadata_info.cc
+    src/data_info.cc
+    src/generated/metadata.pb.cc
 )
+add_dependencies(pok_test
+	kinetic_cpp_client
+)
+target_link_libraries(pok_test
+    ${LIBRARY_DEPENDENCIES}
+)
+

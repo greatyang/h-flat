@@ -1,37 +1,55 @@
 #include "main.h"
 #include "debug.h"
 #include "fuseops.h"
+#include "kinetic_helper.h"
 #include <algorithm>
 
 /** Create a directory */
-int pok_mkdir 		(const char *user_path, mode_t mode)
+int pok_mkdir (const char *user_path, mode_t mode)
 {
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	int err = create_from_mdi(user_path, mode | S_IFDIR, mdi);
-	if(!err)
-		pok_trace("Created directory @ user path: %s",user_path);
-	return err;
+	return pok_create(user_path, mode | S_IFDIR);
 }
 
 /** Remove a directory */
 int pok_rmdir (const char *user_path)
 {
-	/* Update database so that all directory entries will be counted by readdir. */
-	database_update();
-
-	struct fuse_file_info fi;
-	fi.fh = 0;
-
-	int err = pok_open(user_path, &fi);
-	if(err)
+	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+	if( int err = lookup(user_path, mdi))
 		return err;
-	int num_entries = pok_readdir(user_path, 0, 0, 0, &fi);
-	pok_release(user_path, &fi);
 
-	if(num_entries)
+	std::string keystart = mdi->pbuf()->data_unique_id() + ":";
+	std::string keyend   = mdi->pbuf()->data_unique_id() + ":" + static_cast<char>(251);
+	std::vector<std::string> keys;
+	PRIV->kinetic->GetKeyRange(keystart,keyend,1,&keys);
+
+	if(keys.size())
 		return -ENOTEMPTY;
-
 	return pok_unlink(user_path);
+}
+
+
+int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
+{
+	std::string direntry_key = mdi_parent->pbuf()->data_unique_id()+":"+filename;
+
+	KineticRecord record("", std::to_string(1) , "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+	KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
+
+	if(status.versionMismatch())
+		return -EEXIST;
+	if(status.notOk())
+		return -EIO;
+	return 0;
+}
+
+int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
+{
+	std::string direntry_key = mdi_parent->pbuf()->data_unique_id()+":"+filename;
+
+	KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
+	if(status.notOk())
+		return -EIO;
+	return 0;
 }
 
 
@@ -66,47 +84,28 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 	if(check_access(mdi, R_OK)) // ls requires read permission
 		return -EACCES;
 
+	/* A directory entry has been moved out / moved into this directory due to a directory move. */
+	if(mdi->pbuf()->has_force_update_version() && mdi->pbuf()->force_update_version() > PRIV->pmap->getSnapshotVersion())
+		if(int err = database_update())
+			return err;
 
-	pok_debug("Reading directory at user path %s with %d allocated blocks and a byte size of %d",user_path,mdi->pbuf()->blocks(),mdi->pbuf()->size());
 
-	std::unordered_map<std::string, int> ncount;
-	posixok::DirectoryData data;
-	posixok::DirectoryEntry e;
-	std::string value;
-	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
+	std::string keystart = mdi->pbuf()->data_unique_id() + ":";
+	std::string keyend   = mdi->pbuf()->data_unique_id() + ":" + static_cast<char>(251);
+	size_t maxsize = 10000;
+	std::vector<std::string> keys;
 
-	for(unsigned int blocknum=0; blocknum < mdi->pbuf()->blocks(); blocknum++)
-	{
-		if(PRIV->nspace->get(mdi, blocknum, value).notOk()){
-			pok_warning("Failed obtaining block #%d.", blocknum);
-			continue;
+	do{
+		if(keys.size()) keystart = keys.back();
+		keys.clear();
+		PRIV->kinetic->GetKeyRange(keystart,keyend,maxsize,&keys);
+		for (auto& element : keys){
+			std::string filename = element.substr(
+					element.find_first_of(':')+1,
+					element.length());
+			filldir(buffer, filename.c_str(), NULL, 0);
 		}
-		if(!data.ParseFromString(value)){
-			pok_warning("Failure parsing directory data for data block #%d -> data corruption. ",blocknum);
-			continue;
-		}
+	}while(keys.size() == maxsize);
 
-		for(int i = 0; i < data.entries_size(); i++) {
-			e = data.entries(i);
-
-			/* If the required db version of the entry is higher than the current snapshot version, the entry is invisible to this client. */
-			if(e.req_version() > snapshotVersion)
-				continue;
-			if(e.type() == e.ADD) ncount[e.name()]++;
-			else				  ncount[e.name()]--;
-		}
-	}
-
-	int num_elements = 0;
-
-	for (auto& element : ncount) {
-		assert(element.second == 0 || element.second == 1);
-		if(element.second == 1){
-			/* We want to (ab)use this function in rmdir to check if this directory is empty. */
-			if(!filldir) num_elements++;
-			else
-				filldir(buffer, element.first.c_str(), NULL, 0);
-		}
-	}
-	return num_elements;
+	return 0;
 }

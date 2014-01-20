@@ -1,17 +1,17 @@
 #include "main.h"
 #include "debug.h"
 #include "fuseops.h"
+#include "kinetic_helper.h"
 #include "database.pb.h"
+
 
 int database_update(void)
 {
 	std::int64_t dbVersion;
 	std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
-	NamespaceStatus status 		 = PRIV->nspace->getDBVersion(dbVersion);
-	if(status.notOk()){
-		pok_warning("Cannot access database.");
-		return -EHOSTDOWN;
-	}
+
+	if(int err = get_db_version(dbVersion))
+		return err;
 
 	/* Sanity */
 	assert(dbVersion >= snapshotVersion);
@@ -24,11 +24,8 @@ int database_update(void)
 	std::list<posixok::db_entry> entries;
 	posixok::db_entry entry;
 	for(std::int64_t v = snapshotVersion+1; v <= dbVersion; v++){
-		status = PRIV->nspace->getDBEntry(v, entry);
-		if(status.notOk()){
-				pok_warning("Cannot access database.");
-				return -EHOSTDOWN;
-			}
+		if(int err = get_db_entry(v, entry))
+			return err;
 		entries.push_back(entry);
 	}
 	return PRIV->pmap->updateSnapshot(entries, snapshotVersion, dbVersion);
@@ -51,8 +48,8 @@ int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsf
 		return err;
 
 	/* Add supplied database entry to on-drive database. */
-	NamespaceStatus status = PRIV->nspace->putDBEntry(snapshotVersion+1, entry);
-	if(status.ok()){
+	err = put_db_entry(snapshotVersion+1, entry);
+	if(!err){
 		std::list<posixok::db_entry> entries;
 		entries.push_back(entry);
 		PRIV->pmap->updateSnapshot(entries, snapshotVersion, snapshotVersion+1 );
@@ -65,7 +62,7 @@ int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsf
 					"Failed undoing a file system operation after a database update failure. \n"
 					"Killing myself now. Goodbye.");
 		pok_destroy(PRIV);
-		std::exit(EXIT_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 
 	/* Try to update the local database snapshot. Retry if snapshot version changed, otherwise

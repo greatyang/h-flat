@@ -14,7 +14,7 @@ enum class CallingType { LOOKUP, READLINK };
 class PathMapDB final
 {
 private:
-	enum class TargetType { MOVE, REUSE, SYMLINK, HARDLINK, NONE };
+	enum class TargetType { MOVE, REUSE, SYMLINK, NONE };
 	struct PMEntry{
 		TargetType   type; 
 		std::string  target; 
@@ -55,7 +55,6 @@ public:
 	 * a successful update of the remote database (as an alternative of calling updateSnapshot()). */
 	void addDirectoryMove	(std::string origin, std::string destination);
 	void addSoftLink	 	(std::string origin, std::string destination);
-	void addHardLink		(std::string origin, std::string destination);
 	void addPermissionChange(std::string path);
 	void addUnlink  		(std::string path);
 

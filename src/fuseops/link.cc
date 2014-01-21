@@ -67,15 +67,14 @@ int pok_hardlink (const char *target, const char *origin)
 	if( mdi_target->pbuf()->type() != posixok::Metadata_InodeType_HARDLINK_T )
 	{
 		assert(mdi_target->pbuf()->type() == posixok::Metadata_InodeType_POSIX);
-		std::string hardlink_key = "hardlink_"+util::generate_uuid();
 
 		std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
 		mdi_source->pbuf()->set_type( posixok::Metadata_InodeType_HARDLINK_S );
-		mdi_source->pbuf()->set_hardlink_uuid( 	hardlink_key);
+		mdi_source->pbuf()->set_inode_number( 	mdi_target->pbuf()->inode_number());
 		mdi_source->setCurrentVersion( 			mdi_target->getCurrentVersion() );
 		mdi_source->setSystemPath( 				mdi_target->getSystemPath() );
 
-		mdi_target->setSystemPath(hardlink_key);
+		mdi_target->setSystemPath("hardlink_"+std::to_string(mdi_target->pbuf()->inode_number()));
 		mdi_target->pbuf()->set_type( posixok::Metadata_InodeType_HARDLINK_T );
 
 		/* store target metadata at hardlink-key location */
@@ -99,7 +98,7 @@ int pok_hardlink (const char *target, const char *origin)
 	}
 
 	mdi_origin->pbuf()->set_type( posixok::Metadata_InodeType_HARDLINK_S );
-	mdi_origin->pbuf()->set_hardlink_uuid( mdi_target->getSystemPath() );
+	mdi_origin->pbuf()->set_inode_number( mdi_target->pbuf()->inode_number());
 	if(( err = create_metadata(mdi_origin.get()) ))
 		pok_warning("Failed creating metadata key after increasing target link count and creating directory entry.");
 	return err;

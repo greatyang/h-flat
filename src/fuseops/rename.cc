@@ -80,7 +80,7 @@ int pok_rename (const char *user_path_from, const char *user_path_to)
 	}
 	else if (mdifrom->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_T){
 		mdito->pbuf()->set_type(posixok::Metadata_InodeType_HARDLINK_S);
-		mdito->pbuf()->set_hardlink_uuid( mdifrom->getSystemPath() );
+		mdito->pbuf()->set_inode_number( mdifrom->pbuf()->inode_number());
 		err = create_metadata(mdito.get());
 		if(err)
 			pok_warning("failed to create HARDLINK_S metadata-key");

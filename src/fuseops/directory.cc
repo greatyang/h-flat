@@ -17,8 +17,8 @@ int pok_rmdir (const char *user_path)
 	if( int err = lookup(user_path, mdi))
 		return err;
 
-	std::string keystart = mdi->pbuf()->data_unique_id() + ":";
-	std::string keyend   = mdi->pbuf()->data_unique_id() + ":" + static_cast<char>(251);
+	std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
+	std::string keyend   = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
 	std::vector<std::string> keys;
 	PRIV->kinetic->GetKeyRange(keystart,keyend,1,&keys);
 
@@ -30,7 +30,7 @@ int pok_rmdir (const char *user_path)
 
 int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-	std::string direntry_key = mdi_parent->pbuf()->data_unique_id()+":"+filename;
+	std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number())+":"+filename;
 
 	KineticRecord record("", std::to_string(1) , "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
 	KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
@@ -44,7 +44,7 @@ int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
 
 int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-	std::string direntry_key = mdi_parent->pbuf()->data_unique_id()+":"+filename;
+	std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number())+":"+filename;
 
 	KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
 	if(status.notOk())
@@ -90,8 +90,8 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 			return err;
 
 
-	std::string keystart = mdi->pbuf()->data_unique_id() + ":";
-	std::string keyend   = mdi->pbuf()->data_unique_id() + ":" + static_cast<char>(251);
+	std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
+	std::string keyend   = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
 	size_t maxsize = 10000;
 	std::vector<std::string> keys;
 

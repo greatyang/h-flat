@@ -173,10 +173,6 @@ static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const 
 	mdi->pbuf()->set_mode(mode);
 	mdi->pbuf()->set_inode_number(generate_inode_number());
 
-	if(!mdi->pbuf()->has_data_unique_id()) // TODO: remove this once the code requiring such nonsence is gone
-		mdi->pbuf()->set_data_unique_id(generate_uuid());
-
-
 	/* Inherit path permissions existing for directory */
 	mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());
 	/* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */

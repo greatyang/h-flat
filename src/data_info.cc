@@ -31,7 +31,7 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
 {
 	assert(offset+size <= 1024*1024);
 
-	d.resize(std::max(offset+size, (unsigned long long) d.size()));
+	d.resize(std::max((size_t) offset+size, d.size()));
 	try{
 		d.replace(offset, size, data);
 	}catch(std::exception& e){

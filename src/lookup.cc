@@ -23,7 +23,7 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
 	/* Step 3: Special inode types: Follow hardlink_source inode types in the lookup operation, update on force_update. */
 	if(handle_special_inodes){
 		if(mdi->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_S){
-			mdi->setSystemPath(mdi->pbuf()->hardlink_uuid());
+			mdi->setSystemPath("hardlink_"+std::to_string(mdi->pbuf()->inode_number()));
 			if(int err = get_metadata(mdi.get()))
 				return err;
 		}

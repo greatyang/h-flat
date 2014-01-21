@@ -5,7 +5,7 @@ POSIX-over-Kinetic. The goal is to be POSIX compliant in a flat namespace while 
 ## Dependencies
 + [CMake](http://www.cmake.org)
 + **OSX** [libosxfuse](http://osxfuse.github.io)
-+ **Linux** *uuid-dev* & *libssl-dev* packages might not be installed, use your favorite package manager to install them 
++ **Linux** *libssl-dev* package might not be installed, use your favorite package manager to install them 
 
 ## Initial Setup
 + Install any missing dependencies

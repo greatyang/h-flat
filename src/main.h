@@ -61,8 +61,7 @@ int database_operation(std::function<int ()> fsfun_do, std::function<int ()> fsf
 
 /* general utility functions */
 namespace util{
-	ino_t 			generate_inode_number(void);
-	std::string 	generate_uuid(void);
+	ino_t           generate_inode_number(void);
 	std::int64_t 	to_int64(const std::string &version_string);
 	std::string 	path_to_filename(const std::string &path);
 }

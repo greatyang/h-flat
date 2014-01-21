@@ -14,8 +14,8 @@
  * Changed in version 2.6
  */
 void *pok_init (struct fuse_conn_info *conn)
-
-{	/* Setup values required for inode generation. */
+{
+	/* Setup values required for inode generation. */
 	const std::string inode_base_key = "igen";
 	std::string keyVersion;
 
@@ -23,34 +23,33 @@ void *pok_init (struct fuse_conn_info *conn)
 	if(status.ok())
 		PRIV->inum_base = util::to_int64(keyVersion);
 	else if(status.notFound())
-		PRIV->inum_base = 0;
+		  PRIV->inum_base = 0;
 	else
-		pok_error("Error encountered obtaining inode generation numbers.");
+		  pok_error("Error encountered obtaining inode generation numbers.");
 
 
 	KineticRecord empty("",std::to_string(PRIV->inum_base+1),"",com::seagate::kinetic::proto::Message_Algorithm_SHA1);
 	status = PRIV->kinetic->Put(inode_base_key, PRIV->inum_base ? std::to_string(PRIV->inum_base) : "", WriteMode::REQUIRE_SAME_VERSION, empty);
 	if(status.notOk())
-		pok_error("Failed increasing inode base key.");
+		  pok_error("Failed increasing inode base key.");
 
 	/* Verify that root metadata is available. If it isn't, initialize it. */
 	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
 	mdi->setSystemPath("/");
 	int err = get_metadata(mdi.get());
 	if (err == -ENOENT){
-		pok_trace("Initialzing root metadata.");
-		mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
-		mdi->updateACMtime();
-		mdi->pbuf()->set_uid(0);
-		mdi->pbuf()->set_gid(0);
-		mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-		mdi->pbuf()->set_path_permission_verified(0);
-		mdi->pbuf()->set_inode_number(++PRIV->inum_counter);
-		mdi->pbuf()->set_data_unique_id(util::generate_uuid());
-		err = create_metadata(mdi.get());
+		  pok_trace("Initialzing root metadata.");
+		  mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
+		  mdi->updateACMtime();
+		  mdi->pbuf()->set_uid(0);
+		  mdi->pbuf()->set_gid(0);
+		  mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+		  mdi->pbuf()->set_path_permission_verified(0);
+		  mdi->pbuf()->set_inode_number(util::generate_inode_number());
+		  err = create_metadata(mdi.get());
 	}
 	if(err)
-		pok_error("Error encountered validating root metadata.");
+		  pok_error("Error encountered validating root metadata.");
 
 	database_update();
 	return PRIV;

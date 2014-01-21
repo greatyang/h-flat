@@ -86,7 +86,7 @@ int delete_metadata( MetadataInfo *mdi )
 
 int get_data (MetadataInfo *mdi, unsigned int blocknumber)
 {
-	std::string key = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	std::string key = std::to_string(mdi->pbuf()->inode_number()) + "_" + std::to_string(blocknumber);
 	std::unique_ptr<KineticRecord> record;
 	KineticStatus status = PRIV->kinetic->Get(key, &record);
 
@@ -107,7 +107,7 @@ int put_data( MetadataInfo *mdi, unsigned int blocknumber)
 	if(!di->hasUpdates())
 		return 0;
 
-	std::string	 key 	 = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	std::string     key  = std::to_string(mdi->pbuf()->inode_number()) + "_" + std::to_string(blocknumber);
 	std::int64_t version = di->getCurrentVersion();
 
 	KineticRecord record(di->data(), std::to_string(version+1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
@@ -134,7 +134,7 @@ int put_data( MetadataInfo *mdi, unsigned int blocknumber)
 
 int delete_data( MetadataInfo *mdi, unsigned int blocknumber )
 {
-	std::string	 key 	 = mdi->pbuf()->data_unique_id() + std::to_string(blocknumber);
+	std::string	 key 	 = std::to_string(mdi->pbuf()->inode_number()) + "_" + std::to_string(blocknumber);
 	KineticStatus status = PRIV->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);
 
 	if(status.notFound())

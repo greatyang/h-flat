@@ -1,6 +1,5 @@
 #include "main.h"
 #include "debug.h"
-#include <uuid/uuid.h>
 #include <stdint.h>
 
 namespace util{
@@ -18,14 +17,6 @@ std::int64_t to_int64(const std::string &version_string)
 	return version;
 }
 
-std::string generate_uuid(void)
-{
-	uuid_t uuid;
-	uuid_generate(uuid);
-	char uuid_parsed[100];
-	uuid_unparse(uuid, uuid_parsed);
-	return std::string(uuid_parsed);
-}
 
 ino_t generate_inode_number(void)
 {

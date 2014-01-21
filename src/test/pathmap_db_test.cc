@@ -49,8 +49,8 @@ TEST_F(PathmapDBTest, CircularRename)
     ASSERT_EQ(pathPermissionTimeStamp, 0);
     ASSERT_EQ(systemPath, "/x/a");
     /*******************
-     * Database:	/x/b->/x/a | MOVE
-     * 			/x/a->/0a  | REUSE
+     * Database:    /x/b->/x/a | MOVE
+     *              /x/a->/0a  | REUSE
      *******************/
 
     /* move /x/b /x/c */
@@ -63,8 +63,8 @@ TEST_F(PathmapDBTest, CircularRename)
     ASSERT_EQ(pathPermissionTimeStamp, 0);
     ASSERT_EQ(systemPath, "/x/a");
     /*******************
-     * Database:	/x/c->/x/a | MOVE
-     * 			/x/a->/0a  | REUSE
+     * Database /x/c->/x/a | MOVE
+     *          /x/a->/0a  | REUSE
      *******************/
 
     /* move /x/c /x/a */
@@ -80,7 +80,7 @@ TEST_F(PathmapDBTest, CircularRename)
     ASSERT_EQ(pathPermissionTimeStamp, 0);
     ASSERT_EQ(systemPath, "/x/c");
     /*******************
-     * Database:	[]
+     * Database:	    []
      *******************/
 }
 

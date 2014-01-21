@@ -24,7 +24,7 @@ ino_t generate_inode_number(void)
         std::lock_guard<std::mutex> locker(PRIV->lock);
         counter = ++ PRIV->inum_counter;
 
-        if (!counter)						// counter wrapped, need new inum_base value
+        if (!counter)                       // counter wrapped, need new inum_base value
             pok_error("Not Implemented.");  // TODO: implement
 
     }

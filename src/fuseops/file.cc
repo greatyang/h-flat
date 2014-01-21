@@ -77,7 +77,7 @@ int pok_unlink(const char *user_path)
 
     if (PRIV->pmap->hasMapping(user_path)) {
         /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
-         * 	mkdir a   mv a b 	rmdir b */
+         * 	mkdir a   mv a b   rmdir b */
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);

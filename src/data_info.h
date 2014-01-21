@@ -6,8 +6,8 @@
 class DataInfo
     final {
 
-        std::string d;				// the actual data
-        std::int64_t currentVersion;	// current version of data key in flat namespace
+        std::string d;                  // the actual data
+        std::int64_t currentVersion;    // current version of data key in flat namespace
 
         // a list of bit-regions that have been changed since this data block has last been flushed
         std::list<std::pair<off_t, size_t> > updates;

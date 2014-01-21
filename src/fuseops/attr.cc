@@ -45,7 +45,7 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
 /** Get file attributes.
  *
  * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
- * ignored.	 The 'st_ino' field is ignored except if the 'use_ino'
+ * ignored. The 'st_ino' field is ignored except if the 'use_ino'
  * mount option is given.
  */
 int pok_getattr(const char *user_path, struct stat *attr)

@@ -1,6 +1,6 @@
 /*
- * POSIX-o-K is either 	POSIX over Key-Value
- * or					POSIX over Kinetic
+ * POSIX-o-K is either  POSIX over Key-Value
+ * or                   POSIX over Kinetic
  *
  * Either way, the goal is to be POSIX compliant in a flat namespace and support file lookup without path traversal.
  */

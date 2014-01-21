@@ -215,7 +215,7 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
     }
 
     /* Special case: Circular move 
-     * 	mv /a /b [b->a, a->X] 
+     *  mv /a /b [b->a, a->X]
      *  mv /b /a [] */
     if (destination == snapshot[destination].target) {
         snapshot.erase(destination);

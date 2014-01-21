@@ -86,13 +86,13 @@ int get_data(MetadataInfo *mdi, unsigned int blocknumber)
     std::unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(key, &record);
 
-    if (status.notFound())
-        return -ENOENT;
-    if (status.notOk())
-        return -EIO;
+    if (status.notOk() && !status.notFound())
+       return -EIO;
 
-    DataInfo di(record->value(), to_int64(record->version()));
-    mdi->setDataInfo(blocknumber, di);
+    if (status.notFound())
+        mdi->setDataInfo(blocknumber, DataInfo("",0));
+    else
+        mdi->setDataInfo(blocknumber, DataInfo(record->value(), to_int64(record->version())));
     return 0;
 }
 

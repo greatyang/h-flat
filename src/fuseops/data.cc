@@ -67,6 +67,7 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
  */
 int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
+    pok_debug("Write request of %d bytes for user path %s. ", size, user_path);
     MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
     if (!mdi) {
         pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
@@ -80,8 +81,8 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
         mdi->pbuf()->set_size(newsize);
         mdi->pbuf()->set_blocks((newsize / PRIV->blocksize) + 1);
         mdi->updateACMtime();
-
-        rtn = put_metadata(mdi);
+        if ( int err = put_metadata(mdi) )
+           return err;
     }
     return rtn;
 }

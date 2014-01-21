@@ -18,34 +18,34 @@ pok_error(	"Unrecoverable File System Error. \n "												\
 			"Failed undoing a compound file system operation that succeeded only partially. \n"	\
 			"Killing myself now. Goodbye.")
 
-
-
 static void pok_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
 {
-	if(loglevel<llconfig) return;
+    if (loglevel < llconfig)
+        return;
 
     time_t rawtime;
-	time (&rawtime);
-	struct tm * timeinfo = localtime ( &rawtime );
-	printf("[%d:%d:%d] ",timeinfo->tm_hour,timeinfo->tm_min,timeinfo->tm_sec);
+    time(&rawtime);
+    struct tm * timeinfo = localtime(&rawtime);
+    printf("[%d:%d:%d] ", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 
-	if(loglevel==2)	printf("\e[0;37m DEBUG ");
-	if(loglevel==3)	printf("\e[0;33m WARNING ");
-	if(loglevel==4) printf("\e[0;31m ERROR ");
+    if (loglevel == 2)
+        printf("\e[0;37m DEBUG ");
+    if (loglevel == 3)
+        printf("\e[0;33m WARNING ");
+    if (loglevel == 4)
+        printf("\e[0;31m ERROR ");
 
-	std::string filename(file);
-	filename.erase(0,filename.find_last_of('/')+1);
+    std::string filename(file);
+    filename.erase(0, filename.find_last_of('/') + 1);
 
-	printf("\e[033;32m%s@%s\e[033;34m(%d) \e[033;39m \t",
-			fun, filename.c_str(), line
-		   );
+    printf("\e[033;32m%s@%s\e[033;34m(%d) \e[033;39m \t", fun, filename.c_str(), line);
 
-	va_list args;
-	va_start(args, msg);
-	vprintf(msg, args);
-	va_end(args);
+    va_list args;
+    va_start(args, msg);
+    vprintf(msg, args);
+    va_end(args);
 
-	printf("\n");
+    printf("\n");
 }
 
 #endif

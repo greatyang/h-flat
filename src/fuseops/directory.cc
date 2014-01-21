@@ -5,53 +5,51 @@
 #include <algorithm>
 
 /** Create a directory */
-int pok_mkdir (const char *user_path, mode_t mode)
+int pok_mkdir(const char *user_path, mode_t mode)
 {
-	return pok_create(user_path, mode | S_IFDIR);
+    return pok_create(user_path, mode | S_IFDIR);
 }
 
 /** Remove a directory */
-int pok_rmdir (const char *user_path)
+int pok_rmdir(const char *user_path)
 {
-	std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-	if( int err = lookup(user_path, mdi))
-		return err;
+    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    if (int err = lookup(user_path, mdi))
+        return err;
 
-	std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
-	std::string keyend   = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
-	std::vector<std::string> keys;
-	PRIV->kinetic->GetKeyRange(keystart,keyend,1,&keys);
+    std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
+    std::string keyend = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
+    std::vector<std::string> keys;
+    PRIV->kinetic->GetKeyRange(keystart, keyend, 1, &keys);
 
-	if(keys.size())
-		return -ENOTEMPTY;
-	return pok_unlink(user_path);
+    if (keys.size())
+        return -ENOTEMPTY;
+    return pok_unlink(user_path);
 }
-
 
 int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-	std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number())+":"+filename;
+    std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number()) + ":" + filename;
 
-	KineticRecord record("", std::to_string(1) , "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-	KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
+    KineticRecord record("", std::to_string(1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+    KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
 
-	if(status.versionMismatch())
-		return -EEXIST;
-	if(status.notOk())
-		return -EIO;
-	return 0;
+    if (status.versionMismatch())
+        return -EEXIST;
+    if (status.notOk())
+        return -EIO;
+    return 0;
 }
 
 int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-	std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number())+":"+filename;
+    std::string direntry_key = std::to_string(mdi_parent->pbuf()->inode_number()) + ":" + filename;
 
-	KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
-	if(status.notOk())
-		return -EIO;
-	return 0;
+    KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
+    if (status.notOk())
+        return -EIO;
+    return 0;
 }
-
 
 /** Read directory
  *
@@ -76,36 +74,34 @@ int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
  */
 int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, off_t offset, struct fuse_file_info *fi)
 {
-	MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-	if(!mdi){
-		pok_error("Read request for user path '%s' without metadata_info structure", user_path);
-		return -EINVAL;
-	}
-	if(check_access(mdi, R_OK)) // ls requires read permission
-		return -EACCES;
+    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
+    if (!mdi) {
+        pok_error("Read request for user path '%s' without metadata_info structure", user_path);
+        return -EINVAL;
+    }
+    if (check_access(mdi, R_OK)) // ls requires read permission
+        return -EACCES;
 
-	/* A directory entry has been moved out / moved into this directory due to a directory move. */
-	if(mdi->pbuf()->has_force_update_version() && mdi->pbuf()->force_update_version() > PRIV->pmap->getSnapshotVersion())
-		if(int err = database_update())
-			return err;
+    /* A directory entry has been moved out / moved into this directory due to a directory move. */
+    if (mdi->pbuf()->has_force_update_version() && mdi->pbuf()->force_update_version() > PRIV->pmap->getSnapshotVersion())
+        if (int err = database_update())
+            return err;
 
+    std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
+    std::string keyend   = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
+    size_t maxsize = 10000;
+    std::vector<std::string> keys;
 
-	std::string keystart = std::to_string(mdi->pbuf()->inode_number()) + ":";
-	std::string keyend   = std::to_string(mdi->pbuf()->inode_number()) + ":" + static_cast<char>(251);
-	size_t maxsize = 10000;
-	std::vector<std::string> keys;
+    do {
+        if (keys.size())
+            keystart = keys.back();
+        keys.clear();
+        PRIV->kinetic->GetKeyRange(keystart, keyend, maxsize, &keys);
+        for (auto& element : keys) {
+            std::string filename = element.substr(element.find_first_of(':') + 1, element.length());
+            filldir(buffer, filename.c_str(), NULL, 0);
+        }
+    } while (keys.size() == maxsize);
 
-	do{
-		if(keys.size()) keystart = keys.back();
-		keys.clear();
-		PRIV->kinetic->GetKeyRange(keystart,keyend,maxsize,&keys);
-		for (auto& element : keys){
-			std::string filename = element.substr(
-					element.find_first_of(':')+1,
-					element.length());
-			filldir(buffer, filename.c_str(), NULL, 0);
-		}
-	}while(keys.size() == maxsize);
-
-	return 0;
+    return 0;
 }

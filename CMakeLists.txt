@@ -25,8 +25,8 @@ include_directories(
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/include
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/include
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/src/gmock/fused-src
-    ${KINETIC_CLIENT_PATH}/src/main
     ${KINETIC_CLIENT_PATH}/src/main/generated
+    ${KINETIC_CLIENT_PATH}/src/main
     ${KINETIC_CLIENT_PATH}/include
   
     src/generated
@@ -72,35 +72,36 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
 
 add_executable(POSIX-o-K
-	 src/namespace/simple_kinetic_namespace.cc
-	 src/namespace/kinetic_helper.cc
-	 src/main.cc
-	 src/util.cc
+     src/namespace/simple_kinetic_namespace.cc
+     src/namespace/kinetic_helper.cc
+     src/main.cc
+     src/util.cc
      src/lookup.cc
-	 src/metadata_info.cc
-	 src/data_info.cc
-	 src/pathmap_db.cc
-	 src/util_database.cc
-	 src/fuseops/attr.cc
-	 src/fuseops/xattr.cc
-	 src/fuseops/data.cc
-	 src/fuseops/directory.cc
-	 src/fuseops/file.cc
-	 src/fuseops/link.cc
-	 src/fuseops/permission.cc
-	 src/fuseops/rename.cc
-	 src/fuseops/sync.cc
-	 src/generated/database.pb.cc
-	 src/generated/metadata.pb.cc
+     src/metadata_info.cc
+     src/data_info.cc
+     src/pathmap_db.cc
+     src/util_database.cc
+     src/fuseops/attr.cc
+     src/fuseops/xattr.cc
+     src/fuseops/data.cc
+     src/fuseops/directory.cc
+     src/fuseops/file.cc
+     src/fuseops/link.cc
+     src/fuseops/permission.cc
+     src/fuseops/rename.cc
+     src/fuseops/sync.cc
+     src/generated/database.pb.cc
+     src/generated/metadata.pb.cc
 )
 add_dependencies(POSIX-o-K
-	kinetic_cpp_client
+    kinetic_cpp_client
 )
 target_link_libraries(POSIX-o-K
     ${LIBRARY_DEPENDENCIES}
 )
 
 
+if(APPLE)
 add_executable(pok_test
     src/test/pok_test.cc
     src/test/pathmap_db_test.cc
@@ -117,9 +118,9 @@ add_executable(pok_test
     src/generated/metadata.pb.cc
 )
 add_dependencies(pok_test
-	kinetic_cpp_client
+    kinetic_cpp_client
 )
 target_link_libraries(pok_test
     ${LIBRARY_DEPENDENCIES}
 )
-
+endif(APPLE)

@@ -14,8 +14,10 @@ int get_metadata(MetadataInfo *mdi)
 
     if (status.notFound())
         return -ENOENT;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     posixok::Metadata md;
     if(! md.ParseFromString(record->value()) )
@@ -50,8 +52,10 @@ int put_metadata(MetadataInfo *mdi)
            return -EAGAIN;
        }
     }
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     mdi->setCurrentVersion(version + 1);
     return 0;
@@ -66,8 +70,10 @@ int create_metadata(MetadataInfo *mdi)
 
     if (status.versionMismatch())
         return -EEXIST;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     mdi->setCurrentVersion(version + 1);
     return 0;
@@ -81,8 +87,10 @@ int delete_metadata(MetadataInfo *mdi)
         return -EINVAL;
     if (status.notFound())
         return -ENOENT;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
     return 0;
 }
 
@@ -92,8 +100,10 @@ int get_data(MetadataInfo *mdi, unsigned int blocknumber)
     std::unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(key, &record);
 
-    if (status.notOk() && !status.notFound())
-       return -EIO;
+    if (status.notOk() && !status.notFound()){
+        pok_warning("EIO");
+        return -EIO;
+    }
 
     if (status.notFound())
         mdi->setDataInfo(blocknumber, DataInfo("",0));
@@ -128,8 +138,10 @@ int put_data(MetadataInfo *mdi, unsigned int blocknumber)
             return put_data(mdi, blocknumber);
         }
     }
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     di->forgetUpdates();
     di->setCurrentVersion(version + 1);
@@ -143,8 +155,10 @@ int delete_data(MetadataInfo *mdi, unsigned int blocknumber)
 
     if (status.notFound())
         return -ENOENT;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
     return 0;
 }
 
@@ -156,8 +170,10 @@ int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
 
     if (status.versionMismatch())
         return -EEXIST;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     /* can be stored with IGNORE_VERSION since puts serialized by the db_version_key:
      * other clients will only see the database entry we just put after updating based on the db_version_key value */
@@ -175,8 +191,11 @@ int get_db_entry(std::int64_t version, posixok::db_entry &entry)
     KineticStatus status = PRIV->kinetic->Get(key, &record);
     if (status.notFound())
         return -ENOENT;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("encountered status '%s' when attempting to obtain %s. Returning -EIO.",
+                status.ToString().c_str(), key.c_str());
         return -EIO;
+    }
 
     if (!entry.ParseFromString(record->value()))
         return -EINVAL;
@@ -187,8 +206,11 @@ int get_db_version(std::int64_t &version)
 {
     std::string keyVersion;
     KineticStatus status = PRIV->kinetic->GetVersion(db_version_key, &keyVersion);
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("encountered status '%s' when calling getVersion on %s. Returning -EIO.",
+                status.ToString().c_str(), db_version_key.c_str());
         return -EIO;
+    }
     version = to_int64(keyVersion);
     return 0;
 }

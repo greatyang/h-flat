@@ -12,9 +12,6 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
     if (pathPermissionTimeStamp < 0)
         return pathPermissionTimeStamp;
 
-    if (key.compare(user_path))
-        pok_trace("Remapped user path %s to system path %s ", user_path, key.c_str());
-
     /* Step 2: Get metadata from flat namespace */
     mdi->setSystemPath(key);
     if (int err = get_metadata(mdi.get()))

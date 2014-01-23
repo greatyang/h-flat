@@ -38,6 +38,7 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
         pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
         return -EINVAL;
     }
+    pok_trace(".");
     fillattr(attr, mdi);
     return 0;
 }
@@ -86,8 +87,10 @@ int pok_statfs(const char *user_path, struct statvfs *s)
 {
     kinetic::Capacity cap;
     KineticStatus status = PRIV->kinetic->Capacity(cap);
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
 
     s->f_bsize  = PRIV->blocksize; /* File system block size */
     s->f_blocks = (fsblkcnt_t) cap.total_bytes; /* Blocks on FS in units of f_frsize */

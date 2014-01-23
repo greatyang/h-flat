@@ -22,8 +22,12 @@ int pok_rmdir(const char *user_path)
     std::vector<std::string> keys;
     PRIV->kinetic->GetKeyRange(keystart, keyend, 1, &keys);
 
+    pok_debug("Found %d entries for user_path '%s' (inode number %d) ",keys.size(), user_path, mdi->getMD().inode_number());
     if (keys.size())
         return -ENOTEMPTY;
+
+    if(int err = database_update())
+        return err;
     return pok_unlink(user_path);
 }
 
@@ -36,8 +40,11 @@ int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
 
     if (status.versionMismatch())
         return -EEXIST;
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
+    pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
     return 0;
 }
 
@@ -46,8 +53,11 @@ int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
     std::string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
 
     KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
-    if (status.notOk())
+    if (status.notOk()){
+        pok_warning("EIO");
         return -EIO;
+    }
+    pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
     return 0;
 }
 

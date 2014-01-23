@@ -53,6 +53,7 @@ int check_access(MetadataInfo *mdi, int mode);
 /* database */
 int database_update(void);
 int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun_undo, posixok::db_entry &entry);
+int database_op(std::function<int()> verify, posixok::db_entry &entry);
 
 /* general utility functions */
 namespace util

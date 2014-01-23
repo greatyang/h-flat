@@ -30,6 +30,34 @@ int database_update(void)
     return PRIV->pmap->updateSnapshot(entries, snapshotVersion, dbVersion);
 }
 
+/* If put_db_entry fails due to an out-of-date snapshot, the file system operation needs to be re-verified using the supplied function with
+ * the updated snaphshot before put_db_entry can be retried. */
+int database_op(std::function<int()> verify, posixok::db_entry &entry)
+{
+    std::int64_t snapshotVersion = PRIV->pmap->getSnapshotVersion();
+
+    int err = put_db_entry(snapshotVersion + 1, entry);
+    if(!err){
+        std::list<posixok::db_entry> entries;
+        entries.push_back(entry);
+        PRIV->pmap->updateSnapshot(entries, snapshotVersion, snapshotVersion + 1);
+        return 0;
+    }
+    if (err != -EEXIST)
+        return err;
+
+    err = database_update();
+    if(err) return err;
+
+    if (PRIV->pmap->getSnapshotVersion() <= snapshotVersion)
+        return -EINVAL;
+
+    err = verify();
+    if(err) return err;
+
+    return database_op(verify, entry);
+}
+
 int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun_undo, posixok::db_entry &entry)
 {
     /* If we expect other clients to modify the database, update it before starting the operation. */
@@ -54,6 +82,8 @@ int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun
         return 0;
     }
 
+    pok_debug("Putting DB entry #%d failed, undoing fs operation.",snapshotVersion+1);
+
     /* Adding database entry failed, undo file system function. */
     if (fsfun_undo()) {
         pok_error("Unrecoverable File System Error. \n "
@@ -68,5 +98,7 @@ int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun
     database_update();
     if (PRIV->pmap->getSnapshotVersion() > snapshotVersion)
         database_operation(fsfun_do, fsfun_undo, entry);
+
+    pok_warning("EIO");
     return -EIO;
 }

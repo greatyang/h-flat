@@ -46,6 +46,9 @@ void *pok_init(struct fuse_conn_info *conn)
         mdi->getMD().set_path_permission_verified(0);
         mdi->getMD().set_inode_number(util::generate_inode_number());
         err = create_metadata(mdi.get());
+
+        KineticRecord v("", std::to_string(0), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+        status = PRIV->kinetic->Put("pathmapDB_version", "", WriteMode::REQUIRE_SAME_VERSION, v);
     }
     if (err)
         pok_error("Error encountered validating root metadata.");

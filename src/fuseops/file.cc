@@ -4,93 +4,89 @@
 
 using namespace util;
 
-static int unlink_fsdo(const char *user_path)
+int unlink_hardlink_source(const char *user_path)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-    int err;
+    std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
+    if( int err = lookup(user_path, mdi_source, false) )
+         return err;
+    assert(mdi_source->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
+    return delete_metadata(mdi_source.get());
+}
 
-    /* Lookup metadata of supplied path and its directory. */
-    err = lookup(user_path, mdi);
-    if (!err)
-        err = lookup_parent(user_path, mdi_dir);
-    if (err)
+int unlink_force_update(const char *user_path)
+{
+    std::unique_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
+    if( lookup(user_path, mdi_fu) )
+        return 0;
+    assert(mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE);
+    pok_debug("Found force_update entry.");
+
+    if( int err = delete_metadata(mdi_fu.get()))
+        return err;
+    return 0;
+}
+
+/* lookup & verify access permissions */
+int unlink_lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_dir )
+{
+    if( int err = lookup(user_path, mdi) )
+        return err;
+    if( int err = lookup_parent(user_path, mdi_dir) )
         return err;
 
-    /* Removing a file requires write + execute permission on directory. */
     if (check_access(mdi_dir.get(), W_OK | X_OK))
         return -EACCES;
-    /* If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course). */
+    // If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course).
     if (fuse_get_context()->uid && (mdi_dir->getMD().mode() & S_ISVTX) && (fuse_get_context()->uid != mdi_dir->getMD().uid())
             && (fuse_get_context()->uid != mdi->getMD().uid()))
         return -EACCES;
+    return 0;
+};
 
-    /* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
-    mdi->getMD().set_link_count(mdi->getMD().link_count() - 1);
-    pok_debug("link count after unlink: %d", mdi->getMD().link_count());
-    if (mdi->getMD().link_count())
-        err = put_metadata(mdi.get());
-    else
-        err = delete_metadata(mdi.get());
-    if (err)
-        return err;
-
-    /* If we got ourselves a hardlink, make sure to delete the corresponding HARDLINK_S forwarding key */
-    if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T) {
-        pok_debug("Detected Hardlink Inode");
-        std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
-        err = lookup(user_path, mdi_source, false);
-        if (!err) {
-            assert(mdi_source->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
-            err = delete_metadata(mdi_source.get());
-        }
-        if (err)
-            pok_warning("Failed deleting internal hardlink source metadata key after successfully unlinking hardlink target key");
-    }
-
-    /* Remove associated directory entry. */
-    err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
-    if (err)
-        pok_warning("Failed deleting directory entry after successfully unlinking inode.");
-    return err;
-}
-
-static int unlink_fsundo(const char *user_path, MetadataInfo *mdi)
-{
-    assert(mdi);
-    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-    if (int err = lookup_parent(user_path, mdi_dir))
-        return err;
-
-    mdi->getMD().set_link_count(mdi->getMD().link_count() + 1);
-    if (int err = put_metadata(mdi))
-        return err;
-
-    return create_directory_entry(mdi_dir, path_to_filename(user_path));
-}
-
+/* TODO: Hand over all data keys to Housekeeping after a sucessfull unlink operation. */
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
-    /* TODO: Hand over all data keys to Housekeeping after a sucessfull unlink operation. */
-    pok_trace("Attempting to remove file with user path: %s", user_path);
+    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+    int err = unlink_lookup(user_path, mdi, mdi_dir);
+    if( err) return err;
 
-    if (PRIV->pmap->hasMapping(user_path)) {
-        /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
-         * 	mkdir a   mv a b   rmdir b */
+    if (posixok::Metadata_InodeType_HARDLINK_T == mdi->getMD().type())
+          err = unlink_hardlink_source(user_path);
+    if( err) return err;
+
+    /* Unlink Metadata Key */
+    if (mdi->getMD().link_count() > 1){
+        mdi->getMD().set_link_count( mdi->getMD().link_count() - 1 );
+        err = put_metadata(mdi.get());
+    }
+    else{
+        err = delete_metadata(mdi.get());
+    }
+    if( err) return err;
+
+    /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
+    *  mkdir a   mv a b   rmdir b */
+    if(PRIV->pmap->hasMapping(user_path)){
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
-
-        /* Lookup metadata of supplied path in case the operation needs to be undone. */
-        std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-        int err = lookup(user_path, mdi);
-        if (err)
-            return err;
-
-        return database_operation(std::bind(unlink_fsdo, user_path), std::bind(unlink_fsundo, user_path, mdi.get()), entry);
+        err = database_op(std::bind(unlink_lookup,
+                user_path, std::ref(mdi), std::ref(mdi_dir)),
+                entry);
     }
-    return unlink_fsdo(user_path);
+    if (!err && S_ISDIR(mdi->getMD().mode()))
+          err = unlink_force_update(user_path);
+    if(!err)
+        err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
+
+
+    if (err){
+        pok_warning("Failure in the middle of an unlink operation");
+    }
+    return err;
+
 }
 
 /** File open operation

@@ -36,11 +36,11 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     else if (!err) {
         /* rename returns EACCES or EPERM if the file pointed at by the 'to' argument exists, the directory containing 'to' is marked sticky,
          * and neither the containing directory nor 'to' are owned by the effective user ID */
-        if (fuse_get_context()->uid && (dir_mdito->pbuf()->mode() & S_ISVTX) && (fuse_get_context()->uid != dir_mdito->pbuf()->uid())
-                && (fuse_get_context()->uid != mdito->pbuf()->uid()))
+        if (fuse_get_context()->uid && (dir_mdito->getMD().mode() & S_ISVTX) && (fuse_get_context()->uid != dir_mdito->getMD().uid())
+                && (fuse_get_context()->uid != mdito->getMD().uid()))
             return -EACCES;
 
-        if (S_ISDIR(mdito->pbuf()->mode()))
+        if (S_ISDIR(mdito->getMD().mode()))
             err = pok_rmdir(user_path_to);
         else
             err = pok_unlink(user_path_to);
@@ -52,7 +52,7 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     if ((err = create_directory_entry(dir_mdito, util::path_to_filename(user_path_to))))
         return err;
 
-    int mode = mdifrom->pbuf()->mode();
+    int mode = mdifrom->getMD().mode();
 
     /* Copy metadata-key to the new location & update pathmapDB if necessary. */
     if (S_ISDIR(mode)) {
@@ -61,13 +61,13 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
         entry.set_origin(user_path_from);
         entry.set_target(user_path_to);
 
-        mdito->pbuf()->set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
-        mdito->pbuf()->set_force_update_version(PRIV->pmap->getSnapshotVersion() + 1);
+        mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
+        mdito->getMD().set_force_update_version(PRIV->pmap->getSnapshotVersion() + 1);
 
         err = database_operation(std::bind(create_metadata, mdito.get()), std::bind(delete_metadata, mdito.get()), entry);
 
-        dir_mdifrom->pbuf()->set_force_update_version(PRIV->pmap->getSnapshotVersion());
-        dir_mdito->pbuf()->set_force_update_version(PRIV->pmap->getSnapshotVersion());
+        dir_mdifrom->getMD().set_force_update_version(PRIV->pmap->getSnapshotVersion());
+        dir_mdito->getMD().set_force_update_version(PRIV->pmap->getSnapshotVersion());
 
         if (!err) err = put_metadata(dir_mdifrom.get());
         if (!err && dir_mdifrom->getSystemPath().compare(dir_mdito->getSystemPath())) err = put_metadata(dir_mdito.get());
@@ -75,14 +75,14 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
         if ( err)
             pok_warning("Failure when moving directory.");
         return err;
-    } else if (mdifrom->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_T) {
-        mdito->pbuf()->set_type(posixok::Metadata_InodeType_HARDLINK_S);
-        mdito->pbuf()->set_inode_number(mdifrom->pbuf()->inode_number());
+    } else if (mdifrom->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T) {
+        mdito->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
+        mdito->getMD().set_inode_number(mdifrom->getMD().inode_number());
         err = create_metadata(mdito.get());
         if (err)
             pok_warning("failed to create HARDLINK_S metadata-key");
 
-        mdifrom->pbuf()->set_link_count(mdifrom->pbuf()->link_count() + 1);
+        mdifrom->getMD().set_link_count(mdifrom->getMD().link_count() + 1);
         err = put_metadata(mdifrom.get());
         if (err)
             pok_warning("failed to increase HARDLINK_T link count");

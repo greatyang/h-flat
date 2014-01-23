@@ -102,25 +102,22 @@ target_link_libraries(POSIX-o-K
 
 
 if(APPLE)
-add_executable(pok_test
+add_executable(test
     src/test/pok_test.cc
-    src/test/pathmap_db_test.cc
     
+    src/test/pathmap_db_test.cc
     src/pathmap_db.cc
     src/generated/database.pb.cc
     
-    src/test/kinetic_helper_test.cc
-
-    src/util.cc
-    src/namespace/simple_kinetic_namespace.cc
+    src/test/metadata_info_test.cc
     src/metadata_info.cc
     src/data_info.cc
     src/generated/metadata.pb.cc
 )
-add_dependencies(pok_test
+add_dependencies(test
     kinetic_cpp_client
 )
-target_link_libraries(pok_test
+target_link_libraries(test
     ${LIBRARY_DEPENDENCIES}
 )
 endif(APPLE)

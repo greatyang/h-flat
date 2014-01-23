@@ -14,17 +14,22 @@ static int readwrite(char *buf, size_t size, off_t offset, MetadataInfo * mdi, b
         int inblockstart = offset > blocknum * blocksize ? (offset - blocknum * blocksize) : 0;
         int inblocksize = sizeleft > blocksize - inblockstart ? blocksize - inblockstart : sizeleft;
 
-        if (!mdi->hasDataInfo(blocknum))
+        DataInfo *di = mdi->getDataInfo(blocknum);
+        if(!di){
             if (int err = get_data(mdi, blocknum))
                 return err;
+            di = mdi->getDataInfo(blocknum);
+            assert(di);
+        }
 
-        DataInfo *di = mdi->getDataInfo(blocknum);
+        pok_debug("Got data block #%d, which has a size of %d bytes.",blocknum, di->data().size());
         if (write) {
             di->updateData(buf, inblockstart, inblocksize);
-            put_data(mdi, blocknum);
-        } else
+            if ( int err = put_data(mdi, blocknum))
+                return err;
+        } else{
             memcpy(buf + size - sizeleft, di->data().data() + inblockstart, inblocksize);
-
+        }
         sizeleft -= inblocksize;
         blocknum++;
     }
@@ -50,10 +55,11 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
         pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
         return -EINVAL;
     }
-    if (offset + size > mdi->pbuf()->size()) {
-        pok_trace("Attempting to read beyond EOF for user path %s", user_path);
+    if (offset + size > mdi->getMD().size()) {
+        pok_warning("Attempting to read beyond EOF for user path %s", user_path);
         return 0;
     }
+    pok_debug("Read request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
     return readwrite(buf, size, offset, mdi, false);
 }
 
@@ -67,7 +73,7 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
  */
 int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
-    pok_debug("Write request of %d bytes for user path %s. ", size, user_path);
+    pok_debug("Write request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
     MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
     if (!mdi) {
         pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
@@ -77,13 +83,19 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 
     /* update metadata on success */
     if (rtn > 0) {
-        size_t newsize = std::max((std::uint64_t) offset + size, (std::uint64_t) mdi->pbuf()->size());
-        mdi->pbuf()->set_size(newsize);
-        mdi->pbuf()->set_blocks((newsize / PRIV->blocksize) + 1);
+        size_t newsize = std::max((std::uint64_t) offset + size, (std::uint64_t) mdi->getMD().size());
+        mdi->getMD().set_size(newsize);
+        mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
         mdi->updateACMtime();
-        if ( int err = put_metadata(mdi) )
-           return err;
+        if ( int err = put_metadata(mdi) ){
+            pok_debug("Failed writing metadata");
+            if(err == -EAGAIN)
+                err = put_metadata(mdi);
+            if(err)
+            return err;
+        }
     }
+    pok_debug("returning %d.",rtn);
     return rtn;
 }
 
@@ -95,7 +107,7 @@ static int truncate(MetadataInfo *mdi, off_t offset)
     if (offset > std::numeric_limits<std::uint32_t>::max())
         return -EFBIG;
 
-    mdi->pbuf()->set_size(offset);
+    mdi->getMD().set_size(offset);
     mdi->updateACMtime();
     return put_metadata(mdi);
 }

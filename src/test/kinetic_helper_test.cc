@@ -18,10 +18,9 @@ mockPriv *PRIV;
 /* general utility functions */
 namespace util
 {
-ino_t generate_inode_number(void);
-std::string generate_uuid(void);
+ino_t        generate_inode_number(void);
 std::int64_t to_int64(const std::string &version_string);
-std::string path_to_filename(const std::string &path);
+std::string  path_to_filename(const std::string &path);
 }
 
 #define MAIN_H_
@@ -67,22 +66,22 @@ protected:
 TEST_F(KineticNamespaceTest, MetadataCreate)
 {
     std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    mdi->pbuf()->set_type(posixok::Metadata_InodeType_POSIX);
+    mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);
     mdi->setSystemPath("/");
 
-    ASSERT_EQ(get_metadata(mdi.get()), -ENOENT);
+    ASSERT_EQ(get_metadata(mdi.get(), false), -ENOENT);
     ASSERT_EQ(create_metadata(mdi.get()), 0);
     ASSERT_EQ(mdi->getCurrentVersion(), 1);
     mdi->setCurrentVersion(0);
 
     ASSERT_EQ(create_metadata(mdi.get()), -EEXIST);
-    ASSERT_EQ(get_metadata(mdi.get()), 0);
+    ASSERT_EQ(get_metadata(mdi.get(), false), 0);
 }
 
 TEST_F(KineticNamespaceTest, MetadataDelete)
 {
     std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    mdi->pbuf()->set_type(posixok::Metadata_InodeType_POSIX);
+    mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);
     mdi->setSystemPath("/");
 
     ASSERT_EQ(create_metadata(mdi.get()), 0);

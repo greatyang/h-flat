@@ -28,10 +28,9 @@ void DataInfo::mergeDataChanges(std::string fresh)
 int DataInfo::updateData(const char *data, off_t offset, size_t size)
 {
     assert(offset + size <= 1024 * 1024);
-
     d.resize(std::max((size_t) offset + size, d.size()));
     try {
-        d.replace(offset, size, data);
+         d.replace(offset, size, data, size);
     } catch (std::exception& e) {
         pok_warning("Exception thrown trying to replace byte range [%d,%d] in string Reason: %s", offset, size, e.what());
         return -EINVAL;

@@ -13,21 +13,21 @@ int check_access(MetadataInfo *mdi, int mode)
 
     unsigned int umode = mode;
     /* test user */
-    if (mdi->pbuf()->uid() == fuse_get_context()->uid) {
-        if ((mode & mdi->pbuf()->mode() >> 6) == umode)
+    if (mdi->getMD().uid() == fuse_get_context()->uid) {
+        if ((mode & mdi->getMD().mode() >> 6) == umode)
             return 0;
         else
             return -EACCES;
     }
     /* test group */
-    if (mdi->pbuf()->gid() == fuse_get_context()->gid) {
-        if ((mode & mdi->pbuf()->mode() >> 3) == umode)
+    if (mdi->getMD().gid() == fuse_get_context()->gid) {
+        if ((mode & mdi->getMD().mode() >> 3) == umode)
             return 0;
         else
             return -EACCES;
     }
     /* test other */
-    if ((mode & mdi->pbuf()->mode()) == umode)
+    if ((mode & mdi->getMD().mode()) == umode)
         return 0;
     return -EACCES;
 
@@ -63,9 +63,9 @@ int pok_access(const char *user_path, int mode)
 
 static int do_permission_change(const std::unique_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
 {
-    mdi->pbuf()->set_gid(gid);
-    mdi->pbuf()->set_uid(uid);
-    mdi->pbuf()->set_mode(mode);
+    mdi->getMD().set_gid(gid);
+    mdi->getMD().set_uid(uid);
+    mdi->getMD().set_mode(mode);
     mdi->updateACtime();
 
     return put_metadata(mdi.get());
@@ -88,9 +88,9 @@ int pok_chmod(const char *user_path, mode_t mode)
     if (err)
         return err;
 
-    pok_trace("Changing mode for user_path %s from %d to %d", user_path, mdi->pbuf()->mode(), mode);
+    pok_trace("Changing mode for user_path %s from %d to %d", user_path, mdi->getMD().mode(), mode);
 
-    if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->pbuf()->uid())
+    if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
         return -EPERM;
 
     if (S_ISDIR(mode) && mdi->computePathPermissionChildren()) {
@@ -98,12 +98,12 @@ int pok_chmod(const char *user_path, mode_t mode)
         entry.set_type(entry.NONE);
         entry.set_origin(user_path);
 
-        mode_t old_mode = mdi->pbuf()->mode();
-        err = database_operation(std::bind(do_permission_change_lookup, user_path, mode, mdi->pbuf()->uid(), mdi->pbuf()->gid()),
-                std::bind(do_permission_change_lookup, user_path, old_mode, mdi->pbuf()->uid(), mdi->pbuf()->gid()), entry);
+        mode_t old_mode = mdi->getMD().mode();
+        err = database_operation(std::bind(do_permission_change_lookup, user_path, mode, mdi->getMD().uid(), mdi->getMD().gid()),
+                std::bind(do_permission_change_lookup, user_path, old_mode, mdi->getMD().uid(), mdi->getMD().gid()), entry);
         return err;
     }
-    return do_permission_change(mdi, mode, mdi->pbuf()->uid(), mdi->pbuf()->gid());
+    return do_permission_change(mdi, mode, mdi->getMD().uid(), mdi->getMD().gid());
 }
 
 /** Change the owner and group of a file */
@@ -114,7 +114,7 @@ int pok_chown(const char *user_path, uid_t uid, gid_t gid)
     if (err)
         return err;
 
-    pok_trace("Changing owner / group for user_path %s from %d:%d to %d:%d   fuse_context: %d:%d ", user_path, mdi->pbuf()->uid(), mdi->pbuf()->gid(), uid, gid,
+    pok_trace("Changing owner / group for user_path %s from %d:%d to %d:%d   fuse_context: %d:%d ", user_path, mdi->getMD().uid(), mdi->getMD().gid(), uid, gid,
             fuse_get_context()->uid, fuse_get_context()->gid);
 
     /* Only the root user can change the owner of a file.
@@ -124,25 +124,25 @@ int pok_chown(const char *user_path, uid_t uid, gid_t gid)
      * TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system.
      * */
     if (uid == (uid_t) -1)
-        uid = mdi->pbuf()->uid();
+        uid = mdi->getMD().uid();
     else if (fuse_get_context()->uid)
         return -EPERM;
     if (gid == (gid_t) -1)
-        gid = mdi->pbuf()->gid();
-    else if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->pbuf()->uid())
+        gid = mdi->getMD().gid();
+    else if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
         return -EPERM;
 
-    if (S_ISDIR(mdi->pbuf()->mode()) && mdi->computePathPermissionChildren()) {
+    if (S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
         posixok::db_entry entry;
         entry.set_type(entry.NONE);
         entry.set_origin(user_path);
 
-        uid_t old_uid = mdi->pbuf()->uid();
-        gid_t old_gid = mdi->pbuf()->gid();
-        err = database_operation(std::bind(do_permission_change_lookup, user_path, mdi->pbuf()->mode(), uid, gid),
-                std::bind(do_permission_change_lookup, user_path, mdi->pbuf()->mode(), old_uid, old_gid), entry);
+        uid_t old_uid = mdi->getMD().uid();
+        gid_t old_gid = mdi->getMD().gid();
+        err = database_operation(std::bind(do_permission_change_lookup, user_path, mdi->getMD().mode(), uid, gid),
+                std::bind(do_permission_change_lookup, user_path, mdi->getMD().mode(), old_uid, old_gid), entry);
         return err;
     }
-    return do_permission_change(mdi, mdi->pbuf()->mode(), uid, gid);
+    return do_permission_change(mdi, mdi->getMD().mode(), uid, gid);
 }
 

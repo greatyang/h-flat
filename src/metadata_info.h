@@ -5,42 +5,40 @@
 #include "data_info.h"
 #include <map>
 
-class MetadataInfo
-    final {
-        posixok::Metadata md;
-        std::string systemPath;           // key in flat namespace where metadata is stored
-        std::int64_t currentVersion;      // current version of metadata key in flat namespace
-        std::map<std::uint32_t, DataInfo> datablocks;   // all read-in data blocks
+class MetadataInfo final
+{
+    std::string       systemPath;       // key in flat namespace where metadata is stored
+    std::int64_t      currentVersion;   // current version of metadata key
+    posixok::Metadata md_const;         // exact copy of on-drive metadata with version currentVersion
+    posixok::Metadata md_mutable;       // metadata structure containing local changes not yet written to drive
 
-    public:
-        explicit MetadataInfo();
-        explicit MetadataInfo(const std::string &key);
-        ~MetadataInfo();
+    std::map<std::uint32_t, DataInfo> datablocks;    // in-memory data blocks
 
-    public:
-        // direct access to protobuf structure
-        posixok::Metadata * pbuf();
+public:
+    explicit MetadataInfo();
+    explicit MetadataInfo(const std::string &key);
+    ~MetadataInfo();
 
-        // convenience functions to update timestamps in protobuf
-        void updateACMtime();
-        void updateACtime();
 
-        // contains all the path permission computation, returns 'true' if changed, 'false' if unchanged.
-        bool computePathPermissionChildren();
+public:
+    void                setMD(const posixok::Metadata & md, std::int64_t version);
+    bool                mergeMD(const posixok::Metadata & md, std::int64_t version);
+    posixok::Metadata & getMD();
+    void                setSystemPath(const std::string &key);
+    const std::string & getSystemPath();
+    void                setCurrentVersion(std::int64_t version); // after metadata version increased due to a successful put
+    std::int64_t        getCurrentVersion();
 
-        // merge local changes with the supplied metadata structure
-        int mergeMetadataChanges(const posixok::Metadata * const fresh);
+    // returns false if no in-memory data info structure exists for the supplied block number
+    DataInfo *getDataInfo(std::uint32_t block_number);
+    void      setDataInfo(std::uint32_t block_number, const DataInfo &di);
 
-        bool hasDataInfo(std::uint32_t block_number);
-        DataInfo *getDataInfo(std::uint32_t block_number);
-        void setDataInfo(std::uint32_t block_number, const DataInfo &di);
-        void forgetDataInfo(std::uint32_t block_number);
+    // convenience functions to update time-stamps according to current local clock
+    void updateACMtime();
+    void updateACtime();
 
-        const std::string &getSystemPath();
-        void setSystemPath(const std::string &systemPath);
-
-        std::int64_t getCurrentVersion();
-        void setCurrentVersion(std::int64_t version);
-    };
+    // returns 'true' if changed, 'false' if unchanged
+    bool computePathPermissionChildren();
+};
 
 #endif /* METADATA_INFO_H_ */

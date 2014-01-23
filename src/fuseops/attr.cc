@@ -6,16 +6,16 @@
 
 static void fillattr(struct stat *attr, MetadataInfo *mdi)
 {
-    attr->st_ino    = mdi->pbuf()->inode_number();
-    attr->st_atime  = mdi->pbuf()->atime();
-    attr->st_mtime  = mdi->pbuf()->mtime();
-    attr->st_ctime  = mdi->pbuf()->ctime();
-    attr->st_uid    = mdi->pbuf()->uid();
-    attr->st_gid    = mdi->pbuf()->gid();
-    attr->st_mode   = mdi->pbuf()->mode();
-    attr->st_nlink  = mdi->pbuf()->link_count();
-    attr->st_size   = mdi->pbuf()->size();
-    attr->st_blocks = mdi->pbuf()->blocks();
+    attr->st_ino    = mdi->getMD().inode_number();
+    attr->st_atime  = mdi->getMD().atime();
+    attr->st_mtime  = mdi->getMD().mtime();
+    attr->st_ctime  = mdi->getMD().ctime();
+    attr->st_uid    = mdi->getMD().uid();
+    attr->st_gid    = mdi->getMD().gid();
+    attr->st_mode   = mdi->getMD().mode();
+    attr->st_nlink  = mdi->getMD().link_count();
+    attr->st_size   = mdi->getMD().size();
+    attr->st_blocks = mdi->getMD().blocks();
     attr->st_blksize= PRIV->blocksize;
 }
 
@@ -70,8 +70,8 @@ int pok_utimens(const char *user_path, const struct timespec tv[2])
     if (int err = lookup(user_path, mdi))
         return err;
 
-    mdi->pbuf()->set_atime(tv[0].tv_sec);
-    mdi->pbuf()->set_mtime(tv[1].tv_sec);
+    mdi->getMD().set_atime(tv[0].tv_sec);
+    mdi->getMD().set_mtime(tv[1].tv_sec);
     return put_metadata(mdi.get());
 }
 

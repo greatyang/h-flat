@@ -9,9 +9,8 @@ message db_entry {
     enum TargetType{
         MOVE    = 1;
         SYMLINK = 2;
-        HARDLINK= 3;
-        NONE    = 4;
-        REMOVED = 5;
+        NONE    = 3;
+        REMOVED = 4;
     };
     
     required string     origin      = 1;

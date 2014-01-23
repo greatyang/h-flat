@@ -21,14 +21,14 @@ static int unlink_fsdo(const char *user_path)
     if (check_access(mdi_dir.get(), W_OK | X_OK))
         return -EACCES;
     /* If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course). */
-    if (fuse_get_context()->uid && (mdi_dir->pbuf()->mode() & S_ISVTX) && (fuse_get_context()->uid != mdi_dir->pbuf()->uid())
-            && (fuse_get_context()->uid != mdi->pbuf()->uid()))
+    if (fuse_get_context()->uid && (mdi_dir->getMD().mode() & S_ISVTX) && (fuse_get_context()->uid != mdi_dir->getMD().uid())
+            && (fuse_get_context()->uid != mdi->getMD().uid()))
         return -EACCES;
 
     /* Unlink Metadata Key. If other names for the key continue to exist just decrease the link-counter. */
-    mdi->pbuf()->set_link_count(mdi->pbuf()->link_count() - 1);
-    pok_debug("link count after unlink: %d", mdi->pbuf()->link_count());
-    if (mdi->pbuf()->link_count())
+    mdi->getMD().set_link_count(mdi->getMD().link_count() - 1);
+    pok_debug("link count after unlink: %d", mdi->getMD().link_count());
+    if (mdi->getMD().link_count())
         err = put_metadata(mdi.get());
     else
         err = delete_metadata(mdi.get());
@@ -36,12 +36,12 @@ static int unlink_fsdo(const char *user_path)
         return err;
 
     /* If we got ourselves a hardlink, make sure to delete the corresponding HARDLINK_S forwarding key */
-    if (mdi->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_T) {
+    if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T) {
         pok_debug("Detected Hardlink Inode");
         std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
         err = lookup(user_path, mdi_source, false);
         if (!err) {
-            assert(mdi_source->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_S);
+            assert(mdi_source->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
             err = delete_metadata(mdi_source.get());
         }
         if (err)
@@ -62,7 +62,7 @@ static int unlink_fsundo(const char *user_path, MetadataInfo *mdi)
     if (int err = lookup_parent(user_path, mdi_dir))
         return err;
 
-    mdi->pbuf()->set_link_count(mdi->pbuf()->link_count() + 1);
+    mdi->getMD().set_link_count(mdi->getMD().link_count() + 1);
     if (int err = put_metadata(mdi))
         return err;
 
@@ -167,21 +167,21 @@ int pok_release(const char *user_path, struct fuse_file_info *fi)
 static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
     mdi->updateACMtime();
-    mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
-    mdi->pbuf()->set_gid(fuse_get_context()->gid);
-    mdi->pbuf()->set_uid(fuse_get_context()->uid);
-    mdi->pbuf()->set_mode(mode);
-    mdi->pbuf()->set_inode_number(generate_inode_number());
+    mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);
+    mdi->getMD().set_gid(fuse_get_context()->gid);
+    mdi->getMD().set_uid(fuse_get_context()->uid);
+    mdi->getMD().set_mode(mode);
+    mdi->getMD().set_inode_number(generate_inode_number());
 
     /* Inherit path permissions existing for directory */
-    mdi->pbuf()->mutable_path_permission()->CopyFrom(mdi_parent->pbuf()->path_permission());
+    mdi->getMD().mutable_path_permission()->CopyFrom(mdi_parent->getMD().path_permission());
     /* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
-    mdi->pbuf()->set_path_permission_verified(mdi_parent->pbuf()->path_permission_verified());
+    mdi->getMD().set_path_permission_verified(mdi_parent->getMD().path_permission_verified());
 
     /* Add path permissions precomputed for directory's children. */
-    for (int i = 0; i < mdi_parent->pbuf()->path_permission_children_size(); i++) {
-        posixok::Metadata::ReachabilityEntry *e = mdi->pbuf()->add_path_permission();
-        e->CopyFrom(mdi_parent->pbuf()->path_permission_children(i));
+    for (int i = 0; i < mdi_parent->getMD().path_permission_children_size(); i++) {
+        posixok::Metadata::ReachabilityEntry *e = mdi->getMD().add_path_permission();
+        e->CopyFrom(mdi_parent->getMD().path_permission_children(i));
     }
 
     if (S_ISDIR(mode)) {

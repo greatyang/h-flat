@@ -11,23 +11,23 @@ message Metadata {
         HARDLINK_S   = 2;  //     source (follow to hardlink-uuid during lookup) and target (delete corresponding source during unlink)
         FORCE_UPDATE = 3;  // place-holder metadata-key used to synchronize directory moves 
     }
-    required InodeType  type = 1 [default = POSIX];
+    required InodeType  type = 1;
     optional int64      force_update_version = 3 [default = 0]; // forcing database update when stumbling over metadata affected by path-mappings.
                                                                 // this could be either due to a directory move or a symbolic link
     
     //////////////////////////////////////////
     // POSIX Metadata
     //
-    optional uint32 atime       = 11     [default = 0]; // access time. gets updated on file access unless mounted with noatime
-    optional uint32 mtime       = 12;                   // modify time. gets updated when file content is modified. 
-    optional uint32 ctime       = 13;                   // change time. gets updated when the file attributes are changed AND when file content is modified. 
+    optional uint32 atime       = 11 [default = 0]; // access time. gets updated on file access unless mounted with noatime
+    optional uint32 mtime       = 12;               // modify time. gets updated when file content is modified. 
+    optional uint32 ctime       = 13;               // change time. gets updated when the file attributes are changed AND when file content is modified. 
     optional uint32 uid         = 14;
     optional uint32 gid         = 15;
     optional uint32 mode        = 16;
     optional uint64 inode_number= 17;
-    optional uint32 link_count  = 18 [default = 1];   // number of names for this inode (hardlinks)
-    optional uint32 size        = 19 [default = 0];   // size in bytes, might be computed instead of stored
-    optional uint32 blocks      = 20 [default = 0];   // allocated file system blocks
+    optional uint32 link_count  = 18 [default = 1]; // number of names for this inode (hardlinks)
+    optional uint32 size        = 19 [default = 0]; // size in bytes, might be computed instead of stored
+    optional uint32 blocks      = 20 [default = 0]; // allocated file system blocks
     
     message ExtendedAttribute {
         required string name  = 1;

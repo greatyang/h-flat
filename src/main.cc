@@ -38,13 +38,13 @@ void *pok_init(struct fuse_conn_info *conn)
     int err = get_metadata(mdi.get());
     if (err == -ENOENT) {
         pok_trace("Initialzing root metadata.");
-        mdi->pbuf()->set_type(mdi->pbuf()->POSIX);
+        mdi->getMD().set_type(mdi->getMD().POSIX);
         mdi->updateACMtime();
-        mdi->pbuf()->set_uid(0);
-        mdi->pbuf()->set_gid(0);
-        mdi->pbuf()->set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-        mdi->pbuf()->set_path_permission_verified(0);
-        mdi->pbuf()->set_inode_number(util::generate_inode_number());
+        mdi->getMD().set_uid(0);
+        mdi->getMD().set_gid(0);
+        mdi->getMD().set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+        mdi->getMD().set_path_permission_verified(0);
+        mdi->getMD().set_inode_number(util::generate_inode_number());
         err = create_metadata(mdi.get());
     }
     if (err)

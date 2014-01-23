@@ -22,12 +22,12 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
 
     /* Step 3: Special inode types: Follow hardlink_source inode types in the lookup operation, update on force_update. */
     if (handle_special_inodes) {
-        if (mdi->pbuf()->type() == posixok::Metadata_InodeType_HARDLINK_S) {
-            mdi->setSystemPath("hardlink_" + std::to_string(mdi->pbuf()->inode_number()));
+        if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S) {
+            mdi->setSystemPath("hardlink_" + std::to_string(mdi->getMD().inode_number()));
             if (int err = get_metadata(mdi.get()))
                 return err;
         }
-        if (mdi->pbuf()->type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
+        if (mdi->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
             if (int err = database_update())
                 return err;
             return lookup(user_path, mdi, false); // only one special inode possible
@@ -35,7 +35,7 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
     }
 
     /* Step 4: check path permissions for staleness */
-    bool stale = mdi->pbuf()->path_permission_verified() < pathPermissionTimeStamp;
+    bool stale = mdi->getMD().path_permission_verified() < pathPermissionTimeStamp;
     if (stale) {
         /* TODO: validate path permissions up the directory tree, recursively as necessary */
         pok_warning("Stale path permissions detected. Re-validation not implemented yet.");
@@ -57,7 +57,7 @@ int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &md
     if (int err = lookup(key.c_str(), mdi_parent))
         return err;
 
-    if (!S_ISDIR(mdi_parent->pbuf()->mode()))
+    if (!S_ISDIR(mdi_parent->getMD().mode()))
         return -ENOTDIR;
     return 0;
 }

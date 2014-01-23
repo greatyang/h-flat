@@ -23,9 +23,9 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;
 
     /* Search the existing xattrs for the supplied key */
-    for (int i = 0; i < mdi->pbuf()->xattr_size(); i++) {
-        if (!mdi->pbuf()->xattr(i).name().compare(attr_name)) {
-            xattr = mdi->pbuf()->mutable_xattr(i);
+    for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
+        if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
+            xattr = mdi->getMD().mutable_xattr(i);
             break;
         }
     }
@@ -34,7 +34,7 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     if (!xattr && (flags & XATTR_REPLACE))
         return -ENOATTR;
     if (!xattr)
-        xattr = mdi->pbuf()->mutable_xattr()->Add();
+        xattr = mdi->getMD().mutable_xattr()->Add();
 
     /* Set & store the supplied extended attribute. */
     xattr->set_name(attr_name);
@@ -60,9 +60,9 @@ int pok_getxattr(const char *user_path, const char *attr_name, char *attr_value,
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;
 
     /* Search the existing xattrs for the supplied key */
-    for (int i = 0; i < mdi->pbuf()->xattr_size(); i++) {
-        if (!mdi->pbuf()->xattr(i).name().compare(attr_name)) {
-            xattr = mdi->pbuf()->mutable_xattr(i);
+    for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
+        if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
+            xattr = mdi->getMD().mutable_xattr(i);
             break;
         }
     }
@@ -99,9 +99,9 @@ int pok_removexattr(const char *user_path, const char *attr_name)
         return err;
 
     /* Search the existing xattrs for the supplied key */
-    for (int i = 0; i < mdi->pbuf()->xattr_size(); i++) {
-        if (!mdi->pbuf()->xattr(i).name().compare(attr_name)) {
-            mdi->pbuf()->mutable_xattr()->DeleteSubrange(i, 1);
+    for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
+        if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
+            mdi->getMD().mutable_xattr()->DeleteSubrange(i, 1);
             return put_metadata(mdi.get());
         }
     }
@@ -119,8 +119,8 @@ int pok_listxattr(const char *user_path, char *buffer, size_t size)
     size_t bytesize = 0;
 
     /* Iterate over existing xattrs & copy the names into the supplied buffer */
-    for (int i = 0; i < mdi->pbuf()->xattr_size(); i++) {
-        int namesize = mdi->pbuf()->xattr(i).name().size() + 1;
+    for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
+        int namesize = mdi->getMD().xattr(i).name().size() + 1;
         bytesize += namesize;
 
         /* An empty buffer of size zero can be passed into these calls to return the current size of the list of extended attribute names,
@@ -130,7 +130,7 @@ int pok_listxattr(const char *user_path, char *buffer, size_t size)
                 pok_debug("buffer size: %d listsize: %d", size, bytesize);
                 return -ERANGE;
             }
-            strcpy(buffer, mdi->pbuf()->xattr(i).name().c_str());
+            strcpy(buffer, mdi->getMD().xattr(i).name().c_str());
             buffer += namesize;
         }
     }

@@ -43,7 +43,7 @@ int pok_hardlink(const char *target, const char *origin)
     std::unique_ptr<MetadataInfo> mdi_target(new MetadataInfo());
     if (int err = lookup(target, mdi_target))
         return err;
-    assert(!S_ISDIR(mdi_target->pbuf()->mode()));
+    assert(!S_ISDIR(mdi_target->getMD().mode()));
 
     pok_debug("Hardlink %s->%s", origin, target);
 
@@ -60,17 +60,17 @@ int pok_hardlink(const char *target, const char *origin)
         return err;
 
     /* If the target metadata is not already a hardlink_target, make it so. */
-    if (mdi_target->pbuf()->type() != posixok::Metadata_InodeType_HARDLINK_T) {
-        assert(mdi_target->pbuf()->type() == posixok::Metadata_InodeType_POSIX);
+    if (mdi_target->getMD().type() != posixok::Metadata_InodeType_HARDLINK_T) {
+        assert(mdi_target->getMD().type() == posixok::Metadata_InodeType_POSIX);
 
         std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
-        mdi_source->pbuf()->set_type(posixok::Metadata_InodeType_HARDLINK_S);
-        mdi_source->pbuf()->set_inode_number(mdi_target->pbuf()->inode_number());
+        mdi_source->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
+        mdi_source->getMD().set_inode_number(mdi_target->getMD().inode_number());
         mdi_source->setCurrentVersion(mdi_target->getCurrentVersion());
         mdi_source->setSystemPath(mdi_target->getSystemPath());
 
-        mdi_target->setSystemPath("hardlink_" + std::to_string(mdi_target->pbuf()->inode_number()));
-        mdi_target->pbuf()->set_type(posixok::Metadata_InodeType_HARDLINK_T);
+        mdi_target->setSystemPath("hardlink_" + std::to_string(mdi_target->getMD().inode_number()));
+        mdi_target->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_T);
 
         /* store target metadata at hardlink-key location */
         if (int err = create_metadata(mdi_target.get()))
@@ -86,14 +86,14 @@ int pok_hardlink(const char *target, const char *origin)
     if ((err = create_directory_entry(mdi_origin_dir, util::path_to_filename(origin))))
         return err;
 
-    mdi_target->pbuf()->set_link_count(mdi_target->pbuf()->link_count() + 1);
+    mdi_target->getMD().set_link_count(mdi_target->getMD().link_count() + 1);
     if ((err = put_metadata(mdi_target.get()))) {
         pok_warning("Failed increasing link count of metadata after creating directory entry");
         return err;
     }
 
-    mdi_origin->pbuf()->set_type(posixok::Metadata_InodeType_HARDLINK_S);
-    mdi_origin->pbuf()->set_inode_number(mdi_target->pbuf()->inode_number());
+    mdi_origin->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
+    mdi_origin->getMD().set_inode_number(mdi_target->getMD().inode_number());
     if ((err = create_metadata(mdi_origin.get())))
         pok_warning("Failed creating metadata key after increasing target link count and creating directory entry.");
     return err;

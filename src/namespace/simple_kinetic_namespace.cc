@@ -26,7 +26,7 @@ void SimpleKineticNamespace::connect(kinetic::ConnectionOptions options)
     kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
 
     kinetic::ConnectionHandle *kineticConnection = nullptr;
-    kinetic::Status status = factory.NewConnection(options, &kineticConnection);
+    kinetic::Status status = factory.NewThreadsafeConnection(options, &kineticConnection);
     if (!status.ok() || !kineticConnection) {
         throw std::runtime_error(status.ToString());
     }

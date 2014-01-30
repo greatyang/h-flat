@@ -65,8 +65,9 @@ set(PROTO_GEN ${POSIX-o-K_SOURCE_DIR}/src/generated)
 set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/host/bin/protoc")
 add_custom_command(
     COMMENT "Compiling protobuf files"
-    OUTPUT  {PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc {PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc
+    OUTPUT  ${PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc ${PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc
     COMMAND mkdir -p ${PROTO_GEN} && ${PROTOC_PATH} -I=${POSIX-o-K_SOURCE_DIR}/src/proto --cpp_out=${PROTO_GEN} ${POSIX-o-K_SOURCE_DIR}/src/proto/*.proto 
+    DEPENDS ${POSIX-o-K_SOURCE_DIR}/src/proto/database.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/metadata.proto
 )
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
@@ -109,7 +110,6 @@ target_link_libraries(iointer
     dl
 )
 
-if(APPLE)
 add_executable(test
     src/test/pok_test.cc
     
@@ -128,4 +128,4 @@ add_dependencies(test
 target_link_libraries(test
     ${LIBRARY_DEPENDENCIES}
 )
-endif(APPLE)
+

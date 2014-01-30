@@ -77,6 +77,13 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
         return systemPath;
     }
 
+    /* In order to support direct lookup via iointercept, handle ':' in path */
+    size_t pos = systemPath.find_first_of(':');;
+    while(pos != std::string::npos){
+        systemPath[pos]='/';
+        pos = systemPath.find_first_of(':',pos);
+    }
+
     {
         std::lock_guard<std::mutex> locker(lock);
         ++currentReaders;

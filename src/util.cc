@@ -33,7 +33,7 @@ ino_t generate_inode_number(void)
 
 std::string path_to_filename(const std::string &path)
 {
-    return path.substr(path.find_last_of('/') + 1);
+    return path.substr(path.find_last_of("/:") + 1);
 }
 
 }

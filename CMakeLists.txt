@@ -100,6 +100,14 @@ target_link_libraries(POSIX-o-K
     ${LIBRARY_DEPENDENCIES}
 )
 
+add_library(iointer SHARED
+     iointercept/pathchange.cc
+     iointercept/iointercept.cc
+)
+
+target_link_libraries(iointer
+    dl
+)
 
 if(APPLE)
 add_executable(test

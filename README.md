@@ -23,3 +23,13 @@ To mount run the executable given the mountpoint as a parameter. Some flags inte
 + -o mount options, note that *allow_other*, *use_ino*, and *attr_timeout=0* fuse mount options are required for POSIX compliant behavior, 
 
 Example: `./POSIX-o-K -s -f -o allow_other,use_ino /mountpoint` 
+
+## Direct Lookup
+To achieve (partial) direct-lookup functionality with operating systems not supporting it natively (which, at the moment, is everybody), use iointercept library.  
+
+This library implements path-based file system library functions (e.g. open, chmod, etc.). The file path is modified so that all path-components below a supplied mountpoint appear as a single path component to the operating system. 
+
+E.g. /a/mountpoint/path/to/file -> /a/mountpoint/path:to:file
+
+It is intended to be preloaded (using LD_PRELOAD on Linux and DYLD_INSERT_LIBRARIES on OSX) in order to overload the standard implementations. 
+User -> {intercept} -> libc -> kernel -> fuse -> POK

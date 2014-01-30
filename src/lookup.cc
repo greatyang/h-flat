@@ -12,6 +12,8 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
     if (pathPermissionTimeStamp < 0)
         return pathPermissionTimeStamp;
 
+    pok_trace("LOOKUP: %s  ->  %s",user_path,key.c_str());
+
     /* Step 2: Get metadata from flat namespace */
     mdi->setSystemPath(key);
     if (int err = get_metadata(mdi.get()))
@@ -44,7 +46,7 @@ int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool
 int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent)
 {
     std::string key(user_path);
-    auto pos = key.find_last_of("/");
+    auto pos = key.find_last_of("/:");
     if (pos == std::string::npos)
         return -EINVAL;
     if (!pos) // root directory

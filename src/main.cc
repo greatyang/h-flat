@@ -17,11 +17,11 @@ void *pok_init(struct fuse_conn_info *conn)
 {
     /* Setup values required for inode generation. */
     const std::string inode_base_key = "igen";
-    std::string keyVersion;
+    std::unique_ptr<std::string> keyVersion;
 
-    KineticStatus status = PRIV->kinetic->GetVersion(inode_base_key, &keyVersion);
+    KineticStatus status = PRIV->kinetic->GetVersion(inode_base_key, keyVersion);
     if (status.ok())
-        PRIV->inum_base = util::to_int64(keyVersion);
+        PRIV->inum_base = util::to_int64(keyVersion->data());
     else if (status.notFound())
         PRIV->inum_base = 0;
     else

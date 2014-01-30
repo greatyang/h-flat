@@ -60,6 +60,7 @@ namespace util
 {
     ino_t generate_inode_number(void);
     std::int64_t to_int64(const std::string &version_string);
+    std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);
     std::string path_to_filename(const std::string &path);
 }
 

@@ -17,6 +17,11 @@ std::int64_t to_int64(const std::string &version_string)
     return version;
 }
 
+std::int64_t to_int64(const std::shared_ptr<const std::string> version_string)
+{
+    return to_int64(version_string->data());
+}
+
 ino_t generate_inode_number(void)
 {
     std::uint16_t counter;

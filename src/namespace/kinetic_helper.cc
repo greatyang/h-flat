@@ -4,13 +4,13 @@
 
 using namespace util;
 
-static const std::string db_base_name = "pathmapDB_";
-static const std::string db_version_key = db_base_name + "version";
+static const string db_base_name = "pathmapDB_";
+static const string db_version_key = db_base_name + "version";
 
 int get_metadata(MetadataInfo *mdi)
 {
-    std::unique_ptr<KineticRecord> record;
-    KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), &record);
+    unique_ptr<KineticRecord> record;
+    KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
     if (status.notFound())
         return -ENOENT;
@@ -20,7 +20,7 @@ int get_metadata(MetadataInfo *mdi)
     }
 
     posixok::Metadata md;
-    if(! md.ParseFromString(record->value()) )
+    if(! md.ParseFromString(* record->value()) )
         return -EINVAL;
 
     mdi->setMD(md, to_int64(record->version()));
@@ -29,7 +29,7 @@ int get_metadata(MetadataInfo *mdi)
 
 int put_metadata(MetadataInfo *mdi)
 {
-    std::int64_t version = mdi->getCurrentVersion();
+    int64_t version = mdi->getCurrentVersion();
     assert(version);
 
     KineticRecord record(mdi->getMD().SerializeAsString(), std::to_string(version + 1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
@@ -37,12 +37,12 @@ int put_metadata(MetadataInfo *mdi)
 
     /* If someone else has updated the metadata key since it has been read in, try to merge the changes. */
     if (status.versionMismatch()) {
-       std::unique_ptr<KineticRecord> record;
-       KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), &record);
+       unique_ptr<KineticRecord> record;
+       KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
        if(status.ok()){
            posixok::Metadata md;
-           if(!md.ParseFromString(record->value()) )
+           if(!md.ParseFromString(* record->value()))
                return -EINVAL;
 
            if(mdi->mergeMD(md, to_int64(record->version())))
@@ -96,9 +96,9 @@ int delete_metadata(MetadataInfo *mdi)
 
 int get_data(MetadataInfo *mdi, unsigned int blocknumber)
 {
-    std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
-    std::unique_ptr<KineticRecord> record;
-    KineticStatus status = PRIV->kinetic->Get(key, &record);
+    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
+    unique_ptr<KineticRecord> record;
+    KineticStatus status = PRIV->kinetic->Get(key, record);
 
     if (status.notOk() && !status.notFound()){
         pok_warning("EIO");
@@ -108,7 +108,7 @@ int get_data(MetadataInfo *mdi, unsigned int blocknumber)
     if (status.notFound())
         mdi->setDataInfo(blocknumber, DataInfo("",0));
     else
-        mdi->setDataInfo(blocknumber, DataInfo(record->value(), to_int64(record->version())));
+        mdi->setDataInfo(blocknumber, DataInfo(* record->value(), to_int64(record->version())));
     return 0;
 }
 
@@ -118,22 +118,19 @@ int put_data(MetadataInfo *mdi, unsigned int blocknumber)
     if(!di) return -EINVAL;
     if(!di->hasUpdates()) return 0;
 
-    std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
+    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
     std::int64_t version = di->getCurrentVersion();
-
-    pok_debug("putting data block #%d for system path '%s' at key '%s' ",blocknumber, mdi->getSystemPath().c_str(), key.c_str());
-
 
     KineticRecord record(di->data(), std::to_string(version + 1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(key, version?std::to_string(version):"", WriteMode::REQUIRE_SAME_VERSION, record);
 
     /* If someone else has updated the data block since we read it in, just write the incremental changes */
     if (status.versionMismatch()) {
-        std::unique_ptr<KineticRecord> record;
-        status = PRIV->kinetic->Get(key, &record);
+        unique_ptr<KineticRecord> record;
+        status = PRIV->kinetic->Get(key, record);
 
         if (status.ok()) {
-            di->mergeDataChanges(record->value());
+            di->mergeDataChanges(* record->value());
             di->setCurrentVersion(to_int64(record->version()));
             return put_data(mdi, blocknumber);
         }
@@ -150,7 +147,7 @@ int put_data(MetadataInfo *mdi, unsigned int blocknumber)
 
 int delete_data(MetadataInfo *mdi, unsigned int blocknumber)
 {
-    std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
+    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
     KineticStatus status = PRIV->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);
 
     if (status.notFound())
@@ -164,7 +161,7 @@ int delete_data(MetadataInfo *mdi, unsigned int blocknumber)
 
 int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
 {
-    std::string key = db_base_name + std::to_string(version);
+    string key = db_base_name + std::to_string(version);
     KineticRecord record(entry.SerializeAsString(), "", "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(key, "", kinetic::REQUIRE_SAME_VERSION, record);
 
@@ -186,9 +183,9 @@ int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
 
 int get_db_entry(std::int64_t version, posixok::db_entry &entry)
 {
-    std::string key = db_base_name + std::to_string(version);
-    std::unique_ptr<KineticRecord> record;
-    KineticStatus status = PRIV->kinetic->Get(key, &record);
+    string key = db_base_name + std::to_string(version);
+    unique_ptr<KineticRecord> record;
+    KineticStatus status = PRIV->kinetic->Get(key, record);
     if (status.notFound())
         return -ENOENT;
     if (status.notOk()){
@@ -197,20 +194,20 @@ int get_db_entry(std::int64_t version, posixok::db_entry &entry)
         return -EIO;
     }
 
-    if (!entry.ParseFromString(record->value()))
+    if (!entry.ParseFromString(* record->value()))
         return -EINVAL;
     return 0;
 }
 
 int get_db_version(std::int64_t &version)
 {
-    std::string keyVersion;
-    KineticStatus status = PRIV->kinetic->GetVersion(db_version_key, &keyVersion);
+    unique_ptr<string> keyVersion;
+    KineticStatus status = PRIV->kinetic->GetVersion(db_version_key, keyVersion);
     if (status.notOk()){
         pok_warning("encountered status '%s' when calling getVersion on %s. Returning -EIO.",
                 status.ToString().c_str(), db_version_key.c_str());
         return -EIO;
     }
-    version = to_int64(keyVersion);
+    version = to_int64(keyVersion->data());
     return 0;
 }

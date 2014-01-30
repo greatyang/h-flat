@@ -11,15 +11,18 @@
 using kinetic::KineticStatus;
 using kinetic::KineticRecord;
 using kinetic::WriteMode;
+using std::unique_ptr;
+using std::vector;
+using std::string;
 
 class KineticNamespace
 {
 public:
-    virtual KineticStatus Get(const std::string &key, std::unique_ptr<KineticRecord>* record) = 0;
-    virtual KineticStatus Delete(const std::string &key, const std::string& version, WriteMode mode) = 0;
-    virtual KineticStatus Put(const std::string &key, const std::string &current_version, WriteMode mode, const KineticRecord& record) = 0;
-    virtual KineticStatus GetVersion(const std::string &key, std::string* version) = 0;
-    virtual KineticStatus GetKeyRange(const std::string &start_key, const std::string &end_key, unsigned int max_results, std::vector<std::string> *keys) = 0;
+    virtual KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record) = 0;
+    virtual KineticStatus Delete(const string &key, const string& version, WriteMode mode) = 0;
+    virtual KineticStatus Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record) = 0;
+    virtual KineticStatus GetVersion(const string &key, unique_ptr<string>& version) = 0;
+    virtual KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys) = 0;
     virtual KineticStatus Capacity(kinetic::Capacity &cap) = 0;
 
     virtual ~KineticNamespace(){};
@@ -29,17 +32,17 @@ public:
 class SimpleKineticNamespace final : public KineticNamespace
 {
 private:
-    std::unique_ptr<kinetic::ConnectionHandle> con;
+    unique_ptr<kinetic::ConnectionHandle> con;
 
 private:
     void connect(kinetic::ConnectionOptions options);
 
 public:
-    KineticStatus Get(const std::string &key, std::unique_ptr<KineticRecord>* record);
-    KineticStatus Delete(const std::string &key, const std::string& version, WriteMode mode);
-    KineticStatus Put(const std::string &key, const std::string &current_version, WriteMode mode, const KineticRecord& record);
-    KineticStatus GetVersion(const std::string &key, std::string* version);
-    KineticStatus GetKeyRange(const std::string &start_key, const std::string &end_key, unsigned int max_results, std::vector<std::string> *keys);
+    KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);
+    KineticStatus Delete(const string &key, const string& version, WriteMode mode);
+    KineticStatus Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record);
+    KineticStatus GetVersion(const string &key, unique_ptr<string>& version);
+    KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys);
     KineticStatus Capacity(kinetic::Capacity &cap);
 public:
     explicit SimpleKineticNamespace(kinetic::ConnectionOptions options);

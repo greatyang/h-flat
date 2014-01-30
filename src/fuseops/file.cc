@@ -77,7 +77,7 @@ int pok_unlink(const char *user_path)
                 entry);
     }
     if (!err && S_ISDIR(mdi->getMD().mode()))
-          err = unlink_force_update(user_path);
+        err = unlink_force_update(user_path);
     if(!err)
         err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
 

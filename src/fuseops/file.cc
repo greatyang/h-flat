@@ -72,8 +72,7 @@ int pok_unlink(const char *user_path)
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
-        err = database_op(std::bind(unlink_lookup,
-                user_path, std::ref(mdi), std::ref(mdi_dir)),
+        err = database_op(std::bind(unlink_lookup, user_path, std::ref(mdi), std::ref(mdi_dir)),
                 entry);
     }
     if (!err && S_ISDIR(mdi->getMD().mode()))
@@ -81,10 +80,7 @@ int pok_unlink(const char *user_path)
     if(!err)
         err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
 
-
-    if (err){
-        pok_warning("Failure in the middle of an unlink operation");
-    }
+    if (err) pok_warning("Failure in the middle of an unlink operation");
     return err;
 
 }
@@ -160,7 +156,7 @@ int pok_release(const char *user_path, struct fuse_file_info *fi)
     return 0;
 }
 
-static void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
     mdi->updateACMtime();
     mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);

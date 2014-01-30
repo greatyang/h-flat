@@ -29,12 +29,40 @@ int pok_readlink(const char *user_path, char *buffer, size_t size)
 /** Create a symbolic link */
 int pok_symlink(const char *target, const char *origin)
 {
+    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+
+    int err = lookup(origin, mdi);
+    if (!err)
+        return -EEXIST;
+    if (err != -ENOENT)
+        return err;
+    err = lookup_parent(origin, mdi_dir);
+    if (err) return err;
+
+    /* Add filename to directory */
+    err = create_directory_entry(mdi_dir, util::path_to_filename(origin));
+    if (err) return err;
+
     posixok::db_entry entry;
     entry.set_type(entry.SYMLINK);
     entry.set_origin(origin);
     entry.set_target(target);
 
-    return database_operation(std::bind(pok_create, origin, S_IFLNK | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH), std::bind(pok_unlink, origin), entry);
+    /* do database operation... after adding the filename to directory, no other client can disallow it */
+    auto alwaysok = []() -> int{ return 0;};
+    err = database_op(alwaysok, entry);
+    if(err){
+        pok_warning("Database operation failed. Dangling directory entry!");
+        return err;
+    }
+
+    /* initialize metadata and write metadata-key to drive */
+    initialize_metadata(mdi, mdi_dir, S_IFLNK | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
+    err = create_metadata(mdi.get());
+    if (err)
+       pok_error("Failed creating metadata key after successfully database operation");
+    return err;
 }
 
 /** Create a hard link to a file */
@@ -80,7 +108,6 @@ int pok_hardlink(const char *target, const char *origin)
          * if this should fail, there's a garbage uuid key to be cleaned up. */
         if (int err = put_metadata(mdi_source.get()))
             return err;
-
     }
 
     if ((err = create_directory_entry(mdi_origin_dir, util::path_to_filename(origin))))
@@ -95,6 +122,6 @@ int pok_hardlink(const char *target, const char *origin)
     mdi_origin->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
     mdi_origin->getMD().set_inode_number(mdi_target->getMD().inode_number());
     if ((err = create_metadata(mdi_origin.get())))
-        pok_warning("Failed creating metadata key after increasing target link count and creating directory entry.");
+        pok_error("Failed creating metadata key after increasing target link count and creating directory entry.");
     return err;
 }

@@ -61,88 +61,64 @@ int pok_access(const char *user_path, int mode)
     return check_access(mdi.get(), mode);
 }
 
-static int do_permission_change(const std::unique_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
+static int permission_lookup(const char *user_path, unique_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
 {
-    mdi->getMD().set_gid(gid);
-    mdi->getMD().set_uid(uid);
-    mdi->getMD().set_mode(mode);
-    mdi->updateACtime();
+    if ( int err = lookup(user_path, mdi) )
+        return err;
 
-    return put_metadata(mdi.get());
+    /* Only the root user can change the owner of a file.*/
+    if ((uid != (uid_t) -1) && fuse_get_context()->uid)
+      return -EPERM;
+
+    /* You can change the group of a file only if you are a root user or if you own the file.
+    *  If you own the file but are not a root user, you can change the group only to a group of which you are a member.
+    *  TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system. */
+    if ((gid != (gid_t) -1) && fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
+      return -EPERM;
+
+    /* Only root or owner can change file mode. */
+    if ((mode != (mode_t) -1) && fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
+      return -EPERM;
+
+    return 0;
 }
 
-static int do_permission_change_lookup(const char *user_path, mode_t mode, uid_t uid, gid_t gid)
+static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, gid_t gid)
 {
     std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    int err = lookup(user_path, mdi);
-    if (err)
-        return err;
-    return do_permission_change(mdi, mode, uid, gid);
+    int err = permission_lookup(user_path, mdi, mode, uid, gid);
+    if( err) return err;
+
+    bool db_updated = false;
+    if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
+        posixok::db_entry entry;
+        entry.set_type(entry.NONE);
+        entry.set_origin(user_path);
+        err = database_op(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
+        if(err) return err;
+        db_updated = true;
+    }
+
+    if(uid != (uid_t) -1)   mdi->getMD().set_uid(uid);
+    if(gid != (gid_t) -1)   mdi->getMD().set_gid(gid);
+    if(mode != (mode_t) -1) mdi->getMD().set_mode(mode);
+    mdi->updateACtime();
+    err = put_metadata(mdi.get());
+    if(err && db_updated)
+        pok_warning("failure applying permission change after successful database update.");
+    return err;
 }
+
 
 /** Change the permission bits of a file */
 int pok_chmod(const char *user_path, mode_t mode)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    int err = lookup(user_path, mdi);
-    if (err)
-        return err;
-
-    pok_trace("Changing mode for user_path %s from %d to %d", user_path, mdi->getMD().mode(), mode);
-
-    if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
-        return -EPERM;
-
-    if (S_ISDIR(mode) && mdi->computePathPermissionChildren()) {
-        posixok::db_entry entry;
-        entry.set_type(entry.NONE);
-        entry.set_origin(user_path);
-
-        mode_t old_mode = mdi->getMD().mode();
-        err = database_operation(std::bind(do_permission_change_lookup, user_path, mode, mdi->getMD().uid(), mdi->getMD().gid()),
-                std::bind(do_permission_change_lookup, user_path, old_mode, mdi->getMD().uid(), mdi->getMD().gid()), entry);
-        return err;
-    }
-    return do_permission_change(mdi, mode, mdi->getMD().uid(), mdi->getMD().gid());
+    return do_permission_change(user_path, mode, -1, -1);
 }
 
 /** Change the owner and group of a file */
 int pok_chown(const char *user_path, uid_t uid, gid_t gid)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    int err = lookup(user_path, mdi);
-    if (err)
-        return err;
-
-    pok_trace("Changing owner / group for user_path %s from %d:%d to %d:%d   fuse_context: %d:%d ", user_path, mdi->getMD().uid(), mdi->getMD().gid(), uid, gid,
-            fuse_get_context()->uid, fuse_get_context()->gid);
-
-    /* Only the root user can change the owner of a file.
-     * You can change the group of a file only if you are a root user or if you own the file.
-     * If you own the file but are not a root user, you can change the group only to a group of which you are a member.
-     *
-     * TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system.
-     * */
-    if (uid == (uid_t) -1)
-        uid = mdi->getMD().uid();
-    else if (fuse_get_context()->uid)
-        return -EPERM;
-    if (gid == (gid_t) -1)
-        gid = mdi->getMD().gid();
-    else if (fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
-        return -EPERM;
-
-    if (S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
-        posixok::db_entry entry;
-        entry.set_type(entry.NONE);
-        entry.set_origin(user_path);
-
-        uid_t old_uid = mdi->getMD().uid();
-        gid_t old_gid = mdi->getMD().gid();
-        err = database_operation(std::bind(do_permission_change_lookup, user_path, mdi->getMD().mode(), uid, gid),
-                std::bind(do_permission_change_lookup, user_path, mdi->getMD().mode(), old_uid, old_gid), entry);
-        return err;
-    }
-    return do_permission_change(mdi, mdi->getMD().mode(), uid, gid);
+    return do_permission_change(user_path, -1, uid, gid);
 }
 

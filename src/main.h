@@ -50,6 +50,9 @@ int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
 /* permission */
 int check_access(MetadataInfo *mdi, int mode);
 
+/* file */
+void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode);
+
 /* database */
 int database_update(void);
 int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun_undo, posixok::db_entry &entry);

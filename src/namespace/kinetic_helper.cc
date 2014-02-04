@@ -7,8 +7,9 @@ using namespace util;
 static const string db_base_name = "pathmapDB_";
 static const string db_version_key = db_base_name + "version";
 
-int get_metadata(MetadataInfo *mdi)
+int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
+    pok_debug("GET key %s",mdi->getSystemPath().c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
@@ -27,8 +28,9 @@ int get_metadata(MetadataInfo *mdi)
     return 0;
 }
 
-int put_metadata(MetadataInfo *mdi)
+int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
+    pok_debug("PUT key %s",mdi->getSystemPath().c_str());
     int64_t version = mdi->getCurrentVersion();
     assert(version);
 
@@ -61,9 +63,10 @@ int put_metadata(MetadataInfo *mdi)
     return 0;
 }
 
-int create_metadata(MetadataInfo *mdi)
+int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    std::int64_t version = mdi->getCurrentVersion();
+    pok_debug("CREATE key %s",mdi->getSystemPath().c_str());
+    std::int64_t version = 0;
 
     KineticRecord record(mdi->getMD().SerializeAsString(), std::to_string(version + 1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
@@ -79,7 +82,7 @@ int create_metadata(MetadataInfo *mdi)
     return 0;
 }
 
-int delete_metadata(MetadataInfo *mdi)
+int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
     KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), std::to_string(mdi->getCurrentVersion()), WriteMode::REQUIRE_SAME_VERSION);
 
@@ -91,10 +94,11 @@ int delete_metadata(MetadataInfo *mdi)
         pok_warning("EIO");
         return -EIO;
     }
+    PRIV->lookup_cache.invalidate(mdi->getSystemPath());
     return 0;
 }
 
-int get_data(MetadataInfo *mdi, unsigned int blocknumber)
+int get_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
 {
     string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
     unique_ptr<KineticRecord> record;
@@ -112,7 +116,7 @@ int get_data(MetadataInfo *mdi, unsigned int blocknumber)
     return 0;
 }
 
-int put_data(MetadataInfo *mdi, unsigned int blocknumber)
+int put_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
 {
     DataInfo *di = mdi->getDataInfo(blocknumber);
     if(!di) return -EINVAL;
@@ -145,7 +149,7 @@ int put_data(MetadataInfo *mdi, unsigned int blocknumber)
     return 0;
 }
 
-int delete_data(MetadataInfo *mdi, unsigned int blocknumber)
+int delete_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
 {
     string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
     KineticStatus status = PRIV->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);

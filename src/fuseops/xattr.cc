@@ -14,11 +14,9 @@
 int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags)
 {
     pok_trace("Setting extended attribute for user path %s:  %s = %s", user_path, attr_name, attr_value);
-
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
 
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;
 
@@ -40,7 +38,7 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     xattr->set_name(attr_name);
     xattr->set_value(attr_value, attr_size);
 
-    return put_metadata(mdi.get());
+    return put_metadata(mdi);
 }
 
 int pok_setxattr_apple(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags, uint32_t position)
@@ -52,10 +50,9 @@ int pok_setxattr_apple(const char *user_path, const char *attr_name, const char 
 /** Get extended attributes */
 int pok_getxattr(const char *user_path, const char *attr_name, char *attr_value, size_t attr_size)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
 
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;
 
@@ -93,16 +90,16 @@ int pok_getxattr_apple(const char *user_path, const char *attr_name, char *attr_
 /** Remove extended attributes */
 int pok_removexattr(const char *user_path, const char *attr_name)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
+
 
     /* Search the existing xattrs for the supplied key */
     for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
         if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
             mdi->getMD().mutable_xattr()->DeleteSubrange(i, 1);
-            return put_metadata(mdi.get());
+            return put_metadata(mdi);
         }
     }
     return -ENOATTR;
@@ -111,10 +108,9 @@ int pok_removexattr(const char *user_path, const char *attr_name)
 /** List extended attributes */
 int pok_listxattr(const char *user_path, char *buffer, size_t size)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
 
     size_t bytesize = 0;
 

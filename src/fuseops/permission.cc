@@ -2,7 +2,7 @@
 #include "debug.h"
 #include "kinetic_helper.h"
 
-int check_access(MetadataInfo *mdi, int mode)
+int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode)
 {
     /* root does as (s)he pleases */
     if (fuse_get_context()->uid == 0)
@@ -53,31 +53,33 @@ int pok_access(const char *user_path, int mode)
     if (fuse_get_context()->uid == 0)
         return 0;
 
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
 
-    return check_access(mdi.get(), mode);
+    return check_access(mdi, mode);
 }
 
-static int permission_lookup(const char *user_path, unique_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
+static int permission_lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi, mode_t mode, uid_t uid, gid_t gid)
 {
     if ( int err = lookup(user_path, mdi) )
         return err;
 
     /* Only the root user can change the owner of a file.*/
-    if ((uid != (uid_t) -1) && fuse_get_context()->uid)
+    if ((uid != (uid_t) -1) && uid != mdi->getMD().uid() &&
+            fuse_get_context()->uid)
       return -EPERM;
 
     /* You can change the group of a file only if you are a root user or if you own the file.
     *  If you own the file but are not a root user, you can change the group only to a group of which you are a member.
     *  TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system. */
-    if ((gid != (gid_t) -1) && fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
+    if ((gid != (gid_t) -1) && gid != mdi->getMD().gid() &&
+            fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
       return -EPERM;
 
     /* Only root or owner can change file mode. */
-    if ((mode != (mode_t) -1) && fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
+    if ((mode != (mode_t) -1) && mode != mdi->getMD().mode() &&
+            fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
       return -EPERM;
 
     return 0;
@@ -85,7 +87,7 @@ static int permission_lookup(const char *user_path, unique_ptr<MetadataInfo> &md
 
 static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, gid_t gid)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = permission_lookup(user_path, mdi, mode, uid, gid);
     if( err) return err;
 
@@ -103,7 +105,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     if(gid != (gid_t) -1)   mdi->getMD().set_gid(gid);
     if(mode != (mode_t) -1) mdi->getMD().set_mode(mode);
     mdi->updateACtime();
-    err = put_metadata(mdi.get());
+    err = put_metadata(mdi);
     if(err && db_updated)
         pok_warning("failure applying permission change after successful database update.");
     return err;

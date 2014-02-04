@@ -4,8 +4,19 @@
 #include <sys/types.h>
 #include <sys/param.h>
 
-static void fillattr(struct stat *attr, MetadataInfo *mdi)
+
+/** Get file attributes.
+ *
+ * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
+ * ignored. The 'st_ino' field is ignored except if the 'use_ino'
+ * mount option is given.
+ */
+int pok_getattr(const char *user_path, struct stat *attr)
 {
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     attr->st_ino    = mdi->getMD().inode_number();
     attr->st_atime  = mdi->getMD().atime();
     attr->st_mtime  = mdi->getMD().mtime();
@@ -17,7 +28,9 @@ static void fillattr(struct stat *attr, MetadataInfo *mdi)
     attr->st_size   = mdi->getMD().size();
     attr->st_blocks = mdi->getMD().blocks();
     attr->st_blksize= PRIV->blocksize;
+    return 0;
 }
+
 
 /**
  * Get attributes from an open file
@@ -33,30 +46,7 @@ static void fillattr(struct stat *attr, MetadataInfo *mdi)
  */
 int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
-    pok_trace(".");
-    fillattr(attr, mdi);
-    return 0;
-}
-
-/** Get file attributes.
- *
- * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
- * ignored. The 'st_ino' field is ignored except if the 'use_ino'
- * mount option is given.
- */
-int pok_getattr(const char *user_path, struct stat *attr)
-{
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    if (int err = lookup(user_path, mdi))
-        return err;
-
-    fillattr(attr, mdi.get());
-    return 0;
+   return pok_getattr(user_path, attr);
 }
 
 /**
@@ -67,13 +57,13 @@ int pok_getattr(const char *user_path, struct stat *attr)
  */
 int pok_utimens(const char *user_path, const struct timespec tv[2])
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    if (int err = lookup(user_path, mdi))
-        return err;
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
 
     mdi->getMD().set_atime(tv[0].tv_sec);
     mdi->getMD().set_mtime(tv[1].tv_sec);
-    return put_metadata(mdi.get());
+    return put_metadata(mdi);
 }
 
 /** Get file system statistics

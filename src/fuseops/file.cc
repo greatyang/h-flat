@@ -6,35 +6,35 @@ using namespace util;
 
 int unlink_hardlink_source(const char *user_path)
 {
-    std::unique_ptr<MetadataInfo> mdi_source(new MetadataInfo());
-    if( int err = lookup(user_path, mdi_source, false) )
-         return err;
+    std::shared_ptr<MetadataInfo> mdi_source;
+    int err = get_metadata_userpath(user_path, mdi_source);
+    if( err) return err;
+
     assert(mdi_source->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
-    return delete_metadata(mdi_source.get());
+    return delete_metadata(mdi_source);
 }
 
 int unlink_force_update(const char *user_path)
 {
-    std::unique_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
-    if( lookup(user_path, mdi_fu) )
-        return 0;
-    assert(mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE);
-    pok_debug("Found force_update entry.");
+    std::shared_ptr<MetadataInfo> mdi_fu;
+    int err = get_metadata_userpath(user_path, mdi_fu);
+    if( err == -ENOENT) return 0;
+    if( err) return err;
 
-    if( int err = delete_metadata(mdi_fu.get()))
-        return err;
-    return 0;
+    pok_debug("Found force_update entry.");
+    assert(mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE);
+    return delete_metadata(mdi_fu);
 }
 
 /* lookup & verify access permissions */
-int unlink_lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_dir )
+int unlink_lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi, std::shared_ptr<MetadataInfo> &mdi_dir )
 {
     if( int err = lookup(user_path, mdi) )
         return err;
     if( int err = lookup_parent(user_path, mdi_dir) )
         return err;
 
-    if (check_access(mdi_dir.get(), W_OK | X_OK))
+    if (check_access(mdi_dir, W_OK | X_OK))
         return -EACCES;
     // If sticky bit is set on directory, current user needs to be owner of directory OR file (or root of course).
     if (fuse_get_context()->uid && (mdi_dir->getMD().mode() & S_ISVTX) && (fuse_get_context()->uid != mdi_dir->getMD().uid())
@@ -47,8 +47,8 @@ int unlink_lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &md
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
+    std::shared_ptr<MetadataInfo> mdi_dir;
     int err = unlink_lookup(user_path, mdi, mdi_dir);
     if( err) return err;
 
@@ -59,16 +59,17 @@ int pok_unlink(const char *user_path)
     /* Unlink Metadata Key */
     if (mdi->getMD().link_count() > 1){
         mdi->getMD().set_link_count( mdi->getMD().link_count() - 1 );
-        err = put_metadata(mdi.get());
+        mdi->updateACtime();
+        err = put_metadata(mdi);
     }
     else{
-        err = delete_metadata(mdi.get());
+        err = delete_metadata(mdi);
     }
     if( err) return err;
 
     /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
     *  mkdir a   mv a b   rmdir b */
-    if(PRIV->pmap->hasMapping(user_path)){
+    if(PRIV->pmap.hasMapping(user_path)){
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
@@ -104,30 +105,19 @@ int pok_unlink(const char *user_path)
  */
 int pok_open(const char *user_path, struct fuse_file_info *fi)
 {
-    pok_trace("Attempting to open file with user path: %s", user_path);
-    if (fi->fh) {
-        // This could be perfectly legal, I am not sure how fuse works... if it is
-        // we need to reference count metadata_info structures.
-        pok_error("File handle supplied when attempting to open user path %s", user_path);
-        return -EINVAL;
-    }
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if (err)
-        return err;
+    if( err) return err;
 
     int access = fi->flags & O_ACCMODE;
     if (access == O_RDONLY)
-        err = check_access(mdi.get(), R_OK);
+        err = check_access(mdi, R_OK);
     if (access == O_WRONLY)
-        err = check_access(mdi.get(), W_OK);
+        err = check_access(mdi, W_OK);
     if (access == O_RDWR)
-        err = check_access(mdi.get(), R_OK | W_OK);
+        err = check_access(mdi, R_OK | W_OK);
     if (err)
         return err;
-
-    // while this isn't pretty, it's probably the best way to use fi->fh
-    fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
     return 0;
 }
 
@@ -147,16 +137,10 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
  */
 int pok_release(const char *user_path, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (mdi) {
-        pok_trace("Releasing in-memory metadata information for system path: %s (user path: %s)", mdi->getSystemPath().c_str(), user_path);
-        delete (mdi);
-        fi->fh = 0;
-    }
     return 0;
 }
 
-void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode)
+void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
     mdi->updateACMtime();
     mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);
@@ -181,6 +165,38 @@ void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::un
     }
 }
 
+int pok_create(const char *user_path, mode_t mode)
+{
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if (!err)
+        return -EEXIST;
+    if (err != -ENOENT)
+        return err;
+
+    std::shared_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
+    err = lookup_parent(user_path, mdi_dir);
+    if (err)
+        return err;
+
+    /* Add filename to directory */
+    err = create_directory_entry(mdi_dir, path_to_filename(user_path));
+    if (err)
+        return err;
+
+    /* initialize metadata and write metadata-key to drive*/
+    initialize_metadata(mdi, mdi_dir, mode);
+    err = create_metadata(mdi);
+    if (err) {
+        pok_warning("Failed creating metadata key after successfully creating directory-entry key. \n"
+                "Dangling directory entry!");
+        return err;
+    }
+
+    pok_trace("Successfully created user path %s.", user_path);
+    return 0;
+}
+
 /**
  * Create and open a file
  *
@@ -195,54 +211,9 @@ void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::un
  */
 int pok_fcreate(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 {
-    pok_trace("Attempting to create file with user path: %s", user_path);
-    if (fi->fh) {
-        // This could be perfectly legal, I am not sure how fuse works... if it is
-        // we need to reference count metadata_info structures.
-        pok_error("File handle supplied when attempting to create user path %s", user_path);
-        return -EINVAL;
-    }
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    int err = lookup(user_path, mdi);
-    if (!err)
-        return -EEXIST;
-    if (err != -ENOENT)
-        return err;
-
-    std::unique_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
-    err = lookup_parent(user_path, mdi_dir);
-    if (err)
-        return err;
-
-    /* Add filename to directory */
-    err = create_directory_entry(mdi_dir, path_to_filename(user_path));
-    if (err)
-        return err;
-
-    /* initialize metadata and write metadata-key to drive*/
-    initialize_metadata(mdi, mdi_dir, mode);
-    err = create_metadata(mdi.get());
-    if (err) {
-        pok_warning("Failed creating metadata key after successfully creating directory-entry key. \n"
-                "Dangling directory entry!");
-        return err;
-    }
-
-    // while this isn't pretty, it's probably the best way to use fi->fh
-    fi->fh = reinterpret_cast<std::uint64_t>(mdi.release());
-    pok_trace("Successfully created user path %s.", user_path);
-    return 0;
+    return pok_create(user_path, mode);
 }
 
-int pok_create(const char *user_path, mode_t mode)
-{
-    struct fuse_file_info fi;
-    fi.fh = 0;
-    if (int err = pok_fcreate(user_path, mode, &fi))
-        return err;
-    pok_release(user_path, &fi);
-    return 0;
-}
 
 /** Create a file node
  *

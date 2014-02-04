@@ -33,9 +33,9 @@ void *pok_init(struct fuse_conn_info *conn)
         pok_error("Failed increasing inode base key.");
 
     /* Verify that root metadata is available. If it isn't, initialize it. */
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi(new MetadataInfo());
     mdi->setSystemPath("/");
-    int err = get_metadata(mdi.get());
+    int err = get_metadata(mdi);
     if (err == -ENOENT) {
         pok_trace("Initialzing root metadata.");
         mdi->getMD().set_type(mdi->getMD().POSIX);
@@ -45,7 +45,7 @@ void *pok_init(struct fuse_conn_info *conn)
         mdi->getMD().set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
         mdi->getMD().set_path_permission_verified(0);
         mdi->getMD().set_inode_number(util::generate_inode_number());
-        err = create_metadata(mdi.get());
+        err = create_metadata(mdi);
 
         KineticRecord v("", std::to_string(0), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
         status = PRIV->kinetic->Put("pathmapDB_version", "", WriteMode::REQUIRE_SAME_VERSION, v);

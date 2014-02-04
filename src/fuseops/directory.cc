@@ -13,9 +13,9 @@ int pok_mkdir(const char *user_path, mode_t mode)
 /** Remove a directory */
 int pok_rmdir(const char *user_path)
 {
-    unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    if (int err = lookup(user_path, mdi))
-        return err;
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
 
     string keystart = std::to_string(mdi->getMD().inode_number()) + ":";
     string keyend   = std::to_string(mdi->getMD().inode_number()) + ":" + static_cast<char>(251);
@@ -31,7 +31,7 @@ int pok_rmdir(const char *user_path)
     return pok_unlink(user_path);
 }
 
-int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
+int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
     string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
 
@@ -45,10 +45,14 @@ int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
         return -EIO;
     }
     pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+
+    /* update timestamps -> just for posix compliance */
+    mdi_parent->updateACMtime();
+    put_metadata(mdi_parent);
     return 0;
 }
 
-int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename)
+int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
     string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
 
@@ -58,6 +62,10 @@ int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
         return -EIO;
     }
     pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+
+    /* update timestamps -> just for posix compliance */
+    mdi_parent->updateACMtime();
+    put_metadata(mdi_parent);
     return 0;
 }
 
@@ -84,17 +92,16 @@ int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std:
  */
 int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, off_t offset, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_error("Read request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     if (check_access(mdi, R_OK)) // ls requires read permission
         return -EACCES;
 
     /* A directory entry has been moved out / moved into this directory due to a directory move. */
-    if (mdi->getMD().has_force_update_version() && mdi->getMD().force_update_version() > PRIV->pmap->getSnapshotVersion())
-        if (int err = database_update())
+    if (mdi->getMD().has_force_update_version() && mdi->getMD().force_update_version() > PRIV->pmap.getSnapshotVersion())
+        if (( err = database_update()))
             return err;
 
     string keystart = std::to_string(mdi->getMD().inode_number()) + ":";

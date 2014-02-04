@@ -12,11 +12,10 @@
  */
 int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     pok_debug("TODO: implement dirty data flushing. ");
     if (!datasync)
         put_metadata(mdi);
@@ -32,11 +31,10 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
  */
 int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     put_metadata(mdi);
     return 0;
 }

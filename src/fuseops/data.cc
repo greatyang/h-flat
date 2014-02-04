@@ -3,7 +3,7 @@
 #include "kinetic_helper.h"
 #include <unistd.h>
 
-static int readwrite(char *buf, size_t size, off_t offset, MetadataInfo * mdi, bool write)
+static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, bool write)
 {
     /* might have to split the operation across multiple blocks */
     int blocksize = PRIV->blocksize;
@@ -50,11 +50,10 @@ static int readwrite(char *buf, size_t size, off_t offset, MetadataInfo * mdi, b
  */
 int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Read request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     if (offset + size > mdi->getMD().size()) {
         pok_warning("Attempting to read beyond EOF for user path %s", user_path);
         return 0;
@@ -73,12 +72,10 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
  */
 int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
-    pok_debug("Write request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     int rtn = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
 
     /* update metadata on success */
@@ -87,7 +84,7 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
         mdi->getMD().set_size(newsize);
         mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
         mdi->updateACMtime();
-        if ( int err = put_metadata(mdi) ){
+        if (( err = put_metadata(mdi) )){
             pok_debug("Failed writing metadata");
             if(err == -EAGAIN)
                 err = put_metadata(mdi);
@@ -99,26 +96,23 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
     return rtn;
 }
 
-static int truncate(MetadataInfo *mdi, off_t offset)
+/** Change the size of a file */
+int pok_truncate(const char *user_path, off_t offset)
 {
+    std::shared_ptr<MetadataInfo> mdi;
+    int err = lookup(user_path, mdi);
+    if( err) return err;
+
     if (check_access(mdi, W_OK))
-        return -EACCES;
+       return -EACCES;
 
     if (offset > std::numeric_limits<std::uint32_t>::max())
-        return -EFBIG;
+       return -EFBIG;
 
     mdi->getMD().set_size(offset);
     mdi->updateACMtime();
     return put_metadata(mdi);
-}
 
-/** Change the size of a file */
-int pok_truncate(const char *user_path, off_t offset)
-{
-    std::unique_ptr<MetadataInfo> mdi(new MetadataInfo());
-    if (int err = lookup(user_path, mdi))
-        return err;
-    return truncate(mdi.get(), offset);
 }
 
 /**
@@ -135,11 +129,6 @@ int pok_truncate(const char *user_path, off_t offset)
  */
 int pok_ftruncate(const char *user_path, off_t offset, struct fuse_file_info *fi)
 {
-    MetadataInfo * mdi = reinterpret_cast<MetadataInfo *>(fi->fh);
-    if (!mdi) {
-        pok_warning("Write request for user path '%s' without metadata_info structure", user_path);
-        return -EINVAL;
-    }
-    return truncate(mdi, offset);
+    return  pok_truncate(user_path, offset);
 }
 

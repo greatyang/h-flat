@@ -6,6 +6,16 @@
 #include <stdarg.h>
 #include <time.h>
 
+/*
+ *      void *caller[2];
+        backtrace (caller, 2);
+        char ** strings = backtrace_symbols (caller, 2);
+        strings[1][strchr(strchr(strings[1],'p'),'P') - strings[1] ] = '\0';
+        pok_trace("%s > LOOKUP %s  ->  %s", strchr(strings[1],'p'),
+                        user_path, key.c_str());
+ *
+ */
+
 static int llconfig = 0;
 
 #define pok_trace(message...)   pok_printlog(1, __FUNCTION__, __FILE__, __LINE__, ## message)

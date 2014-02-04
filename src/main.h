@@ -16,12 +16,15 @@
 #include "pathmap_db.h"
 #include "metadata_info.h"
 #include "kinetic_namespace.h"
+#include "lru_cache.h"
 
 /* Private file-system wide data, accessible from anywhere. */
 struct pok_priv
 {
-    std::unique_ptr<PathMapDB> pmap;               // path permission & remapping
-    std::unique_ptr<KineticNamespace> kinetic;     // key-value api
+    std::unique_ptr<KineticNamespace> kinetic;          // key-value api
+
+    PathMapDB pmap;                    // path permission & remapping
+    LRUcache<std::string, std::shared_ptr<MetadataInfo>> lookup_cache;
 
     /* superblock like information */
     bool            multiclient;
@@ -31,27 +34,32 @@ struct pok_priv
     std::mutex      lock;
 
     pok_priv() :
-            pmap(new PathMapDB()), kinetic(new SimpleKineticNamespace()),
-
-            multiclient(false), blocksize(1024 * 1024), inum_base(0), inum_counter(10), lock()
-    {
-    }
+            kinetic(new SimpleKineticNamespace()),
+            pmap(),
+            lookup_cache(10,  std::mem_fn(&MetadataInfo::getSystemPath)),
+            multiclient(false),
+            blocksize(1024 * 1024),
+            inum_base(0),
+            inum_counter(0),
+            lock()
+    {}
 };
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
 
 /* lookup > these are utility functions provided to the various path based fuse operations. */
-int lookup(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi, bool handle_special_inodes = true);
-int lookup_parent(const char *user_path, const std::unique_ptr<MetadataInfo> &mdi_parent);
+int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi);
+int lookup_parent(const char *user_path, std::shared_ptr<MetadataInfo> &mdi_parent);
+int get_metadata_userpath(const char *user_path, std::shared_ptr<MetadataInfo> &mdi);
 
 /* directory */
-int create_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename);
-int delete_directory_entry(const std::unique_ptr<MetadataInfo> &mdi_parent, std::string filename);
+int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename);
+int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename);
 
 /* permission */
-int check_access(MetadataInfo *mdi, int mode);
+int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode);
 
 /* file */
-void initialize_metadata(const std::unique_ptr<MetadataInfo> &mdi, const std::unique_ptr<MetadataInfo> &mdi_parent, mode_t mode);
+void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode);
 
 /* database */
 int database_update(void);

@@ -25,9 +25,9 @@ public:
     bool                mergeMD(const posixok::Metadata & md, std::int64_t version);
     posixok::Metadata & getMD();
     void                setSystemPath(const std::string &key);
-    const std::string & getSystemPath() const;
+    const std::string & getSystemPath();
     void                setCurrentVersion(std::int64_t version); // after metadata version increased due to a successful put
-    std::int64_t        getCurrentVersion() const;
+    std::int64_t        getCurrentVersion();
 
     // returns false if no in-memory data info structure exists for the supplied block number
     DataInfo *getDataInfo(std::uint32_t block_number);

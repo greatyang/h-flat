@@ -16,7 +16,7 @@ public:
     explicit DataInfo();
     ~DataInfo();
 
-    int updateData(const char *data, off_t offset, size_t size);
+    int  updateData(const char *data, off_t offset, size_t size);
     bool hasUpdates();
     void forgetUpdates();
 

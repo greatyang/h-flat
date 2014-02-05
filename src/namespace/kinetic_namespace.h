@@ -25,6 +25,9 @@ public:
     virtual KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys) = 0;
     virtual KineticStatus Capacity(kinetic::Capacity &cap) = 0;
 
+    /* Waiting for P2P operation support
+     *     virtual KineticStatus Copy(const string &key, const string& version, WriteMode mode);
+     *     virtual KineticStatus DeleteKeyRangeAsync(const string &start_key, const string &end_key); */
     virtual ~KineticNamespace(){};
 };
 

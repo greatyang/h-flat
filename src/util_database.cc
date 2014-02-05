@@ -60,16 +60,13 @@ int database_op(std::function<int()> verify, posixok::db_entry &entry)
 
 int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun_undo, posixok::db_entry &entry)
 {
-    /* If we expect other clients to modify the database, update it before starting the operation. */
-    if (PRIV->multiclient) {
-        int err = database_update();
-        if (err)
-            return err;
-    }
+    int err = database_update();
+    if (err)
+         return err;
 
     /* Execute supplied file system function & store which snapshotVersion is current.*/
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
-    int err = fsfun_do();
+    err = fsfun_do();
     if (err)
         return err;
 

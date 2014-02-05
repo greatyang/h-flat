@@ -33,7 +33,7 @@ static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr
         sizeleft -= inblocksize;
         blocknum++;
     }
-    return size;
+    return 0;
 
 }
 
@@ -59,7 +59,9 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
         return 0;
     }
     pok_debug("Read request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
-    return readwrite(buf, size, offset, mdi, false);
+    err = readwrite(buf, size, offset, mdi, false);
+    if(err) return err;
+    return size;
 }
 
 /** Write data to an open file
@@ -76,24 +78,27 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    int rtn = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
+    pok_debug("writing %d bytes at offset %d for user path %s", size, offset, user_path);
 
-    /* update metadata on success */
-    if (rtn > 0) {
-        size_t newsize = std::max((std::uint64_t) offset + size, (std::uint64_t) mdi->getMD().size());
-        mdi->getMD().set_size(newsize);
-        mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
-        mdi->updateACMtime();
-        if (( err = put_metadata(mdi) )){
-            pok_debug("Failed writing metadata");
-            if(err == -EAGAIN)
-                err = put_metadata(mdi);
-            if(err)
-            return err;
-        }
+    size_t newsize = std::max((std::uint64_t) offset + size, (std::uint64_t) mdi->getMD().size());
+    mdi->getMD().set_size(newsize);
+    mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
+    mdi->updateACMtime();
+    if (( err = put_metadata(mdi) )){
+        pok_debug("Failed writing metadata");
+        if(err == -EAGAIN)
+            err = put_metadata(mdi);
+        if(err)
+        return err;
     }
-    pok_debug("returning %d.",rtn);
-    return rtn;
+
+    err = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
+    if(err){
+        pok_warning("Error %d encountered after successfully updating file metadata",err);
+        return err;
+    }
+
+    return size;
 }
 
 /** Change the size of a file */

@@ -21,23 +21,22 @@
 /* Private file-system wide data, accessible from anywhere. */
 struct pok_priv
 {
-    std::unique_ptr<KineticNamespace> kinetic;          // key-value api
-
-    PathMapDB pmap;                    // path permission & remapping
+    std::unique_ptr<KineticNamespace> kinetic;
     LRUcache<std::string, std::shared_ptr<MetadataInfo>> lookup_cache;
+    PathMapDB pmap;
 
     /* superblock like information */
-    bool            multiclient;
     std::int32_t    blocksize;
+
+    /* inode generation */
     std::int64_t    inum_base;
     std::uint16_t   inum_counter;
     std::mutex      lock;
 
     pok_priv() :
             kinetic(new SimpleKineticNamespace()),
+            lookup_cache(std::mem_fn(&MetadataInfo::getSystemPath) , 10, 1000, false),
             pmap(),
-            lookup_cache(10,  std::mem_fn(&MetadataInfo::getSystemPath)),
-            multiclient(false),
             blocksize(1024 * 1024),
             inum_base(0),
             inum_counter(0),
@@ -69,6 +68,7 @@ int database_op(std::function<int()> verify, posixok::db_entry &entry);
 /* general utility functions */
 namespace util
 {
+    int grab_inode_generation_token(void);
     ino_t generate_inode_number(void);
     std::int64_t to_int64(const std::string &version_string);
     std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);

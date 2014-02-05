@@ -3,6 +3,8 @@
 #include "fuseops.h"
 #include "kinetic_helper.h"
 
+
+
 /**
  * Initialize filesystem
  *
@@ -16,42 +18,17 @@
 void *pok_init(struct fuse_conn_info *conn)
 {
     /* Setup values required for inode generation. */
-    const std::string inode_base_key = "igen";
-    std::unique_ptr<std::string> keyVersion;
-
-    KineticStatus status = PRIV->kinetic->GetVersion(inode_base_key, keyVersion);
-    if (status.ok())
-        PRIV->inum_base = util::to_int64(keyVersion->data());
-    else if (status.notFound())
-        PRIV->inum_base = 0;
-    else
-        pok_error("Error encountered obtaining inode generation numbers.");
-
-    KineticRecord empty("", std::to_string(PRIV->inum_base + 1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-    status = PRIV->kinetic->Put(inode_base_key, PRIV->inum_base ? std::to_string(PRIV->inum_base) : "", WriteMode::REQUIRE_SAME_VERSION, empty);
-    if (status.notOk())
-        pok_error("Failed increasing inode base key.");
+    if ( util::grab_inode_generation_token() )
+        pok_error("Error encountered during setup of inode number generation");
 
     /* Verify that root metadata is available. If it isn't, initialize it. */
-    std::shared_ptr<MetadataInfo> mdi(new MetadataInfo());
-    mdi->setSystemPath("/");
+    std::shared_ptr<MetadataInfo> mdi(new MetadataInfo("/"));
     int err = get_metadata(mdi);
     if (err == -ENOENT) {
-        pok_trace("Initialzing root metadata.");
-        mdi->getMD().set_type(mdi->getMD().POSIX);
-        mdi->updateACMtime();
-        mdi->getMD().set_uid(0);
-        mdi->getMD().set_gid(0);
-        mdi->getMD().set_mode(S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-        mdi->getMD().set_path_permission_verified(0);
-        mdi->getMD().set_inode_number(util::generate_inode_number());
+        initialize_metadata(mdi, mdi, S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
         err = create_metadata(mdi);
-
-        KineticRecord v("", std::to_string(0), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
-        status = PRIV->kinetic->Put("pathmapDB_version", "", WriteMode::REQUIRE_SAME_VERSION, v);
     }
-    if (err)
-        pok_error("Error encountered validating root metadata.");
+    if (err) pok_error("Error encountered validating root metadata");
 
     database_update();
     return PRIV;

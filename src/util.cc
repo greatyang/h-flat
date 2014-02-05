@@ -22,18 +22,40 @@ std::int64_t to_int64(const std::shared_ptr<const std::string> version_string)
     return to_int64(version_string->data());
 }
 
+
+int grab_inode_generation_token(void)
+{
+    const std::string inode_base_key = "inode_generation";
+
+    std::unique_ptr<std::string> keyVersion;
+    KineticStatus status = PRIV->kinetic->GetVersion(inode_base_key, keyVersion);
+    if (status.ok())
+        PRIV->inum_base = util::to_int64(keyVersion->data());
+    else if (status.statusCode() == kinetic::StatusCode::REMOTE_NOT_FOUND)
+        PRIV->inum_base = 0;
+    else
+        return -EIO;
+
+    KineticRecord empty("", std::to_string(PRIV->inum_base + UINT16_MAX), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+    status = PRIV->kinetic->Put(inode_base_key, PRIV->inum_base ? std::to_string(PRIV->inum_base) : "", WriteMode::REQUIRE_SAME_VERSION, empty);
+    if (status.statusCode() ==  kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
+        return grab_inode_generation_token();
+    if (!status.ok())
+        return -EIO;
+    return 0;
+}
+
 ino_t generate_inode_number(void)
 {
-    std::uint16_t counter;
-    {
-        std::lock_guard<std::mutex> locker(PRIV->lock);
-        counter = ++ PRIV->inum_counter;
-
-        if (!counter)                       // counter wrapped, need new inum_base value
-            pok_error("Not Implemented.");  // TODO: implement
-
+    std::lock_guard<std::mutex> locker(PRIV->lock);
+    PRIV->inum_counter++;
+    if (PRIV->inum_counter == UINT16_MAX){
+       if( grab_inode_generation_token() )
+           pok_error(" Error encountered when attempting to refresh inode generation token. "
+                     " Cannot generate inode numbers. Quitting. ");
+       PRIV->inum_counter = 0;
     }
-    return (ino_t) (PRIV->inum_base + counter);
+    return (ino_t) (PRIV->inum_base +  PRIV->inum_counter);
 }
 
 std::string path_to_filename(const std::string &path)

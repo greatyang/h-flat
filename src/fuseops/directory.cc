@@ -38,14 +38,12 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
     KineticRecord record("", std::to_string(1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
 
-    if (status.versionMismatch())
+    if (status.statusCode() ==  kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
         return -EEXIST;
-    if (status.notOk()){
-        pok_warning("EIO");
+    if (!status.ok())
         return -EIO;
-    }
-    pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
+    pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
     /* update timestamps -> just for posix compliance */
     mdi_parent->updateACMtime();
     put_metadata(mdi_parent);
@@ -57,12 +55,10 @@ int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
     string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
 
     KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
-    if (status.notOk()){
-        pok_warning("EIO");
+    if (!status.ok())
         return -EIO;
-    }
-    pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
+    pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
     /* update timestamps -> just for posix compliance */
     mdi_parent->updateACMtime();
     put_metadata(mdi_parent);

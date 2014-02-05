@@ -1,5 +1,4 @@
 #include "main.h"
-#include "debug.h"
 #include "kinetic_helper.h"
 #include <sys/types.h>
 #include <sys/param.h>
@@ -77,10 +76,8 @@ int pok_statfs(const char *user_path, struct statvfs *s)
 {
     kinetic::Capacity cap;
     KineticStatus status = PRIV->kinetic->Capacity(cap);
-    if (status.notOk()){
-        pok_warning("EIO");
+    if (!status.ok())
         return -EIO;
-    }
 
     s->f_bsize  = PRIV->blocksize; /* File system block size */
     s->f_blocks = (fsblkcnt_t) cap.total_bytes; /* Blocks on FS in units of f_frsize */

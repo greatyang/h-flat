@@ -236,12 +236,11 @@ bool MetadataInfo::computePathPermissionChildren()
     }
 
     auto equal = [](const posixok::Metadata_ReachabilityEntry &lhs, const posixok::Metadata_ReachabilityEntry &rhs) -> bool {
-        if(lhs.uid() != rhs.uid()) return false;
-        if(lhs.gid() != rhs.gid()) return false;
-        if(lhs.type() != rhs.type()) return false;
+        if(lhs.uid() != rhs.uid())      return false;
+        if(lhs.gid() != rhs.gid())      return false;
+        if(lhs.type() != rhs.type())    return false;
         return true;
     };
-
     /* Remove all entries that are duplicates of entries stored in pathPermission.
      * If a restriction is already enforced by a parent directory, there's no need to enforce it again. */
     for (int i = 0; i < md_mutable.path_permission_size(); i++)
@@ -249,12 +248,19 @@ bool MetadataInfo::computePathPermissionChildren()
             if (equal(md_mutable.path_permission(i), *it))
                 v.erase(it);
 
+
+    auto ppc_contains = [this, equal](const posixok::Metadata_ReachabilityEntry &e) -> bool {
+        for (int i = 0; i < md_mutable.path_permission_children_size(); i++)
+            if (equal(md_mutable.path_permission_children(i), e))
+                return true;
+        return false;
+    };
     /* Check if path_permission_children changed, if yes store in md. */
     bool changed = false;
-    for (int i = 0; i < md_mutable.path_permission_children_size(); i++)
-        for (auto it = v.begin(); it != v.end(); it++)
-            if (equal(md_mutable.path_permission_children(i), *it))
-                changed = true;
+    if(md_mutable.path_permission_children_size() != (int)v.size()) changed = true;
+    for (auto it = v.begin(); it != v.end(); it++)
+        if(!ppc_contains(*it)) changed = true;
+
     if (changed) {
         md_mutable.mutable_path_permission_children()->Clear();
         for (auto it = v.begin(); it != v.end(); it++) {

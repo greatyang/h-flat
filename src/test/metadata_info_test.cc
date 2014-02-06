@@ -179,6 +179,12 @@ TEST_F(mdiTest, DataInfo)
     ASSERT_EQ(mdi.getDataInfo(0)->data().compare("143"), 0);
 }
 
+TEST_F(mdiTest, PPChildren)
+{
+
+    mdi.computePathPermissionChildren();
+}
+
 
 
 

@@ -110,6 +110,7 @@ target_link_libraries(iointer
     dl
 )
 
+if(APPLE)
 add_executable(test
     src/test/pok_test.cc
     
@@ -128,4 +129,4 @@ add_dependencies(test
 target_link_libraries(test
     ${LIBRARY_DEPENDENCIES}
 )
-
+endif(APPLE)

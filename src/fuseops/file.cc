@@ -140,6 +140,21 @@ int pok_release(const char *user_path, struct fuse_file_info *fi)
     return 0;
 }
 
+void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent)
+{
+    /* Inherit path permissions existing for directory */
+     mdi->getMD().mutable_path_permission()->CopyFrom(mdi_parent->getMD().path_permission());
+     /* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
+     mdi->getMD().set_path_permission_verified(mdi_parent->getMD().path_permission_verified());
+
+     /* Add path permissions precomputed for directory's children. */
+     for (int i = 0; i < mdi_parent->getMD().path_permission_children_size(); i++) {
+         posixok::Metadata::ReachabilityEntry *e = mdi->getMD().add_path_permission();
+         e->CopyFrom(mdi_parent->getMD().path_permission_children(i));
+     }
+     if (S_ISDIR(mdi->getMD().mode())) mdi->computePathPermissionChildren();
+}
+
 void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
     mdi->updateACMtime();
@@ -148,21 +163,7 @@ void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::sh
     mdi->getMD().set_uid(fuse_get_context()->uid);
     mdi->getMD().set_mode(mode);
     mdi->getMD().set_inode_number(generate_inode_number());
-
-    /* Inherit path permissions existing for directory */
-    mdi->getMD().mutable_path_permission()->CopyFrom(mdi_parent->getMD().path_permission());
-    /* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
-    mdi->getMD().set_path_permission_verified(mdi_parent->getMD().path_permission_verified());
-
-    /* Add path permissions precomputed for directory's children. */
-    for (int i = 0; i < mdi_parent->getMD().path_permission_children_size(); i++) {
-        posixok::Metadata::ReachabilityEntry *e = mdi->getMD().add_path_permission();
-        e->CopyFrom(mdi_parent->getMD().path_permission_children(i));
-    }
-
-    if (S_ISDIR(mode)) {
-        mdi->computePathPermissionChildren();
-    }
+    inherit_path_permissions(mdi,mdi_parent);
 }
 
 int pok_create(const char *user_path, mode_t mode)
@@ -176,13 +177,15 @@ int pok_create(const char *user_path, mode_t mode)
 
     std::shared_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
     err = lookup_parent(user_path, mdi_dir);
-    if (err)
-        return err;
+    if (err) return err;
+
+    /* create requires write access to parent directory */
+    err = check_access(mdi_dir, W_OK);
+    if(err) return err;
 
     /* Add filename to directory */
     err = create_directory_entry(mdi_dir, path_to_filename(user_path));
-    if (err)
-        return err;
+    if (err) return err;
 
     /* initialize metadata and write metadata-key to drive*/
     initialize_metadata(mdi, mdi_dir, mode);

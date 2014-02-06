@@ -59,6 +59,7 @@ int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode);
 
 /* file */
 void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode);
+void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent);
 
 /* database */
 int database_update(void);

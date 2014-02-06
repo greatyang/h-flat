@@ -36,11 +36,10 @@ int pok_symlink(const char *target, const char *origin)
         return -EEXIST;
     if (err != -ENOENT)
         return err;
-    err = lookup_parent(origin, mdi_dir);
-    if (err) return err;
 
-    /* Add filename to directory */
-    err = create_directory_entry(mdi_dir, util::path_to_filename(origin));
+    err = lookup_parent(origin, mdi_dir);
+    if(!err) err = check_access(mdi_dir, W_OK);
+    if(!err) err = create_directory_entry(mdi_dir, util::path_to_filename(origin));
     if (err) return err;
 
     posixok::db_entry entry;
@@ -70,22 +69,24 @@ int pok_hardlink(const char *target, const char *origin)
     pok_debug("Hardlink %s->%s", origin, target);
 
     std::shared_ptr<MetadataInfo> mdi_target;
+    std::shared_ptr<MetadataInfo> mdi_target_dir;
+    std::shared_ptr<MetadataInfo> mdi_origin;
+    std::shared_ptr<MetadataInfo> mdi_origin_dir;
+
     int err = lookup(target, mdi_target);
+    if(!err) err = lookup_parent(origin, mdi_origin_dir);
+    if(!err) err = lookup_parent(target, mdi_target_dir);
+    if(!err) err = check_access(mdi_origin_dir, W_OK);
+    if(!err) err = check_access(mdi_target_dir, W_OK);
+
+
     if( err) return err;
 
-    std::shared_ptr<MetadataInfo> mdi_origin;
-         err = lookup(origin, mdi_origin);
-    if (!err)
-        return -EEXIST;
-    if (err != -ENOENT)
-        return err;
+    err = lookup(origin, mdi_origin);
+    if (!err) return -EEXIST;
+    if (err != -ENOENT) return err;
 
     assert(!S_ISDIR(mdi_target->getMD().mode()));
-
-    std::shared_ptr<MetadataInfo> mdi_origin_dir;
-    err = lookup_parent(origin, mdi_origin_dir);
-    if (err)
-        return err;
 
     PRIV->lookup_cache.invalidate(mdi_origin->getSystemPath());
     PRIV->lookup_cache.invalidate(mdi_target->getSystemPath());
@@ -117,6 +118,7 @@ int pok_hardlink(const char *target, const char *origin)
     if ((err = create_directory_entry(mdi_origin_dir, util::path_to_filename(origin))))
         return err;
 
+    mdi_target->updateACtime();
     mdi_target->getMD().set_link_count(mdi_target->getMD().link_count() + 1);
     if ((err = put_metadata(mdi_target))) {
         pok_warning("Failed increasing link count of metadata after creating directory entry");

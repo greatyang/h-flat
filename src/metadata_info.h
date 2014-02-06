@@ -21,8 +21,8 @@ public:
 
 
 public:
-    void                setMD(const posixok::Metadata & md, std::int64_t version);
     bool                mergeMD(const posixok::Metadata & md, std::int64_t version);
+    void                setMD(const posixok::Metadata & md, std::int64_t version);
     posixok::Metadata & getMD();
     void                setSystemPath(const std::string &key);
     const std::string & getSystemPath();

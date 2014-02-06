@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "kinetic_helper.h"
 
+
 int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode)
 {
     /* root does as (s)he pleases */
@@ -11,6 +12,7 @@ int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode)
     if (mode == F_OK)
         return 0;
 
+    /* check file permissions */
     unsigned int umode = mode;
     /* test user */
     if (mdi->getMD().uid() == fuse_get_context()->uid) {
@@ -91,20 +93,25 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     int err = permission_lookup(user_path, mdi, mode, uid, gid);
     if( err) return err;
 
-    bool db_updated = false;
-    if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
-        posixok::db_entry entry;
-        entry.set_type(entry.NONE);
-        entry.set_origin(user_path);
-        err = database_op(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
-        if(err) return err;
-        db_updated = true;
-    }
-
     if(uid != (uid_t) -1)   mdi->getMD().set_uid(uid);
     if(gid != (gid_t) -1)   mdi->getMD().set_gid(gid);
     if(mode != (mode_t) -1) mdi->getMD().set_mode(mode);
     mdi->updateACtime();
+
+    bool db_updated = false;
+    if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
+        posixok::db_entry entry;
+        entry.set_type(posixok::db_entry_TargetType_NONE);
+        entry.set_origin(user_path);
+        pok_debug("Set target type to %d",entry.type());
+
+        err = database_op(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
+        if(err) return err;
+
+        mdi->getMD().set_path_permission_verified(PRIV->pmap.getSnapshotVersion());
+        db_updated = true;
+    }
+
     err = put_metadata(mdi);
     if(err && db_updated)
         pok_warning("failure applying permission change after successful database update.");

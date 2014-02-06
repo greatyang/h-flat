@@ -37,7 +37,11 @@ int rename_lookup(
            && (fuse_get_context()->uid != mdito->getMD().uid()))
        return -EACCES;
 
-    return 0;
+    /* write permissions to both directories required */
+    err = check_access(dir_mdito, W_OK);
+    if(!err) err = check_access(dir_mdifrom, W_OK);
+
+    return err;
 }
 
 
@@ -73,6 +77,9 @@ static int move_directory(const char *user_path_from, const char *user_path_to,
        err = put_metadata(dir_mdito);
        if(err) return err;
     }
+
+    mdifrom->updateACtime();
+    put_metadata(mdifrom);
     return delete_directory_entry(dir_mdifrom, util::path_to_filename(user_path_from));
 }
 
@@ -86,6 +93,7 @@ static int move_hardlink(const char *user_path_from, const std::shared_ptr<Metad
       return err;
 
     mdifrom->getMD().set_link_count(mdifrom->getMD().link_count() + 1);
+    mdifrom->updateACtime();
     err = put_metadata(mdifrom);
     if (err)
         return err;
@@ -106,6 +114,7 @@ static int move_symlink(const char *user_path_from, const char *user_path_to,
     entry.set_target(buffer);
 
     std::string fromKey = mdifrom->getSystemPath();
+    mdifrom->updateACtime();
     mdifrom->setSystemPath( mdito->getSystemPath() );
     err = database_operation(
           std::bind(create_metadata, mdifrom),
@@ -121,6 +130,7 @@ static int move_regular(const char *user_path_from, const std::shared_ptr<Metada
 {
     std::string fromKey = mdifrom->getSystemPath();
     mdifrom->setSystemPath( mdito->getSystemPath() );
+    mdifrom->updateACtime();
     int err = create_metadata(mdifrom);
     mdifrom->setSystemPath( fromKey );
     if(err)

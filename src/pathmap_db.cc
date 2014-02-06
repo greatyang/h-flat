@@ -179,8 +179,10 @@ void PathMapDB::addPermissionChange(std::string path)
 
     snapshotVersion++;
 
-    snapshot[path] = snapshot.count(path) ? PMEntry { snapshot[path].type, snapshot[path].target, snapshotVersion } : PMEntry { TargetType::NONE, std::string(),
-                                                    snapshotVersion };
+    int exist = snapshot.count(path);
+    snapshot[path] = exist ? PMEntry { snapshot[path].type, snapshot[path].target, snapshotVersion } :
+                             PMEntry { TargetType::NONE, std::string(), snapshotVersion };
+
     printSnapshot();
 }
 

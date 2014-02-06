@@ -23,6 +23,48 @@ int get_metadata_userpath(const char *user_path, std::shared_ptr<MetadataInfo> &
 }
 
 
+/* For full functionality, all group checks should do in_group checks instead of straight
+ * comparisons, compare chown. */
+static int check_path_permissions(const google::protobuf::RepeatedPtrField<posixok::Metadata_ReachabilityEntry > &path_permissions){
+
+
+    for(int i=0; i < path_permissions.size(); i++){
+        const posixok::Metadata_ReachabilityEntry &e = path_permissions.Get(i);
+
+        switch(e.type()){
+
+        case posixok::Metadata_ReachabilityType_UID:
+            if(fuse_get_context()->uid != e.uid())
+                return -EACCES;
+            break;
+        case posixok::Metadata_ReachabilityType_GID:
+            if(fuse_get_context()->gid != e.gid())
+                return -EACCES;
+            break;
+        case posixok::Metadata_ReachabilityType_UID_OR_GID:
+            if(fuse_get_context()->uid != e.uid())
+                if(fuse_get_context()->gid != e.gid())
+                    return -EACCES;
+            break;
+        case posixok::Metadata_ReachabilityType_NOT_GID:
+            if(fuse_get_context()->gid == e.gid())
+               return -EACCES;
+            break;
+        case posixok::Metadata_ReachabilityType_NOT_UID:
+            if(fuse_get_context()->uid == e.uid())
+                return -EACCES;
+            break;
+        case posixok::Metadata_ReachabilityType_GID_REQ_UID:
+            if(fuse_get_context()->gid == e.gid())
+                if(fuse_get_context()->uid != e.uid())
+                    return -EACCES;
+            break;
+        }
+    }
+    return 0;
+}
+
+
 int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
 {
     std::string key, value, version;
@@ -75,13 +117,17 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
     if(!cached)
          PRIV->lookup_cache.add(key,mdi);
 
-    /* Step 4: check path permissions for staleness */
+    /* Step 4: check path permissions, update (recursively as necessary) in case of staleness */
     bool stale = mdi->getMD().path_permission_verified() < pathPermissionTimeStamp;
     if (stale) {
-        /* TODO: validate path permissions up the directory tree, recursively as necessary */
-        pok_warning("Stale path permissions detected. Re-validation not implemented yet.");
+        std::shared_ptr<MetadataInfo> mdi_parent;
+        if (int err = lookup_parent(user_path, mdi_parent))
+            return err;
+        inherit_path_permissions(mdi, mdi_parent);
+        put_metadata(mdi);
     }
-    return 0;
+
+    return check_path_permissions(mdi->getMD().path_permission());
 }
 
 
@@ -101,5 +147,6 @@ int lookup_parent(const char *user_path, std::shared_ptr<MetadataInfo> &mdi_pare
 
     if (!S_ISDIR(mdi_parent->getMD().mode()))
         return -ENOTDIR;
-    return 0;
+
+    return check_path_permissions(mdi_parent->getMD().path_permission_children());
 }

@@ -93,6 +93,19 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     int err = permission_lookup(user_path, mdi, mode, uid, gid);
     if( err) return err;
 
+    /* when non-super-user calls chmod successfully, if the group ID of the file is not the effective group ID and if the file is a regular file, set-gid is cleared */
+    if(fuse_get_context()->uid && (mode != (mode_t)-1) && fuse_get_context()->gid != mdi->getMD().gid() && S_ISREG(mode)){
+       mode &= ~S_ISGID;
+    }
+
+    /* when non-super-user calls chown successfully, set-uid and set-gid bits are removed, except when both uid and gid are equal to -1.*/
+    if(fuse_get_context()->uid && (uid != (uid_t) -1 || gid != (gid_t) -1)){
+        assert(mode == (mode_t)-1);
+        mode = mdi->getMD().mode();
+        mode &= ~S_ISUID;
+        mode &= ~S_ISGID;
+    }
+
     if(uid != (uid_t) -1)   mdi->getMD().set_uid(uid);
     if(gid != (gid_t) -1)   mdi->getMD().set_gid(gid);
     if(mode != (mode_t) -1) mdi->getMD().set_mode(mode);
@@ -103,7 +116,6 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_NONE);
         entry.set_origin(user_path);
-        pok_debug("Set target type to %d",entry.type());
 
         err = database_op(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
         if(err) return err;

@@ -78,8 +78,6 @@ int pok_hardlink(const char *target, const char *origin)
     if(!err) err = lookup_parent(target, mdi_target_dir);
     if(!err) err = check_access(mdi_origin_dir, W_OK);
     if(!err) err = check_access(mdi_target_dir, W_OK);
-
-
     if( err) return err;
 
     err = lookup(origin, mdi_origin);

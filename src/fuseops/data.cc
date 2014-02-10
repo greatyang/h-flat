@@ -2,10 +2,11 @@
 #include "debug.h"
 #include "kinetic_helper.h"
 #include <unistd.h>
+#include <vector>
 
-static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, bool write)
+static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, const std::unique_ptr<std::vector<std::shared_ptr<DataInfo>>> &datakeys)
 {
-    /* might have to split the operation across multiple blocks */
+    /* data request might span multiple blocks */
     int blocksize = PRIV->blocksize;
     int sizeleft = size;
     int blocknum = offset / blocksize;
@@ -14,27 +15,28 @@ static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr
         int inblockstart = offset > blocknum * blocksize ? (offset - blocknum * blocksize) : 0;
         int inblocksize = sizeleft > blocksize - inblockstart ? blocksize - inblockstart : sizeleft;
 
-        DataInfo *di = mdi->getDataInfo(blocknum);
-        if(!di){
-            if (int err = get_data(mdi, blocknum))
-                return err;
-            di = mdi->getDataInfo(blocknum);
-            assert(di);
+        std::shared_ptr<DataInfo> data;
+        string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknum);
+        if(! PRIV->data_cache.get(key, data)){
+            if (int err = get_data(key, data))
+             return err;
+            if(! PRIV->data_cache.add(key, data))
+                pok_debug("Failed to add key %s to data cache",key.c_str());
+        }
+        if (datakeys){
+            pok_trace("update datainfo");
+            data->updateData(buf, inblockstart, inblocksize);
+            datakeys->push_back(data);
+        }
+        else{
+            pok_trace("read from datainfo");
+            memcpy(buf + size - sizeleft, data->data().data() + inblockstart, inblocksize);
         }
 
-        pok_debug("Got data block #%d, which has a size of %d bytes.",blocknum, di->data().size());
-        if (write) {
-            di->updateData(buf, inblockstart, inblocksize);
-            if ( int err = put_data(mdi, blocknum))
-                return err;
-        } else{
-            memcpy(buf + size - sizeleft, di->data().data() + inblockstart, inblocksize);
-        }
         sizeleft -= inblocksize;
         blocknum++;
     }
     return 0;
-
 }
 
 /** Read data from an open file
@@ -58,8 +60,9 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
         pok_warning("Attempting to read beyond EOF for user path %s", user_path);
         return 0;
     }
+
     pok_debug("Read request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
-    err = readwrite(buf, size, offset, mdi, false);
+    err = readwrite(buf, size, offset, mdi, nullptr);
     if(err) return err;
     return size;
 }
@@ -84,20 +87,31 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
     mdi->getMD().set_size(newsize);
     mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
     mdi->updateACMtime();
-    if (( err = put_metadata(mdi) )){
-        pok_debug("Failed writing metadata");
-        if(err == -EAGAIN)
-            err = put_metadata(mdi);
-        if(err)
-        return err;
+
+    std::unique_ptr<std::vector<std::shared_ptr<DataInfo>>> datakeys(new std::vector<std::shared_ptr<DataInfo>>());
+    err = readwrite(const_cast<char*>(buf), size, offset, mdi, datakeys);
+    if( err) return err;
+
+    /* Check if the write should be delayed for write aggregation:
+     *       write targets only a single data block and doesn't fill it completely */
+    if(datakeys->size() == 1 && ((offset+size) % PRIV->blocksize)){
+       if(mdi->setAggregate(datakeys->at(0)))
+           return size;
     }
 
-    err = readwrite(const_cast<char*>(buf), size, offset, mdi, true);
-    if(err){
-        pok_warning("Error %d encountered after successfully updating file metadata",err);
-        return err;
-    }
+    /* write metadata key */
+    err = put_metadata(mdi);
+    if(err == -EAGAIN) return pok_write(user_path, buf, size, offset, fi);
+    if(err) return err;
 
+    /* write data keys */
+    for (size_t i=0; i<datakeys->size(); i++){
+        if(!err) err = put_data(datakeys->at(i));
+    }
+    if(mdi->isDirty())
+        if(!err) err = put_data(mdi->getAggregate());
+
+    if(err)  pok_warning("Failed data put after successfully updating metadata");
     return size;
 }
 

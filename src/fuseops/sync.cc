@@ -1,5 +1,4 @@
 #include "main.h"
-#include "debug.h"
 #include "kinetic_helper.h"
 /* No Functionality in here yet... shouldn't be needed unless we start some caching / buffering somewhere */
 
@@ -16,10 +15,15 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    pok_debug("TODO: implement dirty data flushing. ");
-    if (!datasync)
-        put_metadata(mdi);
-    return 0;
+    /* The only reason for dirty data or metadata is an aggregated write operation.  */
+    if(mdi->isDirty()){
+        if (!datasync){
+             err = put_metadata(mdi);
+             if(err == -EAGAIN) return pok_fsync(user_path, datasync, fi);
+        }
+        if(!err) err = put_data(mdi->getAggregate());
+    }
+    return err;
 }
 
 /** Synchronize directory contents

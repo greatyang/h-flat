@@ -4,13 +4,14 @@
 #include <errno.h>
 
 
+
 MetadataInfo::MetadataInfo() :
-        systemPath(), currentVersion(0)
+        systemPath(), currentVersion(0), aggregate_write()
 {
 }
 
 MetadataInfo::MetadataInfo(const std::string &key) :
-        systemPath(key), currentVersion(0)
+        systemPath(key), currentVersion(0), aggregate_write()
 {
 }
 
@@ -56,7 +57,24 @@ void MetadataInfo::updateACtime()
     md_mutable.set_ctime(now);
 }
 
+bool MetadataInfo::isDirty()
+{
+    if(aggregate_write && aggregate_write->hasUpdates())
+        return true;
+    return false;
+}
 
+bool MetadataInfo::setAggregate(std::shared_ptr<DataInfo>& di)
+{
+    if(aggregate_write == di) return true;
+    if(isDirty()) return false;
+    aggregate_write = di;
+    return true;
+}
+std::shared_ptr<DataInfo>& MetadataInfo::getAggregate()
+{
+    return aggregate_write;
+}
 
 /* If someone has a reasonable idea how to code this function PLEASE let me know */
 bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t version)
@@ -184,18 +202,6 @@ void MetadataInfo::setMD(const posixok::Metadata & md, std::int64_t version)
 posixok::Metadata & MetadataInfo::getMD()
 {
     return md_mutable;
-}
-
-DataInfo * MetadataInfo::getDataInfo(std::uint32_t block_number)
-{
-    if(!datablocks.count(block_number))
-        return nullptr;
-    return &datablocks[block_number];
-}
-
-void MetadataInfo::setDataInfo(std::uint32_t block_number, const DataInfo &di)
-{
-    datablocks[block_number] = di;
 }
 
 bool MetadataInfo::computePathPermissionChildren()

@@ -3,19 +3,17 @@
 #include <errno.h>
 #include <assert.h>
 
-DataInfo::DataInfo(std::string data, std::int64_t version) :
-        d(data), currentVersion(version)
-{
-}
-
-DataInfo::DataInfo() :
-        d("empty"), currentVersion(0)
+DataInfo::DataInfo(std::string key, std::int64_t currentVersion, std::string data):
+        key(key), currentVersion(currentVersion), d(data)
 {
 }
 
 DataInfo::~DataInfo()
 {
+    if(this->hasUpdates())
+        pok_warning("Deleting data info structure containing updates.");
 }
+
 
 void DataInfo::mergeDataChanges(std::string fresh)
 {
@@ -63,4 +61,9 @@ void DataInfo::setCurrentVersion(std::int64_t version)
 const std::string& DataInfo::data()
 {
     return this->d;
+}
+
+const std::string & DataInfo::getKey()
+{
+    return this->key;
 }

@@ -1,6 +1,7 @@
 #include "main.h"
 #include "debug.h"
 #include "kinetic_helper.h"
+#include "fuseops.h"
 
 using namespace util;
 
@@ -43,7 +44,7 @@ int unlink_lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi, std
     return 0;
 };
 
-/* TODO: Hand over all data keys to Housekeeping after a sucessfull unlink operation. */
+/* TODO: Hand over all data keys to Housekeeping after a successfull unlink operation. */
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
@@ -137,14 +138,13 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
  */
 int pok_release(const char *user_path, struct fuse_file_info *fi)
 {
-    return 0;
+    return pok_fsync(user_path, 0, fi);
 }
 
 void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent)
 {
     /* Inherit path permissions existing for directory */
      mdi->getMD().mutable_path_permission()->CopyFrom(mdi_parent->getMD().path_permission());
-     /* Inherit logical timestamp when the path permissions have last been verified to be up-to-date */
      mdi->getMD().set_path_permission_verified(mdi_parent->getMD().path_permission_verified());
 
      /* Add path permissions precomputed for directory's children. */
@@ -195,8 +195,6 @@ int pok_create(const char *user_path, mode_t mode)
                 "Dangling directory entry!");
         return err;
     }
-
-    pok_trace("Successfully created user path %s.", user_path);
     return 0;
 }
 

@@ -165,20 +165,6 @@ TEST_F(mdiTest, MergeXattr)
     ASSERT_FALSE( mdi.mergeMD(md, 1));
 }
 
-TEST_F(mdiTest, DataInfo)
-{
-    DataInfo *di = mdi.getDataInfo(0);
-    ASSERT_EQ(di,nullptr);
-
-    mdi.setDataInfo(0,DataInfo("",0));
-    di = mdi.getDataInfo(0);
-    ASSERT_NE(di,nullptr);
-
-    ASSERT_EQ(di->updateData("123",0,3), 0);
-    ASSERT_EQ(di->updateData("4",1,1), 0);
-    ASSERT_EQ(mdi.getDataInfo(0)->data().compare("143"), 0);
-}
-
 TEST_F(mdiTest, PPChildren)
 {
 

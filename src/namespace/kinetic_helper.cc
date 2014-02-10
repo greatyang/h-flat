@@ -99,49 +99,45 @@ int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     return 0;
 }
 
-int get_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
+int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
 {
-    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
+    pok_debug("GET DATA %s",key.c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(key, record);
 
     if (!status.ok() && status.statusCode() !=  StatusCode::REMOTE_NOT_FOUND){
-        pok_warning("EIO");
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
     if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
-        mdi->setDataInfo(blocknumber, DataInfo("",0));
+        di.reset(new DataInfo(key,0,""));
     else
-        mdi->setDataInfo(blocknumber, DataInfo(* record->value(), to_int64(record->version())));
+        di.reset(new DataInfo(key, to_int64(record->version()), * record->value()));
     return 0;
 }
 
-int put_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
+int put_data(const std::shared_ptr<DataInfo> &di)
 {
-    DataInfo *di = mdi->getDataInfo(blocknumber);
-    if(!di) return -EINVAL;
-    if(!di->hasUpdates()) return 0;
-
-    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
-    std::int64_t version = di->getCurrentVersion();
+    pok_debug("PUT DATA %s",di->getKey().c_str());
+    std::int64_t  version = di->getCurrentVersion();
 
     KineticRecord record(di->data(), std::to_string(version + 1), "", Message_Algorithm_SHA1);
-    KineticStatus status = PRIV->kinetic->Put(key, version?std::to_string(version):"", WriteMode::REQUIRE_SAME_VERSION, record);
+    KineticStatus status = PRIV->kinetic->Put(di->getKey(), version?std::to_string(version):"", WriteMode::REQUIRE_SAME_VERSION, record);
 
     /* If someone else has updated the data block since we read it in, just write the incremental changes */
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) {
         unique_ptr<KineticRecord> record;
-        status = PRIV->kinetic->Get(key, record);
+        status = PRIV->kinetic->Get(di->getKey(), record);
 
         if (status.ok()) {
             di->mergeDataChanges(* record->value());
             di->setCurrentVersion(to_int64(record->version()));
-            return put_data(mdi, blocknumber);
+            return put_data(di);
         }
     }
     if (!status.ok()){
-        pok_warning("%s -> EIO",status.message().c_str());
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
@@ -150,17 +146,13 @@ int put_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
     return 0;
 }
 
-int delete_data(const std::shared_ptr<MetadataInfo> &mdi, unsigned int blocknumber)
+int delete_data(const std::shared_ptr<DataInfo> &di)
 {
-    string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknumber);
-    KineticStatus status = PRIV->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);
-
+    KineticStatus status = PRIV->kinetic->Delete(di->getKey(), "", WriteMode::IGNORE_VERSION);
     if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
         return -ENOENT;
-    if (!status.ok()){
-        pok_warning("EIO");
+    if (!status.ok())
         return -EIO;
-    }
     return 0;
 }
 
@@ -172,10 +164,8 @@ int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
         return -EEXIST;
-    if (!status.ok()){
-        pok_warning("EIO");
+    if (!status.ok())
         return -EIO;
-    }
 
     /* can be stored with IGNORE_VERSION since puts serialized by the db_version_key:
      * other clients will only see the database entry we just put after updating based on the db_version_key value */

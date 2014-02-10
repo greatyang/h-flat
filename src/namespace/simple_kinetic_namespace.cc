@@ -9,7 +9,7 @@ SimpleKineticNamespace::SimpleKineticNamespace(kinetic::ConnectionOptions option
 SimpleKineticNamespace::SimpleKineticNamespace()
 {
     kinetic::ConnectionOptions options;
-    options.host = "localhost";
+    options.host = "localhost"; //
     options.port = 8123;
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
@@ -24,7 +24,8 @@ SimpleKineticNamespace::~SimpleKineticNamespace()
 void SimpleKineticNamespace::connect(kinetic::ConnectionOptions options)
 {
     kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-    kinetic::Status status = factory.NewThreadsafeConnection(options, con);
+
+    kinetic::Status status = factory.NewThreadsafeConnection(options, 5, con);
     if (status.notOk())
         throw std::runtime_error(status.ToString());
 }

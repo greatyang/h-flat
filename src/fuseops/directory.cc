@@ -44,6 +44,7 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
         return -EIO;
 
     pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+
     /* update timestamps -> just for posix compliance */
     mdi_parent->updateACMtime();
     put_metadata(mdi_parent);
@@ -59,6 +60,7 @@ int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
         return -EIO;
 
     pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+
     /* update timestamps -> just for posix compliance */
     mdi_parent->updateACMtime();
     put_metadata(mdi_parent);

@@ -5,11 +5,12 @@
 #include <list>
 #include <chrono>
 
+
 using namespace std::chrono;
 
-/* A threadsafe LRU cache with auto-expiration of cache elements.
- * Use std::shared_ptr as data elements for a non-owning cache (probably a good idea in multithread environments) */
-
+/* A threadsafe LRU cache with optional auto-expiration of cache elements.
+ * Use std::shared_ptr as data elements for a non-owning cache (probably a good idea in multithread environments).
+ * Note that the removable property overrides item expiration (a non-removable item will never be considered expired). */
 template< typename Key, typename Data > class LRUcache final {
 
 private:
@@ -18,69 +19,69 @@ private:
     std::list<cache_entry> cache;
     std::unordered_map<Key, typename std::list<cache_entry>::iterator > lookup;
 
-    bool                expiration_refresh;
     milliseconds        expiration_time;
     std::uint32_t       capacity;
     std::mutex          mutex;
 
-    std::function<const Key(Data&)> getKey;
+    std::function<const Key(const Data&)> getKey;
+    std::function<bool(const Data&)> dirty;
 
+private:
+    bool expired(typename std::list<cache_entry>::iterator it){
+        return expiration_time.count() && (duration_cast<milliseconds>(steady_clock::now() - it->second) > expiration_time);
+    }
+    void remove(const Key &k){
+        cache.erase(lookup[k]);
+        lookup.erase(k);
+    }
 
 public:
     bool get(const Key& k, Data& d){
         std::lock_guard<std::mutex> locker(mutex);
-        if(lookup.count(k) == 0)
-            return false;
+        if(lookup.count(k) == 0) return false;
 
-        if(expiration_time.count() && (duration_cast<milliseconds>(steady_clock::now() - lookup[k]->second) > expiration_time)){
-            cache.erase(lookup[k]);
-            lookup.erase(k);
+        if( expired(lookup[k]) && !dirty(lookup[k]->first)){
+            remove(k);
             return false;
         }
-        if(expiration_refresh)
-            lookup[k]->second = steady_clock::now();
-
         cache.splice( cache.begin(), cache, lookup[k] );
         d = lookup[k]->first;
         return true;
     }
 
     bool add(const Key& k, Data& d){
-      std::lock_guard<std::mutex> locker(mutex);
+        std::lock_guard<std::mutex> locker(mutex);
+        if(lookup.count(k) > 0){
+            if(expired(lookup[k]) && !dirty(lookup[k]->first))
+                remove(k);
+            else return false;
+        }
 
-      if(lookup.count(k) > 0){
-          if(expiration_time.count() && (duration_cast<milliseconds>(steady_clock::now() - lookup[k]->second) > expiration_time)){
-               cache.erase(lookup[k]);
-               lookup.erase(k);
-          }
-          else return false;
-      }
+        for (auto it = -- std::end(cache); cache.size() >= capacity && it!=std::begin(cache); it--){
+            if(!dirty(it->first)){
+                lookup.erase(getKey(it->first));
+                cache.erase(it);
+            }
+        }
 
-      if(cache.size() >= capacity){
-          const Key last = getKey(cache.back().first);
-          lookup.erase(last);
-          cache.pop_back();
-      }
-
-      cache.push_front(cache_entry(d, steady_clock::now()));
-      lookup[k] = cache.begin();
-      return true;
+        cache.push_front(cache_entry(d, steady_clock::now()));
+        lookup[k] = cache.begin();
+        return true;
     }
 
     void invalidate(const Key& k){
         std::lock_guard<std::mutex> locker(mutex);
-        if(lookup.count(k) > 0){
-            cache.erase(lookup[k]);
-            lookup.erase(k);
-        }
+        if(lookup.count(k) > 0) remove(k);
     }
 
 public:
-    explicit LRUcache(std::function<const Key(Data&)> getKey,
+    /* Set expiration time to 0 to disable expiration.
+     * Capacity limit can be exceeded if the cache contains only non-removable objects.*/
+    explicit LRUcache(std::uint64_t expiration_milliseconds,
                       std::uint32_t capacity,
-                      std::uint64_t expiration_milliseconds,
-                      bool          expiration_refresh_on_get):
-         expiration_refresh(expiration_refresh_on_get), expiration_time(expiration_milliseconds), capacity(capacity), getKey(getKey) {};
+                      std::function<const Key(const Data&)> getKey,
+                      std::function<bool (const Data&)> dirty):
+         expiration_time(expiration_milliseconds), capacity(capacity), getKey(getKey), dirty(dirty) {};
     ~LRUcache(){};
 };
 

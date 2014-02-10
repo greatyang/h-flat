@@ -23,6 +23,7 @@ struct pok_priv
 {
     std::unique_ptr<KineticNamespace> kinetic;
     LRUcache<std::string, std::shared_ptr<MetadataInfo>> lookup_cache;
+    LRUcache<std::string, std::shared_ptr<DataInfo>>     data_cache;
     PathMapDB pmap;
 
     /* superblock like information */
@@ -35,7 +36,8 @@ struct pok_priv
 
     pok_priv() :
             kinetic(new SimpleKineticNamespace()),
-            lookup_cache(std::mem_fn(&MetadataInfo::getSystemPath) , 10, 1000, false),
+            lookup_cache(1000, 10, std::mem_fn(&MetadataInfo::getSystemPath), std::mem_fn(&MetadataInfo::isDirty)),
+            data_cache(1000, 10, std::mem_fn(&DataInfo::getKey), std::mem_fn(&DataInfo::hasUpdates)),
             pmap(),
             blocksize(1024 * 1024),
             inum_base(0),

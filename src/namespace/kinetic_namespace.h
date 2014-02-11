@@ -26,7 +26,6 @@ public:
     virtual KineticStatus Capacity(kinetic::Capacity &cap) = 0;
 
     /* Waiting for P2P operation support
-     *     virtual KineticStatus Copy(const string &key, const string& version, WriteMode mode);
      *     virtual KineticStatus DeleteKeyRangeAsync(const string &start_key, const string &end_key); */
     virtual ~KineticNamespace(){};
 };
@@ -35,10 +34,11 @@ public:
 class SimpleKineticNamespace final : public KineticNamespace
 {
 private:
+    kinetic::ConnectionOptions        options;
     unique_ptr<kinetic::ConnectionHandle> con;
 
 private:
-    void connect(kinetic::ConnectionOptions options);
+    void connect();
 
 public:
     KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);

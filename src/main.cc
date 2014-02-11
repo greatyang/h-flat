@@ -30,7 +30,7 @@ void *pok_init(struct fuse_conn_info *conn)
     }
     if (err) pok_error("Error encountered validating root metadata");
 
-    database_update();
+    util::database_update();
     return PRIV;
 }
 

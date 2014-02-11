@@ -117,7 +117,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
         entry.set_type(posixok::db_entry_TargetType_NONE);
         entry.set_origin(user_path);
 
-        err = database_op(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
+        err = util::database_operation(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
         if(err) return err;
 
         mdi->getMD().set_path_permission_verified(PRIV->pmap.getSnapshotVersion());

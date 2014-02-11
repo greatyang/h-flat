@@ -1,6 +1,9 @@
 #include "main.h"
 #include "debug.h"
 #include <stdint.h>
+#include "kinetic_helper.h"
+#include "database.pb.h"
+
 
 namespace util
 {
@@ -62,5 +65,49 @@ std::string path_to_filename(const std::string &path)
 {
     return path.substr(path.find_last_of("/:") + 1);
 }
+
+
+int database_update(void)
+{
+    std::int64_t dbVersion;
+    std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
+
+    if (int err = get_db_version(dbVersion))
+        return err;
+    assert(dbVersion >= snapshotVersion);
+
+    if (dbVersion == snapshotVersion)
+        return -EALREADY;
+
+    /* Update */
+    std::list<posixok::db_entry> entries;
+    posixok::db_entry entry;
+    for (std::int64_t v = snapshotVersion + 1; v <= dbVersion; v++) {
+        if (int err = get_db_entry(v, entry))
+            return err;
+        entries.push_back(entry);
+    }
+    return PRIV->pmap.updateSnapshot(entries, snapshotVersion, dbVersion);
+}
+
+/* If put_db_entry fails due to an out-of-date snapshot, the file system operation needs to be re-verified using the supplied function with
+ * the updated snaphshot before put_db_entry can be retried. */
+int database_operation(std::function<int()> verify, posixok::db_entry &entry)
+{
+    std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
+
+    int err = put_db_entry(snapshotVersion + 1, entry);
+    if(!err){
+        std::list<posixok::db_entry> entries;
+        entries.push_back(entry);
+        PRIV->pmap.updateSnapshot(entries, snapshotVersion, snapshotVersion + 1);
+        return 0;
+    }
+    if (  err != -EEXIST) return err;
+    if (( err = database_update() )) return err;
+    if (( err = verify()          )) return err;
+    return database_operation(verify, entry);
+}
+
 
 }

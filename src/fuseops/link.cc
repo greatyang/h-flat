@@ -48,8 +48,7 @@ int pok_symlink(const char *target, const char *origin)
     entry.set_target(target);
 
     /* do database operation... after adding the filename to directory, no other client can disallow it */
-    auto alwaysok = []() -> int{ return 0;};
-    err = database_op(alwaysok, entry);
+    err = util::database_operation([](){return 0;}, entry);
     if(err){
         pok_warning("Database operation failed. Dangling directory entry!");
         return err;

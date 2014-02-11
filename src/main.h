@@ -63,10 +63,6 @@ int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode);
 void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode);
 void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent);
 
-/* database */
-int database_update(void);
-int database_operation(std::function<int()> fsfun_do, std::function<int()> fsfun_undo, posixok::db_entry &entry);
-int database_op(std::function<int()> verify, posixok::db_entry &entry);
 
 /* general utility functions */
 namespace util
@@ -76,6 +72,8 @@ namespace util
     std::int64_t to_int64(const std::string &version_string);
     std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);
     std::string path_to_filename(const std::string &path);
+    int database_update(void);
+    int database_operation(std::function<int()> verify, posixok::db_entry &entry);
 }
 
 #endif

@@ -81,7 +81,6 @@ add_executable(POSIX-o-K
      src/metadata_info.cc
      src/data_info.cc
      src/pathmap_db.cc
-     src/util_database.cc
      src/fuseops/attr.cc
      src/fuseops/xattr.cc
      src/fuseops/data.cc

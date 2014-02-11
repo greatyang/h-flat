@@ -5,7 +5,7 @@
 #include <sys/param.h>
 
 
-int rename_lookup(
+static int rename_lookup(
         const char *user_path_from, const char *user_path_to,
         std::shared_ptr<MetadataInfo> &dir_mdifrom,
         std::shared_ptr<MetadataInfo> &dir_mdito,
@@ -44,99 +44,103 @@ int rename_lookup(
     return err;
 }
 
-
-static int move_directory(const char *user_path_from, const char *user_path_to,
-         std::shared_ptr<MetadataInfo> &mdito,
-         std::shared_ptr<MetadataInfo> &mdifrom,
-         std::shared_ptr<MetadataInfo> &dir_mdito,
-         std::shared_ptr<MetadataInfo> &dir_mdifrom)
+static int rename_updateDB(const char *user_path_from, const char *user_path_to,
+    std::shared_ptr<MetadataInfo> &mdito,
+    std::shared_ptr<MetadataInfo> &mdifrom,
+    std::shared_ptr<MetadataInfo> &dir_mdito,
+    std::shared_ptr<MetadataInfo> &dir_mdifrom)
 {
-    mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
-    mdito->getMD().set_force_update_version(PRIV->pmap.getSnapshotVersion() + 1);
-    int err = create_metadata(mdito);
-    if(err) return err;
-
     posixok::db_entry entry;
-    entry.set_type(entry.MOVE);
-    entry.set_origin(user_path_from);
-    entry.set_target(user_path_to);
-    err = database_op(
-            std::bind(rename_lookup, user_path_from, user_path_to,
-                    std::ref(dir_mdifrom), std::ref(dir_mdito), std::ref(mdifrom), std::ref(mdito)),
-                    entry
-                    );
+    if(S_ISDIR(mdifrom->getMD().mode())){
+      entry.set_type(entry.MOVE);
+      entry.set_origin(user_path_from);
+      entry.set_target(user_path_to);
+    }
+    else{
+        assert(PRIV->pmap.hasMapping(user_path_from));
+        entry.set_type(posixok::db_entry_TargetType_REMOVED);
+        entry.set_origin(user_path_from);
+        int err = util::database_operation([](){return 0;},entry);
+        if (err) return err;
+
+        char buffer[PATH_MAX];
+        err = pok_readlink(user_path_from, buffer, PATH_MAX);
+        if( err) return err;
+        entry.set_type(entry.SYMLINK);
+        entry.set_origin(user_path_to);
+        entry.set_target(buffer);
+    }
+    return util::database_operation( std::bind(rename_lookup, user_path_from, user_path_to,
+               std::ref(dir_mdifrom), std::ref(dir_mdito), std::ref(mdifrom), std::ref(mdito)),
+               entry );
+}
+
+static int rename_moveMDKey(
+    std::shared_ptr<MetadataInfo> &mdito,
+    std::shared_ptr<MetadataInfo> &mdifrom )
+{
+    mdifrom->updateACtime();
+    KineticRecord record(mdifrom->getMD().SerializeAsString(), std::to_string(mdifrom->getCurrentVersion() + 1), "",
+            com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+    KineticStatus status = PRIV->kinetic->Put(mdito->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
+    if(!status.ok()) return -EIO;
+    status = PRIV->kinetic->Delete(mdifrom->getSystemPath(), "", WriteMode::IGNORE_VERSION);
+    if(!status.ok()) return -EIO;
+    return 0;
+}
+
+static int rename_moveHardlink(const char *user_path_from, const char *user_path_to)
+{
+    std::shared_ptr<MetadataInfo> mdito;
+    std::shared_ptr<MetadataInfo> mdifrom;
+
+    int err = get_metadata_userpath(user_path_from, mdifrom);
+    assert(mdifrom->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
+
+    err = lookup(user_path_to, mdito);
+    assert(err == -ENOENT);
+
+    err = rename_moveMDKey(mdito,mdifrom);
+
+    PRIV->lookup_cache.invalidate(mdifrom->getSystemPath());
+    PRIV->lookup_cache.invalidate(mdito->getSystemPath());
+    return err;
+}
+
+static int rename_changeDirMD(const char *user_path_from, const char *user_path_to,
+    std::shared_ptr<MetadataInfo> &mdito,
+    std::shared_ptr<MetadataInfo> &mdifrom,
+    std::shared_ptr<MetadataInfo> &dir_mdito,
+    std::shared_ptr<MetadataInfo> &dir_mdifrom )
+{
+    /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it.
+     * Create a new force_udpate metadata key at target location. */
+    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
+    mdi_fu->setSystemPath(dir_mdifrom->getSystemPath()+"/"+util::path_to_filename(user_path_from));
+    int err = get_metadata(mdi_fu);
+    if(!err && mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE){
+        err = delete_metadata(mdi_fu);
+        if(err) return err;
+    }
+    mdi_fu->setSystemPath(dir_mdito->getSystemPath()+"/"+util::path_to_filename(user_path_to));
+    mdi_fu->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
+    mdi_fu->getMD().set_force_update_version(PRIV->pmap.getSnapshotVersion()+1 );
+    err = create_metadata(mdi_fu);
     if(err) return err;
 
-    dir_mdifrom->getMD().set_force_update_version( PRIV->pmap.getSnapshotVersion() );
+    /* Set force_update_version property in parent directories */
+    dir_mdifrom->getMD().set_force_update_version( PRIV->pmap.getSnapshotVersion()+1 );
     err = put_metadata(dir_mdifrom);
     if(err) return err;
-
-    /* only touch metadata of parent directory of the new name if it is a different directory */
-    if( dir_mdito->getMD().inode_number() != dir_mdifrom->getMD().inode_number() ){
-       dir_mdito->getMD().set_force_update_version( PRIV->pmap.getSnapshotVersion() );
-       err = put_metadata(dir_mdito);
-       if(err) return err;
+    if(dir_mdifrom != dir_mdito){
+        dir_mdito->getMD().set_force_update_version( PRIV->pmap.getSnapshotVersion()+1 );
+        err = put_metadata(dir_mdito);
+        if(err) return err;
     }
 
+    /* Update ACtime for POSIX compliance */
     mdifrom->updateACtime();
-    put_metadata(mdifrom);
-    return delete_directory_entry(dir_mdifrom, util::path_to_filename(user_path_from));
-}
-
-static int move_hardlink(const char *user_path_from, const std::shared_ptr<MetadataInfo> &dir_mdifrom,
-        const std::shared_ptr<MetadataInfo> &mdito, const std::shared_ptr<MetadataInfo> &mdifrom )
-{
-    mdito->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
-    mdito->getMD().set_inode_number(mdifrom->getMD().inode_number());
-    int err = create_metadata(mdito);
-    if (err)
-      return err;
-
-    mdifrom->getMD().set_link_count(mdifrom->getMD().link_count() + 1);
-    mdifrom->updateACtime();
-    err = put_metadata(mdifrom);
-    if (err)
-        return err;
-    return pok_unlink(user_path_from);
-}
-
-static int move_symlink(const char *user_path_from, const char *user_path_to,
-        const std::shared_ptr<MetadataInfo> &mdito, const std::shared_ptr<MetadataInfo> &mdifrom )
-{
-    char buffer[PATH_MAX];
-    int err = pok_readlink(user_path_from, buffer, PATH_MAX);
-    if( err)
-        return err;
-
-    posixok::db_entry entry;
-    entry.set_type(entry.SYMLINK);
-    entry.set_origin(user_path_to);
-    entry.set_target(buffer);
-
-    std::string fromKey = mdifrom->getSystemPath();
-    mdifrom->updateACtime();
-    mdifrom->setSystemPath( mdito->getSystemPath() );
-    err = database_operation(
-          std::bind(create_metadata, mdifrom),
-          std::bind(delete_metadata, mdifrom),
-          entry);
-    mdifrom->setSystemPath( fromKey );
-    if(err)
-        return err;
-    return pok_unlink(user_path_from);
-}
-
-static int move_regular(const char *user_path_from, const std::shared_ptr<MetadataInfo> &mdito, const std::shared_ptr<MetadataInfo> &mdifrom )
-{
-    std::string fromKey = mdifrom->getSystemPath();
-    mdifrom->setSystemPath( mdito->getSystemPath() );
-    mdifrom->updateACtime();
-    int err = create_metadata(mdifrom);
-    mdifrom->setSystemPath( fromKey );
-    if(err)
-        return err;
-
-    return pok_unlink(user_path_from);
+    return put_metadata(mdifrom);
 }
 
 
@@ -144,7 +148,7 @@ static int move_regular(const char *user_path_from, const std::shared_ptr<Metada
 int pok_rename(const char *user_path_from, const char *user_path_to)
 {
     pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
-    database_update();
+    util::database_update();
     std::shared_ptr<MetadataInfo> dir_mdifrom;
     std::shared_ptr<MetadataInfo> dir_mdito;
     std::shared_ptr<MetadataInfo> mdifrom;
@@ -152,7 +156,7 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     int err = rename_lookup(user_path_from, user_path_to, dir_mdifrom, dir_mdito, mdifrom, mdito);
     if (err) return err;
 
-    /* Remove potentially existing directory */
+    /* Remove potentially existing target if possible */
     if(mdito->getCurrentVersion() != -1){
         if (S_ISDIR(mdito->getMD().mode()))
              err = pok_rmdir(user_path_to);
@@ -160,33 +164,30 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
         if (err) return err;
     }
 
-    /* Create new directory entry */
+    /* Create new directory entry: Synchronization point.  */
     if ((err = create_directory_entry(dir_mdito, util::path_to_filename(user_path_to))))
         return err;
 
+    /* update database for directory and symlink moves, obtain the HARDLINK_S metadata for hardlink moves */
+    if(S_ISDIR(mdifrom->getMD().mode()) || S_ISLNK(mdifrom->getMD().mode()))
+       err = rename_updateDB(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom);
 
+    /* do the actual file system work */
+    if(S_ISDIR(mdifrom->getMD().mode())){
+        if(!err) err = rename_changeDirMD(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom);
+    } else if (mdifrom->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T){
+        if(!err) err = rename_moveHardlink(user_path_from, user_path_to);
+    } else
+        if(!err) err = rename_moveMDKey(mdito, mdifrom);
+
+
+    /* delete old directory entry */
+    if(!err) err = delete_directory_entry(dir_mdifrom, util::path_to_filename(user_path_from));
+
+    /* invalidate cache */
     PRIV->lookup_cache.invalidate(mdifrom->getSystemPath());
     PRIV->lookup_cache.invalidate(mdito->getSystemPath());
 
-    int mode = mdifrom->getMD().mode();
-
-    /* Copy metadata-key to the new location & update pathmapDB if necessary. */
-    if (S_ISDIR(mode))
-        err = move_directory(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom);
-
-    else if (mdifrom->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
-        err = move_hardlink(user_path_from, dir_mdifrom, mdito, mdifrom);
-
-    else if S_ISLNK(mode)
-        err = move_symlink(user_path_from, user_path_to, mdito, mdifrom);
-
-    else
-        err = move_regular(user_path_from, mdito, mdifrom);
-
-    PRIV->lookup_cache.invalidate(mdifrom->getSystemPath());
-    PRIV->lookup_cache.invalidate(mdito->getSystemPath());
-
-    if(err)
-        pok_warning("Error in move operation after point of no return");
+    if(err)  pok_warning("Error in move operation after serialization point. Shouldn't have happened. Really really.");
     return err;
 }

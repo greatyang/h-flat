@@ -1,27 +1,26 @@
 #include "kinetic_namespace.h"
 #include <exception>
 
-SimpleKineticNamespace::SimpleKineticNamespace(kinetic::ConnectionOptions options)
+SimpleKineticNamespace::SimpleKineticNamespace(kinetic::ConnectionOptions opts):
+options(opts)
 {
-    connect(options);
+    connect();
 }
 
 SimpleKineticNamespace::SimpleKineticNamespace()
 {
-    kinetic::ConnectionOptions options;
-    options.host = "localhost"; //
+    options.host = "localhost";
     options.port = 8123;
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
-
-    connect(options);
+    connect();
 }
 
 SimpleKineticNamespace::~SimpleKineticNamespace()
 {
 }
 
-void SimpleKineticNamespace::connect(kinetic::ConnectionOptions options)
+void SimpleKineticNamespace::connect()
 {
     kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
 

@@ -74,7 +74,7 @@ int pok_unlink(const char *user_path)
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
-        err = database_op(std::bind(unlink_lookup, user_path, std::ref(mdi), std::ref(mdi_dir)),
+        err = database_operation(std::bind(unlink_lookup, user_path, std::ref(mdi), std::ref(mdi_dir)),
                 entry);
     }
     if (!err && S_ISDIR(mdi->getMD().mode()))

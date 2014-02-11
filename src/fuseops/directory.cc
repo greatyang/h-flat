@@ -26,8 +26,7 @@ int pok_rmdir(const char *user_path)
     if (keys->size())
         return -ENOTEMPTY;
 
-    if(int err = database_update())
-        return err;
+    util::database_update();
     return pok_unlink(user_path);
 }
 
@@ -99,7 +98,7 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
 
     /* A directory entry has been moved out / moved into this directory due to a directory move. */
     if (mdi->getMD().has_force_update_version() && mdi->getMD().force_update_version() > PRIV->pmap.getSnapshotVersion())
-        if (( err = database_update()))
+        if (( err = util::database_update() ))
             return err;
 
     string keystart = std::to_string(mdi->getMD().inode_number()) + ":";

@@ -106,12 +106,11 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
     }
     if (mdi->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
         pok_debug("force_metadata_update found at key %s.",key.c_str());
-        std::int64_t _version = PRIV->pmap.getSnapshotVersion();
-        if (int err = database_update())
+        if (int err = util::database_update()){
+            pok_debug("encountered force_update inode in regular lookup and couldn't update database");
             return err;
-        if(PRIV->pmap.getSnapshotVersion() > _version)
-            return lookup(user_path, mdi);
-        return -EINVAL;
+        }
+        return lookup(user_path, mdi);
     }
 
     if(!cached)

@@ -38,6 +38,7 @@ final
         mutable std::mutex lock;
 
     private:
+        void iointercept(std::string &path) const;
         bool searchPathRecursive(std::string& path, std::int64_t &maxTimeStamp, const bool afterMove, const bool followSymlink) const;
 
     public:

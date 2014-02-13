@@ -67,23 +67,24 @@ static int permission_lookup(const char *user_path, std::shared_ptr<MetadataInfo
     if ( int err = lookup(user_path, mdi) )
         return err;
 
-    /* Only the root user can change the owner of a file.*/
-    if ((uid != (uid_t) -1) && uid != mdi->getMD().uid() &&
-            fuse_get_context()->uid)
-      return -EPERM;
+    /* Root can do what (s)he wants. */
+    if(fuse_get_context()->uid == 0)
+        return 0;
 
-    /* You can change the group of a file only if you are a root user or if you own the file.
-    *  If you own the file but are not a root user, you can change the group only to a group of which you are a member.
-    *  TODO: check if owner is in group described by gid. Non-trivial, need our own group-list in file system. */
-    if ((gid != (gid_t) -1) && gid != mdi->getMD().gid() &&
-            fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
-      return -EPERM;
+    /* Non-root can't change the owner of a file.*/
+    if ((uid != (uid_t) -1) && (uid != mdi->getMD().uid()))
+        return -EPERM;
 
-    /* Only root or owner can change file mode. */
-    if ((mode != (mode_t) -1) && mode != mdi->getMD().mode() &&
-            fuse_get_context()->uid && fuse_get_context()->uid != mdi->getMD().uid())
-      return -EPERM;
+    /* Non-root owner can change group to a group of which he is a member.
+    *  TODO: group member-check. not possible in fuse with system groups */
+    if ((gid != (gid_t) -1) && (gid != mdi->getMD().gid()))
+        if( (fuse_get_context()->uid != mdi->getMD().uid()) )
+            return -EPERM;
 
+    /* Owner can change file mode. */
+    if ((mode != (mode_t) -1) && (mode != mdi->getMD().mode()))
+        if(fuse_get_context()->uid != mdi->getMD().uid())
+            return -EPERM;
     return 0;
 }
 
@@ -134,7 +135,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
 /** Change the permission bits of a file */
 int pok_chmod(const char *user_path, mode_t mode)
 {
-    return do_permission_change(user_path, mode, -1, -1);
+    return  do_permission_change(user_path, mode, -1, -1);
 }
 
 /** Change the owner and group of a file */

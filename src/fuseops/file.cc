@@ -177,6 +177,7 @@ int pok_create(const char *user_path, mode_t mode)
 
     std::shared_ptr<MetadataInfo> mdi_dir(new MetadataInfo());
     err = lookup_parent(user_path, mdi_dir);
+    if (err == -ENOENT && strchr(user_path,':')) return -ENOTDIR; // fuse will infinity-loop on enoent with iointercept
     if (err) return err;
 
     /* create requires write access to parent directory */

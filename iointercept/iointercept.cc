@@ -17,7 +17,6 @@ extern std::string change(const char *);
 
 // stdio
 FILE* pc_fopen (const char *path, const char *mode){
-    printf("ALARM\n\n");
     return (ORIG(fopen))
                 (change(path).c_str(), mode);
 }

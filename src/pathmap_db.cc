@@ -53,6 +53,7 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 
     /* Take this opportunity to check for component-by-component POSIX name compliance. */
     if (path.size() - 1 - pos > NAME_MAX) {
+        pok_debug("Last component of path '%s' has %d size.",path.c_str(),path.size()-1-pos);
         maxTimeStamp = -ENAMETOOLONG;
         return false;
     }
@@ -62,28 +63,33 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
     return searchPathRecursive(path, maxTimeStamp, followReuse, true);
 }
 
+void PathMapDB::iointercept(std::string &path) const
+{
+    /* In order to support direct lookup via iointercept, handle ':' in path */
+       size_t pos = path.find_first_of(':');;
+       while(pos != std::string::npos){
+           path[pos]='/';
+           pos = path.find_first_of(':',pos);
+       }
+}
+
 std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTimeStamp, CallingType ctype) const
 {
     int numLinksFollowed = 0;
     bool followReuse = true;
     bool followSymlink = ctype == CallingType::LOOKUP ? false : true;
-    std::string temp(user_path);
-    std::string systemPath(user_path);
     maxTimeStamp = 0;
+    std::string systemPath(user_path);
+    iointercept(systemPath);
+    std::string temp(systemPath);
+
 
     /* Take this opportunity to check for path POSIX name compliance. */
     if (temp.size() > PATH_MAX) {
+        pok_debug("path size > %d",PATH_MAX);
         maxTimeStamp = -ENAMETOOLONG;
         return systemPath;
     }
-
-    /* In order to support direct lookup via iointercept, handle ':' in path */
-    size_t pos = systemPath.find_first_of(':');;
-    while(pos != std::string::npos){
-        systemPath[pos]='/';
-        pos = systemPath.find_first_of(':',pos);
-    }
-
     {
         std::lock_guard<std::mutex> locker(lock);
         ++currentReaders;
@@ -155,6 +161,7 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
 
 void PathMapDB::addSoftLink(std::string origin, std::string destination)
 {
+    iointercept(origin); iointercept(destination);
     std::lock_guard<std::mutex> locker(lock);
     while (currentReaders.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -173,6 +180,7 @@ void PathMapDB::addSoftLink(std::string origin, std::string destination)
 
 void PathMapDB::addPermissionChange(std::string path)
 {
+    iointercept(path);
     std::lock_guard<std::mutex> locker(lock);
     while (currentReaders.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -193,6 +201,7 @@ void PathMapDB::addPermissionChange(std::string path)
  * access permissions are validated. */
 void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
 {
+    iointercept(origin); iointercept(destination);
     std::lock_guard<std::mutex> locker(lock);
     while (currentReaders.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -235,6 +244,7 @@ void PathMapDB::addDirectoryMove(std::string origin, std::string destination)
 
 void PathMapDB::addUnlink(std::string path)
 {
+    iointercept(path);
     std::lock_guard<std::mutex> locker(lock);
     while (currentReaders.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -248,6 +258,7 @@ void PathMapDB::addUnlink(std::string path)
 
 bool PathMapDB::hasMapping(std::string path)
 {
+    iointercept(path);
     return snapshot.count(path);
 }
 

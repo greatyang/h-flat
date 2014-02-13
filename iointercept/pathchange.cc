@@ -30,17 +30,12 @@ void getMountPoints(void)
         while ( ( part = getmntent ( mtab) ) != NULL) {
             if ( ( part->mnt_fsname != NULL ) && !pok.compare(0, pok.length(), part->mnt_fsname, pok.length())){
                 mountpoints.push_back(part->mnt_dir);
-                printf("Adding mount %s\n",part->mnt_dir);
             }
         }
     }
     endmntent ( mtab);
 #endif
 }
-
-
-
-
 
 
 
@@ -55,20 +50,20 @@ void _realpath(std::string &path)
     }
 
     size_t pos = path.find_first_of('/',0);
-    while(pos != std::string::npos){
+    while(pos != std::string::npos && pos < path.length()-1){
         /* erase multiple '/' */
         if(path[pos+1] == '/')
             path.erase(pos, path.find_first_not_of('/',pos) - pos -1);
 
         /* handle '.' and '..' */
         if(path[pos+1] == '.'){
-            if(path[pos+2] == '.'){
-                size_t pre = path.find_last_of('/',pos-1);
-                path.erase(pre, pos - pre + 3);
-                continue;
-            }
             if(path.length() <= pos+2 || path[pos+2] == '/'){
                 path.erase(pos,2);
+                continue;
+            }
+            if(path[pos+2] == '.'){
+                size_t pre = path.find_last_of('/',pos-1);
+                path.erase(pre + 1, pos - pre + 2);
                 continue;
             }
         }
@@ -83,7 +78,6 @@ void _substitute(std::string &path, size_t pos)
             path[pos]=':';
         pos = path.find_first_of('/',pos+1);
     }
-    printf("fakepath: %s\n",path.data());
 }
 
 std::string change(const char *path)
@@ -91,10 +85,12 @@ std::string change(const char *path)
     getMountPoints();
     std::string p(path);
     _realpath(p);
-    printf("full path: %s \n",p.c_str());
     for(auto mnt : mountpoints){
-        if(! mnt.compare(0, mnt.length(), p.data(), mnt.length()))
+        if(! mnt.compare(0, mnt.length(), p.data(), mnt.length())){
+           // printf("intial request: '%s'\n",path);
             _substitute(p, mnt.length() + 1);
+           // printf("substitute: '%s'\n",p.data());
+        }
     }
     return p;
 }

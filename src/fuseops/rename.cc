@@ -156,6 +156,10 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     int err = rename_lookup(user_path_from, user_path_to, dir_mdifrom, dir_mdito, mdifrom, mdito);
     if (err) return err;
 
+    /* rename returns EINVAL when the 'from' argument is a parent directory of 'to' */
+    if(strncmp(user_path_from,user_path_to,strlen(user_path_from)) == 0)
+        return -EINVAL;
+
     /* Remove potentially existing target if possible */
     if(mdito->getCurrentVersion() != -1){
         if (S_ISDIR(mdito->getMD().mode()))

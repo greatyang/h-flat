@@ -10,7 +10,7 @@ using namespace std::chrono;
 
 /* A threadsafe LRU cache with optional auto-expiration of cache elements.
  * Use std::shared_ptr as data elements for a non-owning cache (probably a good idea in multithread environments).
- * Note that the removable property overrides item expiration (a non-removable item will never be considered expired). */
+ * Note that the dirty property overrides item expiration (a non-removable item will never be considered expired). */
 template< typename Key, typename Data > class LRUcache final {
 
 private:
@@ -28,6 +28,7 @@ private:
 
 private:
     bool expired(typename std::list<cache_entry>::iterator it){
+        if(dirty(it->first)) return false;
         return expiration_time.count() && (duration_cast<milliseconds>(steady_clock::now() - it->second) > expiration_time);
     }
     void remove(const Key &k){
@@ -38,9 +39,11 @@ private:
 public:
     bool get(const Key& k, Data& d){
         std::lock_guard<std::mutex> locker(mutex);
-        if(lookup.count(k) == 0) return false;
 
-        if( expired(lookup[k]) && !dirty(lookup[k]->first)){
+        if(lookup.count(k) == 0)
+            return false;
+
+        if(expired(lookup[k])){
             remove(k);
             return false;
         }
@@ -51,17 +54,15 @@ public:
 
     bool add(const Key& k, Data& d){
         std::lock_guard<std::mutex> locker(mutex);
+
         if(lookup.count(k) > 0){
-            if(expired(lookup[k]) && !dirty(lookup[k]->first))
-                remove(k);
+            if(expired(lookup[k])) remove(k);
             else return false;
         }
 
         for (auto it = -- std::end(cache); cache.size() >= capacity && it!=std::begin(cache); it--){
-            if(!dirty(it->first)){
-                lookup.erase(getKey(it->first));
-                cache.erase(it);
-            }
+            if(!dirty(it->first))
+                remove(getKey(it->first));
         }
 
         cache.push_front(cache_entry(d, steady_clock::now()));
@@ -71,7 +72,9 @@ public:
 
     void invalidate(const Key& k){
         std::lock_guard<std::mutex> locker(mutex);
-        if(lookup.count(k) > 0) remove(k);
+
+        if(lookup.count(k) > 0)
+            remove(k);
     }
 
 public:

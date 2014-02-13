@@ -94,7 +94,6 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
     /* Step 3: Special inode types: Follow hardlink_source inode types in the lookup operation, update on force_update. */
     if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S) {
         if(!cached){
-            pok_debug("hardlink_s found at key %s.", key.c_str());
             std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo(key));
             mdi_source->getMD().set_type( posixok::Metadata_InodeType_HARDLINK_S );
             mdi_source->getMD().set_inode_number( mdi->getMD().inode_number() );
@@ -105,7 +104,6 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
 
     }
     if (mdi->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
-        pok_debug("force_metadata_update found at key %s.",key.c_str());
         if (int err = util::database_update()){
             pok_debug("encountered force_update inode in regular lookup and couldn't update database");
             return err;
@@ -113,17 +111,23 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         return lookup(user_path, mdi);
     }
 
-    if(!cached)
-         PRIV->lookup_cache.add(key,mdi);
+    if(!cached) PRIV->lookup_cache.add(key,mdi);
 
     /* Step 4: check path permissions, update (recursively as necessary) in case of staleness */
     bool stale = mdi->getMD().path_permission_verified() < pathPermissionTimeStamp;
     if (stale) {
+        pok_debug("stale path permission for path %s (%d vs required %d )",user_path, mdi->getMD().path_permission_verified(), pathPermissionTimeStamp);
         std::shared_ptr<MetadataInfo> mdi_parent;
-        if (int err = lookup_parent(user_path, mdi_parent))
-            return err;
+        if (int err = lookup_parent(user_path, mdi_parent)){
+            if(err != -EACCES){
+                pok_debug("Error %d looking up parent",err);
+                return err;
+            }
+        }
         inherit_path_permissions(mdi, mdi_parent);
-        put_metadata(mdi);
+        if (int err = put_metadata(mdi) )
+            return err;
+        pok_debug("updated to timestamp %d",mdi->getMD().path_permission_verified());
     }
 
     return check_path_permissions(mdi->getMD().path_permission());
@@ -133,15 +137,15 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
 /* Lookup parent directory of supplied user path. */
 int lookup_parent(const char *user_path, std::shared_ptr<MetadataInfo> &mdi_parent)
 {
-    std::string key(user_path);
-    auto pos = key.find_last_of("/:");
+    std::string path(user_path);
+    auto pos = path.find_last_of("/:");
     if (pos == std::string::npos)
         return -EINVAL;
     if (!pos) // root directory
         pos++;
-    key.erase(pos, std::string::npos);
+    path.erase(pos, std::string::npos);
 
-    if (int err = lookup(key.c_str(), mdi_parent))
+    if (int err = lookup(path.c_str(), mdi_parent))
         return err;
 
     if (!S_ISDIR(mdi_parent->getMD().mode()))

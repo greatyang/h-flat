@@ -3,8 +3,9 @@
 #define METADATA_INFO_H_
 #include "metadata.pb.h"
 #include "data_info.h"
+#include <memory>
 #include <map>
-#include "lru_cache.h"
+
 
 class MetadataInfo final
 {

@@ -87,9 +87,9 @@ std::string change(const char *path)
     _realpath(p);
     for(auto mnt : mountpoints){
         if(! mnt.compare(0, mnt.length(), p.data(), mnt.length())){
-           // printf("intial request: '%s'\n",path);
+            printf("intial: '%s'\n",path);
             _substitute(p, mnt.length() + 1);
-           // printf("substitute: '%s'\n",p.data());
+            printf("substitute: '%s'\n",p.data());
         }
     }
     return p;

@@ -1,6 +1,5 @@
 #include "main.h"
 #include "kinetic_helper.h"
-/* No Functionality in here yet... shouldn't be needed unless we start some caching / buffering somewhere */
 
 /** Synchronize file contents
  *
@@ -16,14 +15,25 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
     if( err) return err;
 
     /* The only reason for dirty data or metadata is an aggregated write operation.  */
-    if(mdi->isDirty()){
-        if (!datasync){
-             err = put_metadata(mdi);
-             if(err == -EAGAIN) return pok_fsync(user_path, datasync, fi);
-        }
-        if(!err) err = put_data(mdi->getAggregate());
+    std::shared_ptr<DataInfo> di = mdi->getDirtyData();
+    if(! di || ! di->hasUpdates() )
+        return 0;
+
+    int blocknum = util::to_int64(di->getKey().substr(di->getKey().find_first_of('_',0)+1,di->getKey().size()));
+    size_t newsize = std::max((std::uint64_t) PRIV->blocksize * blocknum + di->data().size(), (std::uint64_t) mdi->getMD().size());
+    if(mdi->getMD().size() < newsize || PRIV->posix == PosixMode::FULL){
+       mdi->getMD().set_size(newsize);
+       mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
+       mdi->updateACMtime();
+       err = put_metadata(mdi);
+       if(err){
+           PRIV->data_cache.invalidate(di->getKey());
+           return err;
+       }
     }
-    return err;
+
+   /* write data key */
+   return put_data(di);
 }
 
 /** Synchronize directory contents
@@ -35,11 +45,7 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
  */
 int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
-    std::shared_ptr<MetadataInfo> mdi;
-    int err = lookup(user_path, mdi);
-    if( err) return err;
-
-    put_metadata(mdi);
+    /* No action required in this file system, directories are never dirty. */
     return 0;
 }
 

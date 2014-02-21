@@ -1,42 +1,26 @@
 #include "main.h"
 #include "debug.h"
 #include "kinetic_helper.h"
-#include <unistd.h>
-#include <vector>
+#include "fuseops.h"
 
-static int readwrite(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, const std::unique_ptr<std::vector<std::shared_ptr<DataInfo>>> &datakeys)
+enum class rw {READ, WRITE};
+static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, std::shared_ptr<DataInfo> &di, rw mode)
 {
-    /* data request might span multiple blocks */
-    int blocksize = PRIV->blocksize;
-    int sizeleft = size;
-    int blocknum = offset / blocksize;
+    int blocknum     = offset / PRIV->blocksize;
+    int inblockstart = offset - blocknum * PRIV->blocksize;
+    int inblocksize  = size > (size_t) PRIV->blocksize - inblockstart ? PRIV->blocksize - inblockstart : size;
+    std::string key  = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknum);
 
-    while (sizeleft) {
-        int inblockstart = offset > blocknum * blocksize ? (offset - blocknum * blocksize) : 0;
-        int inblocksize = sizeleft > blocksize - inblockstart ? blocksize - inblockstart : sizeleft;
-
-        std::shared_ptr<DataInfo> data;
-        string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknum);
-        if(! PRIV->data_cache.get(key, data)){
-            if (int err = get_data(key, data))
-             return err;
-            if(! PRIV->data_cache.add(key, data))
-                pok_debug("Failed to add key %s to data cache",key.c_str());
-        }
-        if (datakeys){
-            pok_trace("update datainfo");
-            data->updateData(buf, inblockstart, inblocksize);
-            datakeys->push_back(data);
-        }
-        else{
-            pok_trace("read from datainfo");
-            memcpy(buf + size - sizeleft, data->data().data() + inblockstart, inblocksize);
-        }
-
-        sizeleft -= inblocksize;
-        blocknum++;
+    if(PRIV->data_cache.get(key, di) == false){
+        if (int err = get_data(key, di))
+            return err;
+        PRIV->data_cache.add(key, di);
     }
-    return 0;
+
+    if(mode == rw::WRITE)  di->updateData(buf, inblockstart, inblocksize);
+    if(mode == rw::READ)   memcpy(buf, di->data().data() + inblockstart, inblocksize);
+
+    return inblocksize;
 }
 
 /** Read data from an open file
@@ -60,11 +44,8 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
         pok_warning("Attempting to read beyond EOF for user path %s", user_path);
         return 0;
     }
-
-    pok_debug("Read request of %d bytes for user path %s at offset %d. ", size, user_path, offset);
-    err = readwrite(buf, size, offset, mdi, nullptr);
-    if(err) return err;
-    return size;
+    std::shared_ptr<DataInfo> di;
+    return do_rw(buf,size,offset,mdi,di,rw::READ);
 }
 
 /** Write data to an open file
@@ -77,47 +58,37 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
  */
 int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
+    pok_debug("writing %d bytes at offset %d for user path %s, O_APPEND: %d", size, offset, user_path, fi->flags & O_APPEND);
+
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    pok_debug("writing %d bytes at offset %d for user path %s", size, offset, user_path);
+    std::shared_ptr<DataInfo> di;
+    size = do_rw(const_cast<char*>(buf), size, offset, mdi, di, rw::WRITE);
+    if( size <= 0 ) return size;
 
-    size_t newsize = std::max((std::uint64_t) offset + size, (std::uint64_t) mdi->getMD().size());
-    mdi->getMD().set_size(newsize);
-    mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
-    mdi->updateACMtime();
-
-    std::unique_ptr<std::vector<std::shared_ptr<DataInfo>>> datakeys(new std::vector<std::shared_ptr<DataInfo>>());
-    err = readwrite(const_cast<char*>(buf), size, offset, mdi, datakeys);
-    if( err) return err;
-
-    /* Check if the write should be delayed for write aggregation:
-     *       write targets only a single data block and doesn't fill it completely */
-    if(datakeys->size() == 1 && ((offset+size) % PRIV->blocksize)){
-       if(mdi->setAggregate(datakeys->at(0)))
-           return size;
+    /* set updated datainfo structure in mdi, flush existing dirty data if required */
+    if(! mdi->setDirtyData(di) ){
+        err = pok_fsync(user_path, 0, fi);
+        if(err) return err;
+        mdi->setDirtyData(di);
     }
 
-    /* write metadata key */
-    err = put_metadata(mdi);
-    if(err == -EAGAIN) return pok_write(user_path, buf, size, offset, fi);
-    if(err) return err;
-
-    /* write data keys */
-    for (size_t i=0; i<datakeys->size(); i++){
-        if(!err) err = put_data(datakeys->at(i));
+    /* check if the write should be immediately flushed or aggregated */
+    if( (fi->flags & O_APPEND) || ((offset+size) % PRIV->blocksize == 0) ){
+        err = pok_fsync(user_path,0,fi);
+        if(err == -EAGAIN) return pok_write(user_path, buf, size, offset, fi);
+        if(err) return err;
     }
-    if(mdi->isDirty())
-        if(!err) err = put_data(mdi->getAggregate());
 
-    if(err)  pok_warning("Failed data put after successfully updating metadata");
     return size;
 }
 
 /** Change the size of a file */
 int pok_truncate(const char *user_path, off_t offset)
 {
+    pok_debug("truncate for user path %s to size %ld",user_path,offset);
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.6)
 project(POSIX-o-K CXX C)
 
-set(CMAKE_CXX_FLAGS "-g --std=c++11 -D_FILE_OFFSET_BITS=64 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -Wno-null-dereference -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS")
+set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -Wno-null-dereference -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS")
 
 include(ExternalProject)
 

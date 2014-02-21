@@ -18,6 +18,11 @@
 #include "kinetic_namespace.h"
 #include "lru_cache.h"
 
+enum class PosixMode
+{
+    FULL, TIMERELAXED
+};
+
 /* Private file-system wide data, accessible from anywhere. */
 struct pok_priv
 {
@@ -28,6 +33,7 @@ struct pok_priv
 
     /* superblock like information */
     std::int32_t    blocksize;
+    PosixMode       posix;
 
     /* inode generation */
     std::int64_t    inum_base;
@@ -36,10 +42,16 @@ struct pok_priv
 
     pok_priv() :
             kinetic(new SimpleKineticNamespace()),
-            lookup_cache(1000, 10, std::mem_fn(&MetadataInfo::getSystemPath), std::mem_fn(&MetadataInfo::isDirty)),
+            lookup_cache(1000, 10, std::mem_fn(&MetadataInfo::getSystemPath),
+                    [](const std::shared_ptr<MetadataInfo> &mdi){
+                        if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
+                            return true;
+                        return false;
+            }),
             data_cache(1000, 10, std::mem_fn(&DataInfo::getKey), std::mem_fn(&DataInfo::hasUpdates)),
             pmap(),
             blocksize(1024 * 1024),
+            posix(PosixMode::FULL),
             inum_base(0),
             inum_counter(0),
             lock()

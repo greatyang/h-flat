@@ -52,7 +52,7 @@ ino_t generate_inode_number(void)
 {
     std::lock_guard<std::mutex> locker(PRIV->lock);
     PRIV->inum_counter++;
-    if (PRIV->inum_counter == UINT16_MAX){
+    if (PRIV->inum_counter == std::numeric_limits<std::uint16_t>::max()){
        if( grab_inode_generation_token() )
            pok_error(" Error encountered when attempting to refresh inode generation token. "
                      " Cannot generate inode numbers. Quitting. ");

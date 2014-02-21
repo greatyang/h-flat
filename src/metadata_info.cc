@@ -6,12 +6,12 @@
 
 
 MetadataInfo::MetadataInfo() :
-        systemPath(), currentVersion(0), aggregate_write()
+        systemPath(), currentVersion(0)
 {
 }
 
 MetadataInfo::MetadataInfo(const std::string &key) :
-        systemPath(key), currentVersion(0), aggregate_write()
+        systemPath(key), currentVersion(0)
 {
 }
 
@@ -57,24 +57,19 @@ void MetadataInfo::updateACtime()
     md_mutable.set_ctime(now);
 }
 
-bool MetadataInfo::isDirty()
-{
-    if(aggregate_write && aggregate_write->hasUpdates())
-        return true;
-    return false;
-}
 
-bool MetadataInfo::setAggregate(std::shared_ptr<DataInfo>& di)
+bool MetadataInfo::setDirtyData(std::shared_ptr<DataInfo>& di)
 {
-    if(aggregate_write == di) return true;
-    if(isDirty()) return false;
-    aggregate_write = di;
+    if(dirty_data == di) return true;
+    if(dirty_data && dirty_data->hasUpdates()) return false;
+    dirty_data = di;
     return true;
 }
-std::shared_ptr<DataInfo>& MetadataInfo::getAggregate()
+std::shared_ptr<DataInfo>& MetadataInfo::getDirtyData()
 {
-    return aggregate_write;
+    return dirty_data;
 }
+
 
 /* If someone has a reasonable idea how to code this function PLEASE let me know */
 bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t version)

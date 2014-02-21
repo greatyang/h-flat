@@ -38,7 +38,8 @@ int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     KineticRecord record(mdi->getMD().SerializeAsString(), std::to_string(version + 1), "", Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), std::to_string(version), WriteMode::REQUIRE_SAME_VERSION, record);
 
-    /* If someone else has updated the metadata key since it has been read in, try to merge the changes. */
+    /* If someone else has updated the metadata key since it has been read in, try to merge the changes.
+     * If that should turn out to be impossible, overwrite local changes and return -EAGAIN. */
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) {
        unique_ptr<KineticRecord> record;
        KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);

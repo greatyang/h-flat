@@ -11,7 +11,7 @@ class MetadataInfo final
 {
     std::string       systemPath;       // key in flat namespace where metadata is stored
     std::int64_t      currentVersion;   // current version of metadata key
-    std::shared_ptr<DataInfo> aggregate_write;
+    std::shared_ptr<DataInfo> dirty_data;
 
     posixok::Metadata md_const;         // exact copy of on-drive metadata with version currentVersion
     posixok::Metadata md_mutable;       // metadata structure containing local changes not yet written to drive
@@ -37,9 +37,9 @@ public:
     // returns 'true' if changed, 'false' if unchanged
     bool computePathPermissionChildren();
 
-    bool isDirty();
-    bool setAggregate(std::shared_ptr<DataInfo>& di);
-    std::shared_ptr<DataInfo>& getAggregate();
+    bool setDirtyData(std::shared_ptr<DataInfo>& di);
+    std::shared_ptr<DataInfo>& getDirtyData();
+
 };
 
 #endif /* METADATA_INFO_H_ */

@@ -51,14 +51,14 @@ static struct fuse_operations pok_ops;
 static void init_pok_ops(fuse_operations *ops)
 {
     ops->create = pok_fcreate;
+    ops->mknod = pok_mknod;
     ops->unlink = pok_unlink;
     ops->open = pok_open;
     ops->release = pok_release;
-    ops->mknod = pok_mknod;
 
     ops->mkdir = pok_mkdir;
-    ops->opendir = pok_open;
     ops->rmdir = pok_rmdir;
+    ops->opendir = pok_open;
     ops->releasedir = pok_release;
     ops->readdir = pok_readdir;
 

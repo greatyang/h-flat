@@ -119,17 +119,13 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         pok_debug("stale path permission for path %s (%d vs required %d )",user_path, mdi->getMD().path_permission_verified(), pathPermissionTimeStamp);
         std::shared_ptr<MetadataInfo> mdi_parent;
         if (int err = lookup_parent(user_path, mdi_parent)){
-            if(err != -EACCES){
-                pok_debug("Error %d looking up parent",err);
-                return err;
-            }
+            if(err != -EACCES) return err;
         }
         inherit_path_permissions(mdi, mdi_parent);
-        if (int err = put_metadata(mdi) )
-            return err;
-        pok_debug("updated to timestamp %d",mdi->getMD().path_permission_verified());
+        int err = put_metadata(mdi);
+        if (err == -EAGAIN ) return lookup(user_path, mdi);
+        if (err) return err;
     }
-
     return check_path_permissions(mdi->getMD().path_permission());
 }
 

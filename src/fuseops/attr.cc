@@ -62,7 +62,9 @@ int pok_utimens(const char *user_path, const struct timespec tv[2])
 
     mdi->getMD().set_atime(tv[0].tv_sec);
     mdi->getMD().set_mtime(tv[1].tv_sec);
-    return put_metadata(mdi);
+    err = put_metadata(mdi);
+    if(err == -EAGAIN) return pok_utimens(user_path, tv);
+    return err;
 }
 
 /** Get file system statistics

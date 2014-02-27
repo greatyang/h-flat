@@ -71,7 +71,10 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
     /* set updated datainfo structure in mdi, flush existing dirty data if required */
     if(! mdi->setDirtyData(di) ){
         err = pok_fsync(user_path, 0, fi);
-        if(err) return err;
+        if(err){
+            pok_warning("Failed flushing dirty metadata&data kept for write aggregation.");
+            return err;
+        }
         mdi->setDirtyData(di);
     }
 
@@ -101,8 +104,9 @@ int pok_truncate(const char *user_path, off_t offset)
 
     mdi->getMD().set_size(offset);
     mdi->updateACMtime();
-    return put_metadata(mdi);
-
+    err = put_metadata(mdi);
+    if(err == -EAGAIN) return pok_truncate(user_path, offset);
+    return err;
 }
 
 /**

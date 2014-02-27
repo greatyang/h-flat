@@ -5,16 +5,6 @@
 
 using namespace util;
 
-int unlink_hardlink_source(const char *user_path)
-{
-    std::shared_ptr<MetadataInfo> mdi_source;
-    int err = get_metadata_userpath(user_path, mdi_source);
-    if( err) return err;
-
-    assert(mdi_source->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
-    return delete_metadata(mdi_source);
-}
-
 int unlink_force_update(const char *user_path)
 {
     std::shared_ptr<MetadataInfo> mdi_fu;
@@ -44,7 +34,42 @@ int unlink_lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi, std
     return 0;
 };
 
-/* TODO: Hand over all data keys to Housekeeping after a successfull unlink operation. */
+/* Need to serialize hardlink unlinks over HARDLINK_S key in addition to metadata key
+ * in case multiple clients try to unlink the same hardlink name in parallel (only one may succeed). */
+static int unlink_hardlink(const char *user_path, const std::shared_ptr<MetadataInfo> &mdiT)
+{
+    std::shared_ptr<MetadataInfo> mdiS;
+    int err = get_metadata_userpath(user_path, mdiS);
+    if( err) return err;
+    assert(mdiS->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
+
+    /* set HARDLINK_S link count to 0 */
+    if(mdiS->getMD().link_count() == 0) return -EINVAL;
+    mdiS->getMD().set_link_count(0);
+    err = put_metadata(mdiS);
+    if(err) return err;
+
+    /* unlink HARDLINK_T metadata key */
+    if(mdiT->getMD().link_count() == 1) err = delete_metadata(mdiT);
+    else{
+        mdiT->getMD().set_link_count( mdiT->getMD().link_count() - 1 );
+        mdiT->updateACtime();
+        err = put_metadata(mdiT);
+    }
+
+    /* If unlinking HARDLINK_T metadata key was unsuccessful, reset HARDLINK_S link count to 1. Otherwise delete HARDLINK_S key.
+     * Since HARDLINK_S key was used for serialization, no other client will interfere writing to it.  */
+    if(err){
+        mdiS->getMD().set_link_count(1);
+        REQ( put_metadata(mdiS) );
+        return err;
+    }
+    REQ( delete_metadata(mdiS) );
+    return 0;
+}
+
+
+/* TODO: Hand over all data keys to Housekeeping after a successful unlink operation. */
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
@@ -53,38 +78,30 @@ int pok_unlink(const char *user_path)
     int err = unlink_lookup(user_path, mdi, mdi_dir);
     if( err) return err;
 
-    if (posixok::Metadata_InodeType_HARDLINK_T == mdi->getMD().type())
-          err = unlink_hardlink_source(user_path);
+    bool hardlink  = mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T;
+    bool directory = S_ISDIR(mdi->getMD().mode());
+
+    if(hardlink)  err = unlink_hardlink(user_path, mdi);
+    else          err = delete_metadata(mdi);
+    if( err == -EAGAIN) return pok_unlink(user_path);
     if( err) return err;
 
-    /* Unlink Metadata Key */
-    if (mdi->getMD().link_count() > 1){
-        mdi->getMD().set_link_count( mdi->getMD().link_count() - 1 );
-        mdi->updateACtime();
-        err = put_metadata(mdi);
-    }
-    else{
-        err = delete_metadata(mdi);
-    }
-    if( err) return err;
-
-    /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
-    *  mkdir a   mv a b   rmdir b */
+   /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
+    *  mkdir a   mv a b   rmdir b.
+    *  Since serialization has been done over the md-key, no verification is necessary */
     if(PRIV->pmap.hasMapping(user_path)){
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
-        err = database_operation(std::bind(unlink_lookup, user_path, std::ref(mdi), std::ref(mdi_dir)),
-                entry);
+        REQ( database_operation([](){return 0;}, entry) );
     }
-    if (!err && S_ISDIR(mdi->getMD().mode()))
-        err = unlink_force_update(user_path);
-    if(!err)
-        err = delete_directory_entry(mdi_dir, path_to_filename(user_path));
 
-    if (err) pok_warning("Failure in the middle of an unlink operation");
-    return err;
+    /* remove force_update that (might) exist for the current path when unlinking a directory that has been moved. */
+    if (directory) REQ(unlink_force_update(user_path));
 
+    /* remove directory entry */
+    REQ( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
+    return 0;
 }
 
 /** File open operation
@@ -190,12 +207,7 @@ int pok_create(const char *user_path, mode_t mode)
 
     /* initialize metadata and write metadata-key to drive*/
     initialize_metadata(mdi, mdi_dir, mode);
-    err = create_metadata(mdi);
-    if (err) {
-        pok_warning("Failed creating metadata key after successfully creating directory-entry key. \n"
-                "Dangling directory entry!");
-        return err;
-    }
+    REQ ( create_metadata(mdi) );
     return 0;
 }
 

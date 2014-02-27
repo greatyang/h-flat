@@ -16,12 +16,11 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
     if(!status.ok()){
-        if(status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
-            return -ENOENT;
-        pok_warning("EIO");
+        if(status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND) return -ENOENT;
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
-
     }
+
     posixok::Metadata md;
     if(! md.ParseFromString(* record->value()) )
         return -EINVAL;
@@ -29,41 +28,41 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     return 0;
 }
 
+
 int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    pok_debug("PUT key %s",mdi->getSystemPath().c_str());
     int64_t version = mdi->getCurrentVersion();
     assert(version);
 
     KineticRecord record(mdi->getMD().SerializeAsString(), std::to_string(version + 1), "", Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), std::to_string(version), WriteMode::REQUIRE_SAME_VERSION, record);
 
-    /* If someone else has updated the metadata key since it has been read in, try to merge the changes.
-     * If that should turn out to be impossible, overwrite local changes and return -EAGAIN. */
-    if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) {
-       unique_ptr<KineticRecord> record;
-       KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
-
-       if(status.ok()){
-           posixok::Metadata md;
-           if(!md.ParseFromString(* record->value()))
-               return -EINVAL;
-
-           if(mdi->mergeMD(md, to_int64(record->version())))
-               return put_metadata(mdi);
-
-           mdi->setMD(md, to_int64(record->version()));
-           return -EAGAIN;
-       }
-    }
-    if (!status.ok()){
-        pok_warning("EIO");
+    if(!status.ok()){
+        PRIV->lookup_cache.invalidate(mdi->getSystemPath());
+        if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) return -EAGAIN;
+        if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND) return -ENOENT;
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
+    pok_debug("PUT key %s",mdi->getSystemPath().c_str());
     mdi->setCurrentVersion(version + 1);
     return 0;
 }
+
+int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<void()> md_update)
+{
+    md_update();
+
+    int err = put_metadata(mdi);
+    if(err != -EAGAIN)
+        return err;
+    err = get_metadata(mdi);
+    if(err)
+        return err;
+    return put_metadata_forced(mdi, md_update);
+}
+
 
 int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
@@ -76,7 +75,7 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
         return -EEXIST;
     if (!status.ok()){
-        pok_warning("EIO");
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
@@ -87,16 +86,16 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
     KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), std::to_string(mdi->getCurrentVersion()), WriteMode::REQUIRE_SAME_VERSION);
+    PRIV->lookup_cache.invalidate(mdi->getSystemPath());
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
-        return -EINVAL;
+        return -EAGAIN;
     if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
         return -ENOENT;
     if (!status.ok()){
-        pok_warning("EIO");
+        pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
-    PRIV->lookup_cache.invalidate(mdi->getSystemPath());
     return 0;
 }
 

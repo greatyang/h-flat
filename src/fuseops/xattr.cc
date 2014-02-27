@@ -38,7 +38,9 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     xattr->set_name(attr_name);
     xattr->set_value(attr_value, attr_size);
 
-    return put_metadata(mdi);
+    err = put_metadata(mdi);
+    if(err == -EAGAIN) return pok_setxattr(user_path, attr_name, attr_value, attr_size, flags);
+    return err;
 }
 
 int pok_setxattr_apple(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags, uint32_t position)
@@ -99,7 +101,9 @@ int pok_removexattr(const char *user_path, const char *attr_name)
     for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
         if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
             mdi->getMD().mutable_xattr()->DeleteSubrange(i, 1);
-            return put_metadata(mdi);
+            err = put_metadata(mdi);
+            if(err == -EAGAIN) return pok_removexattr(user_path, attr_name);
+            return err;
         }
     }
     return -ENOATTR;

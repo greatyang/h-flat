@@ -112,23 +112,25 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     if(mode != (mode_t) -1) mdi->getMD().set_mode(mode);
     mdi->updateACtime();
 
-    bool db_updated = false;
-    if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren()) {
+    err = put_metadata(mdi);
+    if(err == -EAGAIN)
+       return do_permission_change(user_path, mode, uid, gid);
+    if(err) return err;
+
+    /* note in database if path permissions changed */
+    if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren())
+    {
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_NONE);
         entry.set_origin(user_path);
 
-        err = util::database_operation(std::bind(permission_lookup, user_path, std::ref(mdi), mode, uid, gid), entry);
-        if(err) return err;
-
-        mdi->getMD().set_path_permission_verified(PRIV->pmap.getSnapshotVersion());
-        db_updated = true;
+        /* the permission change already happened, no need to verify that it is permitted in database_operation */
+        REQ( util::database_operation([](){return 0;}, entry) );
+        std::int64_t snapshot_version = PRIV->pmap.getSnapshotVersion();
+        err = put_metadata_forced(mdi, [&mdi, &snapshot_version](){ mdi->getMD().set_path_permission_verified(snapshot_version);});
+        assert(!err || err == -ENOENT);
     }
-
-    err = put_metadata(mdi);
-    if(err && db_updated)
-        pok_warning("failure applying permission change after successful database update.");
-    return err;
+    return 0;
 }
 
 

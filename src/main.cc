@@ -108,8 +108,9 @@ int main(int argc, char *argv[])
     try {
         priv = new pok_priv();
     }
-    catch(std::exception& e)
-    pok_error("Exception thrown during mount operation. Reason: %s",e.what());
-
+    catch(std::exception& e){
+        pok_error("Exception thrown during mount operation. Reason: %s",e.what());
+        exit(EXIT_FAILURE);
+    }
     return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

@@ -5,13 +5,18 @@
 
 /* Metadata */
 int get_metadata    (const std::shared_ptr<MetadataInfo> &mdi);
-int put_metadata    (const std::shared_ptr<MetadataInfo> &mdi); // in case of version missmatch, attempt to merge metadata updates but can fail with -EAGAIN
-int create_metadata (const std::shared_ptr<MetadataInfo> &mdi); // fails on   version missmatch
-int delete_metadata (const std::shared_ptr<MetadataInfo> &mdi); // fails on   version missmatch
+int create_metadata (const std::shared_ptr<MetadataInfo> &mdi);
+int delete_metadata (const std::shared_ptr<MetadataInfo> &mdi); // version missmatch -> -EAGAIN
+int put_metadata    (const std::shared_ptr<MetadataInfo> &mdi); // version missmatch -> -EAGAIN
+// forced put_metadata uses supplied md_update function on remote metadata in case on version missmatch. Used when metadata
+// operation has to succeed regardless of the activity of other clients ( except if key is deleted ).
+// E.g. updating path permissions. Never return -EAGAIN.
+int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<void()> md_update);
+
 
 /* Data */
 int get_data    (const std::string &key, std::shared_ptr<DataInfo> &di);
-int put_data    (const std::shared_ptr<DataInfo> &di);          // in case of version missmatch, will always resolve using incremental update
+int put_data    (const std::shared_ptr<DataInfo> &di);          // will always resolve version miss-match using incremental update
 int delete_data (const std::shared_ptr<DataInfo> &di);          // ignores version
 
 /* Database */

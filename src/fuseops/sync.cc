@@ -1,5 +1,6 @@
 #include "main.h"
 #include "kinetic_helper.h"
+#include "debug.h"
 
 /** Synchronize file contents
  *
@@ -14,11 +15,11 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    /* The only reason for dirty data or metadata is an aggregated write operation.  */
     std::shared_ptr<DataInfo> di = mdi->getDirtyData();
     if(! di || ! di->hasUpdates() )
         return 0;
 
+    /* Data and metadata is flushed as a unit, synchronized over the metadata key. Different flush rules for O_APPEND and regular */
     int blocknum = util::to_int64(di->getKey().substr(di->getKey().find_first_of('_',0)+1,di->getKey().size()));
     size_t newsize = std::max((std::uint64_t) PRIV->blocksize * blocknum + di->data().size(), (std::uint64_t) mdi->getMD().size());
     if(mdi->getMD().size() < newsize || PRIV->posix == PosixMode::FULL){
@@ -26,12 +27,14 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
        mdi->getMD().set_blocks((newsize / PRIV->blocksize) + 1);
        mdi->updateACMtime();
        err = put_metadata(mdi);
-       if(err){
+       /* O_APPEND -> can't allow non-serialized data changes*/
+       if(err && (fi->flags & O_APPEND)){
            PRIV->data_cache.invalidate(di->getKey());
            return err;
        }
+       if(err == -EAGAIN) return pok_fsync(user_path, datasync, fi);
+       if(err) pok_error("Impossible Error. ");
     }
-
    /* write data key */
    return put_data(di);
 }

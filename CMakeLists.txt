@@ -103,15 +103,9 @@ target_link_libraries(POSIX-o-K
 if(APPLE)
 add_executable(test
     src/test/pok_test.cc
-    
     src/test/pathmap_db_test.cc
     src/pathmap_db.cc
     src/generated/database.pb.cc
-    
-    src/test/metadata_info_test.cc
-    src/metadata_info.cc
-    src/data_info.cc
-    src/generated/metadata.pb.cc
 )
 add_dependencies(test
     kinetic_cpp_client

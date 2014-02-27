@@ -21,12 +21,9 @@ static int llconfig = 0;
 #define pok_trace(message...)   pok_printlog(1, __FUNCTION__, __FILE__, __LINE__, ## message)
 #define pok_debug(message...)   pok_printlog(2, __FUNCTION__, __FILE__, __LINE__, ## message)
 #define pok_warning(message...) pok_printlog(3, __FUNCTION__, __FILE__, __LINE__, ## message)
-#define pok_error(message...)   { pok_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
+#define pok_error(message...)   pok_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message)
 
-#define kill_compound_fail()    \
-pok_error(  "Unrecoverable File System Error. \n "  \
-            "Failed undoing a compound file system operation that succeeded only partially. \n" \
-            "Killing myself now. Goodbye.")
+#define REQ(fun) if(fun){ pok_error("Unrecoverable File System Error. \n Killing myself now. Goodbye."); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
 
 static void pok_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
 {

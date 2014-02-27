@@ -18,7 +18,7 @@ int pok_rmdir(const char *user_path)
     if( err) return err;
 
     string keystart = std::to_string(mdi->getMD().inode_number()) + ":";
-    string keyend   = std::to_string(mdi->getMD().inode_number()) + ":" + static_cast<char>(251);
+    string keyend   = std::to_string(mdi->getMD().inode_number()) + ":" + static_cast<char>(255);
     unique_ptr<vector<string>> keys(new vector<string>());
     PRIV->kinetic->GetKeyRange(keystart, keyend, 1, keys);
 
@@ -45,8 +45,8 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
     pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
     if(PRIV->posix == PosixMode::FULL){
-        mdi_parent->updateACMtime();
-        put_metadata(mdi_parent);
+        int err = put_metadata_forced(mdi_parent, [&mdi_parent](){mdi_parent->updateACMtime();});
+        if (err)  pok_warning("Failed updating parent directory time stamps after successfully adding directory entry.");
     }
     return 0;
 }
@@ -62,8 +62,8 @@ int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
     pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
     if(PRIV->posix == PosixMode::FULL){
-        mdi_parent->updateACMtime();
-        put_metadata(mdi_parent);
+        int err = put_metadata_forced(mdi_parent, [&mdi_parent](){mdi_parent->updateACMtime();});
+        if (err)  pok_warning("Failed updating parent directory time stamps after successfully removing directory entry.");
     }
     return 0;
 }

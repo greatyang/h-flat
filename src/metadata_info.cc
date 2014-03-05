@@ -263,7 +263,6 @@ bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t ver
     md_mutable.set_atime( std::max(  md_mutable.atime(), md_update.atime() ) );
     md_mutable.set_mtime( std::max(  md_mutable.mtime(), md_update.mtime() ) );
     md_mutable.set_ctime( std::max(  md_mutable.ctime(), md_update.ctime() ) );
-    md_mutable.set_force_update_version( std::max( md_mutable.force_update_version(), md_update.force_update_version() ) );
     md_mutable.set_path_permission_verified( std::max( md_mutable.path_permission_verified(), md_update.path_permission_verified() ) );
 
     currentVersion = version;

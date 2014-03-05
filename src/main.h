@@ -85,7 +85,7 @@ namespace util
     std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);
     std::string path_to_filename(const std::string &path);
     int database_update(void);
-    int database_operation(std::function<int()> verify, posixok::db_entry &entry);
+    int database_operation(posixok::db_entry &entry);
 }
 
 #endif

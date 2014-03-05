@@ -98,11 +98,6 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
     if (check_access(mdi, R_OK)) // ls requires read permission
         return -EACCES;
 
-    /* A directory entry has been moved out / moved into this directory due to a directory move. */
-    if (mdi->getMD().has_force_update_version() && mdi->getMD().force_update_version() > PRIV->pmap.getSnapshotVersion())
-        if (( err = util::database_update() ))
-            return err;
-
     string keystart = std::to_string(mdi->getMD().inode_number()) + "|";
     string keyend   = std::to_string(mdi->getMD().inode_number()) + "|" + static_cast<char>(251);
     size_t maxsize = 10000;

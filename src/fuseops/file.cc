@@ -93,7 +93,7 @@ int pok_unlink(const char *user_path)
         posixok::db_entry entry;
         entry.set_type(posixok::db_entry_TargetType_REMOVED);
         entry.set_origin(user_path);
-        REQ( database_operation([](){return 0;}, entry) );
+        REQ( database_operation(entry) );
     }
 
     /* remove force_update that (might) exist for the current path when unlinking a directory that has been moved. */

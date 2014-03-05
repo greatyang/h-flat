@@ -78,12 +78,12 @@ static int rename_softlink(const char *user_path_from, const char *user_path_to,
 
     entry.set_type(posixok::db_entry_TargetType_REMOVED);
     entry.set_origin(user_path_from);
-    REQ( util::database_operation([](){return 0;},entry) );
+    REQ( util::database_operation(entry) );
 
     entry.set_type(entry.SYMLINK);
     entry.set_origin(user_path_to);
     entry.set_target(buffer);
-    REQ( util::database_operation([](){return 0;},entry) );
+    REQ( util::database_operation(entry) );
 
     return rename_regular(mdito, mdifrom);
 }
@@ -110,25 +110,17 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     entry.set_type(entry.MOVE);
     entry.set_origin(user_path_from);
     entry.set_target(user_path_to);
-    REQ ( util::database_operation( [](){return 0;}, entry ) );
-
-    std::uint64_t snapshot_version = PRIV->pmap.getSnapshotVersion();
-    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
+    REQ ( util::database_operation( entry ) );
 
     /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it. */
+    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
     mdi_fu->setSystemPath(dir_mdifrom->getSystemPath()+"/"+util::path_to_filename(user_path_from));
     if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE)
         REQ ( delete_metadata(mdi_fu) );
 
     /* Create a new force_udpate metadata key at target location.  */
     mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
-    mdito->getMD().set_force_update_version( snapshot_version );
     REQ ( create_metadata(mdito) );
-
-    /* Set force_update_version property in parent directories. */
-    put_metadata_forced(dir_mdifrom,[&dir_mdifrom, &snapshot_version](){dir_mdifrom->getMD().set_force_update_version( snapshot_version );});
-    if(dir_mdifrom != dir_mdito)
-        put_metadata_forced(dir_mdito,[&dir_mdito, &snapshot_version](){dir_mdito->getMD().set_force_update_version( snapshot_version );});
 
     /* Update ACtime for POSIX compliance */
     if(PRIV->posix == PosixMode::FULL)

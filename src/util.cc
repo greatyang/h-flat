@@ -92,7 +92,7 @@ int database_update(void)
 
 /* If put_db_entry fails due to an out-of-date snapshot, the file system operation needs to be re-verified using the supplied function with
  * the updated snaphshot before put_db_entry can be retried. */
-int database_operation(std::function<int()> verify, posixok::db_entry &entry)
+int database_operation(posixok::db_entry &entry)
 {
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
 
@@ -105,8 +105,7 @@ int database_operation(std::function<int()> verify, posixok::db_entry &entry)
     }
     if (  err != -EEXIST) return err;
     if (( err = database_update() )) return err;
-    if (( err = verify()          )) return err;
-    return database_operation(verify, entry);
+    return database_operation(entry);
 }
 
 

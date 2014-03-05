@@ -124,8 +124,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
         entry.set_type(posixok::db_entry_TargetType_NONE);
         entry.set_origin(user_path);
 
-        /* the permission change already happened, no need to verify that it is permitted in database_operation */
-        REQ( util::database_operation([](){return 0;}, entry) );
+        REQ( util::database_operation(entry) );
         std::int64_t snapshot_version = PRIV->pmap.getSnapshotVersion();
         err = put_metadata_forced(mdi, [&mdi, &snapshot_version](){ mdi->getMD().set_path_permission_verified(snapshot_version);});
         assert(!err || err == -ENOENT);

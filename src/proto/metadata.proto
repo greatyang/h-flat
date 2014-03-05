@@ -12,9 +12,7 @@ message Metadata {
         FORCE_UPDATE = 3;  // place-holder metadata-key used to synchronize directory moves 
     }
     required InodeType  type = 1;
-    optional int64      force_update_version = 3 [default = 0]; // forcing database update when stumbling over metadata affected by path-mappings.
-                                                                // this could be either due to a directory move or a symbolic link
-    
+      
     //////////////////////////////////////////
     // POSIX Metadata
     //

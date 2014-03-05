@@ -64,14 +64,14 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
              posixok::db_entry entry;
              entry.set_type(posixok::db_entry_TargetType_REMOVED);
              entry.set_origin(target);
-             int err = util::database_operation([](){return 0;}, entry);
+             int err = util::database_operation(entry);
              if(err) return err;
          }
         if(PRIV->pmap.hasMapping(origin.c_str())){
              posixok::db_entry entry;
              entry.set_type(posixok::db_entry_TargetType_REMOVED);
              entry.set_origin(origin);
-             int err = util::database_operation([](){return 0;}, entry);
+             int err = util::database_operation(entry);
              if(err) return err;
          }
         get_metadata_userpath(target.c_str(), target_mdi);
@@ -127,7 +127,7 @@ int fsck_directory(const char* user_path, const std::shared_ptr<MetadataInfo> &m
              posixok::db_entry entry;
              entry.set_type(posixok::db_entry_TargetType_REMOVED);
              entry.set_origin(filepath);
-             err = util::database_operation([](){return 0;}, entry);
+             err = util::database_operation(entry);
              if(err) return err;
          }
          err = delete_directory_entry(mdi, entry.c_str());

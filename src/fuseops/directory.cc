@@ -17,8 +17,8 @@ int pok_rmdir(const char *user_path)
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    string keystart = std::to_string(mdi->getMD().inode_number()) + ":";
-    string keyend   = std::to_string(mdi->getMD().inode_number()) + ":" + static_cast<char>(255);
+    string keystart = std::to_string(mdi->getMD().inode_number()) + "|";
+    string keyend   = std::to_string(mdi->getMD().inode_number()) + "|" + static_cast<char>(255);
     unique_ptr<vector<string>> keys(new vector<string>());
     PRIV->kinetic->GetKeyRange(keystart, keyend, 1, keys);
 
@@ -32,7 +32,7 @@ int pok_rmdir(const char *user_path)
 
 int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-    string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
+    string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + "|" + filename;
 
     KineticRecord record("", std::to_string(1), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
@@ -53,7 +53,7 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
 
 int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename)
 {
-    string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + ":" + filename;
+    string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + "|" + filename;
 
     KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
     if (!status.ok())
@@ -103,8 +103,8 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
         if (( err = util::database_update() ))
             return err;
 
-    string keystart = std::to_string(mdi->getMD().inode_number()) + ":";
-    string keyend   = std::to_string(mdi->getMD().inode_number()) + ":" + static_cast<char>(251);
+    string keystart = std::to_string(mdi->getMD().inode_number()) + "|";
+    string keyend   = std::to_string(mdi->getMD().inode_number()) + "|" + static_cast<char>(251);
     size_t maxsize = 10000;
     unique_ptr<vector<std::string>> keys(new vector<string>());
 
@@ -114,7 +114,7 @@ int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, of
         keys->clear();
         PRIV->kinetic->GetKeyRange(keystart, keyend, maxsize, keys);
         for (auto& element : *keys) {
-            std::string filename = element.substr(element.find_first_of(':') + 1, element.length());
+            std::string filename = element.substr(element.find_first_of('|') + 1, element.length());
             filldir(buffer, filename.c_str(), NULL, 0);
         }
     } while (keys->size() == maxsize);

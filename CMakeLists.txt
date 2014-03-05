@@ -92,6 +92,7 @@ add_executable(POSIX-o-K
      src/fuseops/sync.cc
      src/generated/database.pb.cc
      src/generated/metadata.pb.cc
+     src/fsck/fsck.cc
 )
 add_dependencies(POSIX-o-K
     kinetic_cpp_client
@@ -100,17 +101,16 @@ target_link_libraries(POSIX-o-K
     ${LIBRARY_DEPENDENCIES}
 )
 
-if(APPLE)
-add_executable(test
-    src/test/pok_test.cc
-    src/test/pathmap_db_test.cc
-    src/pathmap_db.cc
-    src/generated/database.pb.cc
-)
-add_dependencies(test
-    kinetic_cpp_client
-)
-target_link_libraries(test
-    ${LIBRARY_DEPENDENCIES}
-)
-endif(APPLE)
+
+#add_executable(test
+#    src/test/pok_test.cc
+#    src/test/pathmap_db_test.cc
+#    src/pathmap_db.cc
+#    src/generated/database.pb.cc
+#)
+#add_dependencies(test
+#    kinetic_cpp_client
+#)
+#target_link_libraries(test
+#    ${LIBRARY_DEPENDENCIES}
+#)

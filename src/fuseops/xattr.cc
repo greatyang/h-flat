@@ -6,6 +6,8 @@
 # define ENOATTR ENODATA        /* No such attribute */
 #endif
 
+extern int fsck_directory(const char*, const std::shared_ptr<MetadataInfo>&);
+
 /* xattr_flags:
  * XATTR_CREATE specifies a pure create, which fails if the named attribute exists already.
  * XATTR_REPLACE specifies a pure replace operation, which fails if the named attribute does not already exist.
@@ -17,6 +19,11 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
+
+    /* (Ab)using setxattr as a possibility to start a fsck on a specific directory */
+    if(std::string("fsck").compare(attr_name) == 0)
+        return fsck_directory(user_path, mdi);
+
 
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;
 

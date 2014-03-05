@@ -141,7 +141,6 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
 int pok_rename(const char *user_path_from, const char *user_path_to)
 {
     pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
-    util::database_update();
     std::shared_ptr<MetadataInfo> dir_mdifrom;
     std::shared_ptr<MetadataInfo> dir_mdito;
     std::shared_ptr<MetadataInfo> mdifrom;
@@ -161,13 +160,19 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     if ((err = create_directory_entry(dir_mdito, util::path_to_filename(user_path_to)) ))
         return err;
 
+    /* create recovery key in order to guarantee that fsck works correctly in all cases if client
+     * crashes somewhere between this point and successfully finishing the rename operation. */
+    std::string recovery_direntry = util::path_to_filename(user_path_to) + "|recovery|" + user_path_from;
+    REQ( create_directory_entry (dir_mdito, recovery_direntry) );
+
     /* Delete old directory entry: Synchronization point (2) */
     if (( err = delete_directory_entry(dir_mdifrom, util::path_to_filename(user_path_from)) )){
-        REQ ( delete_directory_entry(dir_mdito, util::path_to_filename(user_path_to)) );
+        REQ ( delete_directory_entry (dir_mdito, util::path_to_filename(user_path_to)) );
+        REQ ( delete_directory_entry (dir_mdito, recovery_direntry) );
         return err;
     }
 
-    pok_trace("past serialization points: removed & created directory entries");
+    pok_trace("passed serialization points");
 
     /* The actual move operation is type dependent */
     bool directory = S_ISDIR(mdifrom->getMD().mode());
@@ -179,6 +184,9 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     if( softlink  ) REQ( rename_softlink( user_path_from, user_path_to, mdito, mdifrom) );
     if( hardlink )  REQ( rename_hardlink( user_path_from, mdito) );
     if( regular  )  REQ( rename_regular(  mdito, mdifrom) );
+
+    /* remove recovery key */
+    REQ( delete_directory_entry (dir_mdito, recovery_direntry ));
 
     /* invalidate cache */
     PRIV->lookup_cache.invalidate(mdito->getSystemPath());

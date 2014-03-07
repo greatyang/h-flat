@@ -3,31 +3,32 @@
 #define METADATA_INFO_H_
 #include "metadata.pb.h"
 #include "data_info.h"
+#include "vector_clock.h"
 #include <memory>
 #include <map>
 
-
 class MetadataInfo final
 {
+private:
     std::string       systemPath;       // key in flat namespace where metadata is stored
-    std::int64_t      currentVersion;   // current version of metadata key
-    std::shared_ptr<DataInfo> dirty_data;
+    VectorClock       keyVersion;
 
-    posixok::Metadata md_const;         // exact copy of on-drive metadata with version currentVersion
-    posixok::Metadata md_mutable;       // metadata structure containing local changes not yet written to drive
+    posixok::Metadata md;               // metadata structure
+    std::shared_ptr<DataInfo> dirty_data; // reference to data block updated by a write call, compare data.cc
+
 
 public:
-    explicit MetadataInfo();
     explicit MetadataInfo(const std::string &key);
     ~MetadataInfo();
 
 public:
-    void                setMD(const posixok::Metadata & md, std::int64_t version);
+    void                setMD(const posixok::Metadata & md, const VectorClock &version);
     posixok::Metadata & getMD();
     void                setSystemPath(const std::string &key);
-    const std::string & getSystemPath();
-    void                setCurrentVersion(std::int64_t version); // after metadata version increased due to a successful put
-    std::int64_t        getCurrentVersion();
+    const std::string & getSystemPath() const;
+    void                setKeyVersion(const VectorClock &vc);
+    const VectorClock & getKeyVersion() const;
+
 
     // convenience functions to update time-stamps according to current local clock
     void updateACMtime();
@@ -38,7 +39,6 @@ public:
 
     bool setDirtyData(std::shared_ptr<DataInfo>& di);
     std::shared_ptr<DataInfo>& getDirtyData();
-
 };
 
 #endif /* METADATA_INFO_H_ */

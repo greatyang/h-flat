@@ -47,8 +47,8 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
     PRIV->lookup_cache.invalidate(target);
 
     /* if hardlink -> obtain HARDLINK_S md-keys before continuing */
-    if( (target_mdi->getCurrentVersion() > -1 && target_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
-      ||(origin_mdi->getCurrentVersion() > -1 && origin_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
+    if( (target_mdi->getMD().inode_number() && target_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
+      ||(origin_mdi->getMD().inode_number() && origin_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
       )
     {
         get_metadata_userpath(target.c_str(), target_mdi);
@@ -56,8 +56,8 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
     }
 
     /* if directory -> obtain FORCE_UPDATE md-key before continuing. */
-    if( (target_mdi->getCurrentVersion() > -1 && S_ISDIR(target_mdi->getMD().mode()))
-      ||(origin_mdi->getCurrentVersion() > -1 && S_ISDIR(origin_mdi->getMD().mode()))
+    if( (target_mdi->getMD().inode_number() && S_ISDIR(target_mdi->getMD().mode()))
+      ||(origin_mdi->getMD().inode_number() && S_ISDIR(origin_mdi->getMD().mode()))
       )
     {
         if(PRIV->pmap.hasMapping(target.c_str())){
@@ -79,17 +79,17 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
     }
 
     /* origin md-key doesn't exist -> copy from target location */
-    if(origin_mdi->getCurrentVersion() == -1){
-        assert(target_mdi->getCurrentVersion() != -1);
+    if(origin_mdi->getMD().inode_number() == 0){
+        assert(target_mdi->getMD().inode_number());
         assert(!S_ISDIR( target_mdi->getMD().mode() ));
-        KineticRecord record(target_mdi->getMD().SerializeAsString(), std::to_string(target_mdi->getCurrentVersion() + 1), "",
+        KineticRecord record(target_mdi->getMD().SerializeAsString(), target_mdi->getKeyVersion().serialize(), "",
                 com::seagate::kinetic::proto::Message_Algorithm_SHA1);
         KineticStatus status = PRIV->kinetic->Put(origin_mdi->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
         if(!status.ok()) return -EIO;
     }
 
     /* delete target metadata key if it exists */
-    if(target_mdi->getCurrentVersion() != -1){
+    if(target_mdi->getMD().inode_number()){
         KineticStatus status = PRIV->kinetic->Delete(target_mdi->getSystemPath(), "", WriteMode::IGNORE_VERSION);
         if(!status.ok()) return -EIO;
     }

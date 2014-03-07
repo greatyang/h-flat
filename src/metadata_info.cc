@@ -3,15 +3,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-
-
-MetadataInfo::MetadataInfo() :
-        systemPath(), currentVersion(0)
-{
-}
-
 MetadataInfo::MetadataInfo(const std::string &key) :
-        systemPath(key), currentVersion(0)
+        systemPath(key), keyVersion()
 {
 }
 
@@ -19,7 +12,7 @@ MetadataInfo::~MetadataInfo()
 {
 }
 
-const std::string & MetadataInfo::getSystemPath()
+const std::string & MetadataInfo::getSystemPath() const
 {
     return systemPath;
 }
@@ -29,34 +22,32 @@ void MetadataInfo::setSystemPath(const std::string &path)
     systemPath = path;
 }
 
-std::int64_t MetadataInfo::getCurrentVersion()
+const VectorClock & MetadataInfo::getKeyVersion() const
 {
-    return currentVersion;
+    return keyVersion;
 }
 
-void MetadataInfo::setCurrentVersion(std::int64_t version)
+void MetadataInfo::setKeyVersion(const VectorClock &vc)
 {
-    currentVersion = version;
+    keyVersion=vc;
 }
-
 
 void MetadataInfo::updateACMtime()
 {
     std::time_t now;
     std::time(&now);
-    md_mutable.set_atime(now);
-    md_mutable.set_mtime(now);
-    md_mutable.set_ctime(now);
+    md.set_atime(now);
+    md.set_mtime(now);
+    md.set_ctime(now);
 }
 
 void MetadataInfo::updateACtime()
 {
     std::time_t now;
     std::time(&now);
-    md_mutable.set_atime(now);
-    md_mutable.set_ctime(now);
+    md.set_atime(now);
+    md.set_ctime(now);
 }
-
 
 bool MetadataInfo::setDirtyData(std::shared_ptr<DataInfo>& di)
 {
@@ -70,29 +61,28 @@ std::shared_ptr<DataInfo>& MetadataInfo::getDirtyData()
     return dirty_data;
 }
 
-void MetadataInfo::setMD(const posixok::Metadata & md, std::int64_t version)
+void MetadataInfo::setMD(const posixok::Metadata & md, const VectorClock &vc)
 {
-    md_mutable = md;
-    md_const = md;
-    currentVersion = version;
+    this->md = md;
+    this->keyVersion = vc;
 }
 
 posixok::Metadata & MetadataInfo::getMD()
 {
-    return md_mutable;
+    return md;
 }
 
 bool MetadataInfo::computePathPermissionChildren()
 {
     /* Execute permission for user / group / other */
-    bool user =  md_mutable.mode() & S_IXUSR;
-    bool group = md_mutable.mode() & S_IXGRP;
-    bool other = md_mutable.mode() & S_IXOTH;
+    bool user =  md.mode() & S_IXUSR;
+    bool group = md.mode() & S_IXGRP;
+    bool other = md.mode() & S_IXOTH;
 
     std::vector<posixok::Metadata_ReachabilityEntry> v;
     posixok::Metadata_ReachabilityEntry e;
-    e.set_uid(md_mutable.uid());
-    e.set_gid(md_mutable.gid());
+    e.set_uid(md.uid());
+    e.set_gid(md.gid());
     auto addEntry = [&v,&e](posixok::Metadata_ReachabilityType type) -> void {
         e.set_type(type);
         v.push_back(e);
@@ -127,28 +117,28 @@ bool MetadataInfo::computePathPermissionChildren()
     };
     /* Remove all entries that are duplicates of entries stored in pathPermission.
      * If a restriction is already enforced by a parent directory, there's no need to enforce it again. */
-    for (int i = 0; i < md_mutable.path_permission_size(); i++)
+    for (int i = 0; i < md.path_permission_size(); i++)
         for (auto it = v.begin(); it != v.end(); it++)
-            if (equal(md_mutable.path_permission(i), *it))
+            if (equal(md.path_permission(i), *it))
                 v.erase(it);
 
 
     auto ppc_contains = [this, equal](const posixok::Metadata_ReachabilityEntry &e) -> bool {
-        for (int i = 0; i < md_mutable.path_permission_children_size(); i++)
-            if (equal(md_mutable.path_permission_children(i), e))
+        for (int i = 0; i < md.path_permission_children_size(); i++)
+            if (equal(md.path_permission_children(i), e))
                 return true;
         return false;
     };
     /* Check if path_permission_children changed, if yes store in md. */
     bool changed = false;
-    if(md_mutable.path_permission_children_size() != (int)v.size()) changed = true;
+    if(md.path_permission_children_size() != (int)v.size()) changed = true;
     for (auto it = v.begin(); it != v.end(); it++)
         if(!ppc_contains(*it)) changed = true;
 
     if (changed) {
-        md_mutable.mutable_path_permission_children()->Clear();
+        md.mutable_path_permission_children()->Clear();
         for (auto it = v.begin(); it != v.end(); it++) {
-            posixok::Metadata_ReachabilityEntry *entry = md_mutable.mutable_path_permission_children()->Add();
+            posixok::Metadata_ReachabilityEntry *entry = md.mutable_path_permission_children()->Add();
             entry->CopyFrom(*it);
         }
     }

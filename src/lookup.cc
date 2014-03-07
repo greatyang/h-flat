@@ -17,8 +17,7 @@ int get_metadata_userpath(const char *user_path, std::shared_ptr<MetadataInfo> &
         return pathPermissionTimeStamp;
 
     /* Step 2: Get metadata from flat namespace */
-    if(!mdi) mdi.reset(new MetadataInfo());
-    mdi->setSystemPath(key);
+    mdi.reset(new MetadataInfo(key));
     return get_metadata(mdi);
 }
 
@@ -76,24 +75,23 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         return pathPermissionTimeStamp;
 
     /* Step 2: Get metadata from flat namespace */
-    bool cached = PRIV->lookup_cache.get(key,mdi);
+    bool cached = PRIV->lookup_cache.get(key, mdi);
 
     if(!cached){
-        if(!mdi) mdi.reset(new MetadataInfo());
-        mdi->setSystemPath(key);
+        mdi.reset(new MetadataInfo(key));
         int err = get_metadata(mdi);
         if (err == -ENOENT){
-            mdi->setCurrentVersion(-1);
             PRIV->lookup_cache.add(key,mdi);
         }
         if (err) return err;
     }
-    if(mdi->getCurrentVersion() == -1)
+    if(mdi->getMD().inode_number() == 0)
         return -ENOENT;
 
     /* Step 3: Special inode types: Follow hardlink_source inode types in the lookup operation, update on force_update. */
     if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S) {
         if(!cached){
+            pok_debug("type HARDLINK_S for user_path %s",user_path);
             std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo(key));
             mdi_source->getMD().set_type( posixok::Metadata_InodeType_HARDLINK_S );
             mdi_source->getMD().set_inode_number( mdi->getMD().inode_number() );

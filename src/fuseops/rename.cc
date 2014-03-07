@@ -56,7 +56,7 @@ static int rename_regular(
     mdifrom->updateACtime();
 
     /* store md-key referenced by mdfrom in location pointed to be mdito */
-    KineticRecord record(mdifrom->getMD().SerializeAsString(), std::to_string(mdifrom->getCurrentVersion() + 1), "",
+    KineticRecord record(mdifrom->getMD().SerializeAsString(), mdito->getKeyVersion().serialize(), "",
             com::seagate::kinetic::proto::Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdito->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
     if(!status.ok()) return -EIO;
@@ -113,8 +113,7 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     REQ ( util::database_operation( entry ) );
 
     /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it. */
-    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo());
-    mdi_fu->setSystemPath(dir_mdifrom->getSystemPath()+"/"+util::path_to_filename(user_path_from));
+    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo( dir_mdifrom->getSystemPath()+"/"+util::path_to_filename(user_path_from) ));
     if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE)
         REQ ( delete_metadata(mdi_fu) );
 
@@ -141,7 +140,7 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     if (err) return err;
 
     /* Remove potentially existing target if possible */
-    if(mdito->getCurrentVersion() != -1){
+    if(mdito->getMD().inode_number()){
         if (S_ISDIR(mdito->getMD().mode()))
              err = pok_rmdir(user_path_to);
         else err = pok_unlink(user_path_to);

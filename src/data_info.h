@@ -2,29 +2,30 @@
 #define DATA_INFO_H
 #include <string>
 #include <list>
+#include "vector_clock.h"
 
 class DataInfo final {
 private:
     std::string   key;
-    std::int64_t  currentVersion;       // current version of data key in flat namespace
-    std::string d;                      // the actual data
+    VectorClock   keyVersion;
 
-    // a list of bit-regions that have been changed since this data block has last been flushed
-    std::list<std::pair<off_t, size_t> > updates;
+    std::string d;                      // the actual data
+    std::list<std::pair<off_t, size_t> > updates;     // a list of bit-regions that have been changed since this data block has last been flushed
 
 public:
-    explicit DataInfo(std::string key, std::int64_t currentVersion, std::string data);
-    ~DataInfo();
-
     int  updateData(const char *data, off_t offset, size_t size);
-    bool hasUpdates();
+    bool hasUpdates() const;
     void forgetUpdates();
     void mergeDataChanges(std::string fresh);
 
-    const std::string& data();
-    const std::string& getKey();
-    std::int64_t getCurrentVersion();
-    void setCurrentVersion(std::int64_t version);
+    const std::string& data() const;
+    const std::string& getKey() const;
+    const VectorClock &getKeyVersion() const;
+    void setKeyVersion(const VectorClock &vc);
+
+public:
+    explicit DataInfo(std::string key, const VectorClock &keyVersion, std::string data);
+    ~DataInfo();
 };
 
 #endif

@@ -1,4 +1,4 @@
-#include "kinetic_namespace.h"
+#include "simple_kinetic_namespace.h"
 #include <exception>
 
 SimpleKineticNamespace::SimpleKineticNamespace(kinetic::ConnectionOptions opts):

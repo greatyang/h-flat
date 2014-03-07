@@ -15,7 +15,7 @@
 
 #include "pathmap_db.h"
 #include "metadata_info.h"
-#include "kinetic_namespace.h"
+#include "simple_kinetic_namespace.h"
 #include "lru_cache.h"
 
 enum class PosixMode

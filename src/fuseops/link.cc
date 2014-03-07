@@ -64,12 +64,11 @@ static int toHardlinkT(const std::shared_ptr<MetadataInfo> &mdi_target)
 {
     assert(mdi_target->getMD().type() == posixok::Metadata_InodeType_POSIX);
 
-    std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo());
+    std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo( mdi_target->getSystemPath() ));
+    mdi_source->setKeyVersion(mdi_target->getKeyVersion());
     mdi_source->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
     mdi_source->getMD().set_inode_number(mdi_target->getMD().inode_number());
     mdi_source->getMD().set_link_count(1);
-    mdi_source->setCurrentVersion(mdi_target->getCurrentVersion());
-    mdi_source->setSystemPath(mdi_target->getSystemPath());
 
     mdi_target->setSystemPath("hardlink_" + std::to_string(mdi_target->getMD().inode_number()));
     mdi_target->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_T);

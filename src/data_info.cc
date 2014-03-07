@@ -3,8 +3,8 @@
 #include <errno.h>
 #include <assert.h>
 
-DataInfo::DataInfo(std::string key, std::int64_t currentVersion, std::string data):
-        key(key), currentVersion(currentVersion), d(data)
+DataInfo::DataInfo(std::string key, const VectorClock &keyVersion, std::string data):
+        key(key), keyVersion(keyVersion), d(data)
 {
 }
 
@@ -13,7 +13,6 @@ DataInfo::~DataInfo()
     if(this->hasUpdates())
         pok_warning("Deleting data info structure containing updates.");
 }
-
 
 void DataInfo::mergeDataChanges(std::string fresh)
 {
@@ -38,7 +37,7 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
     return 0;
 }
 
-bool DataInfo::hasUpdates()
+bool DataInfo::hasUpdates() const
 {
     return !this->updates.empty();
 }
@@ -48,22 +47,22 @@ void DataInfo::forgetUpdates()
     this->updates.clear();
 }
 
-std::int64_t DataInfo::getCurrentVersion()
+const VectorClock & DataInfo::getKeyVersion() const
 {
-    return this->currentVersion;
+    return keyVersion;
 }
 
-void DataInfo::setCurrentVersion(std::int64_t version)
+void DataInfo::setKeyVersion(const VectorClock &vc)
 {
-    this->currentVersion = version;
+    keyVersion=vc;
 }
 
-const std::string& DataInfo::data()
+const std::string& DataInfo::data() const
 {
     return this->d;
 }
 
-const std::string & DataInfo::getKey()
+const std::string & DataInfo::getKey() const
 {
     return this->key;
 }

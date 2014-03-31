@@ -1,0 +1,24 @@
+package posixok;
+
+message KineticDrive {
+    enum Status {
+        GREEN  = 1; // Has seen all valid writes. In read and write quorums. 
+        YELLOW = 2; // Might have missed writes. In write quorum but not in read quorum. 
+        RED    = 3; // Currently unavailable. Neither in write nor in read quorum.  
+    }
+    required Status status      = 2; 
+    optional string host        = 3;
+    optional int32  port        = 4;
+}
+
+message KineticDriveReference {
+   required uint64 partitionID = 1;
+   required uint32 driveID = 2; 
+}
+    
+// A partition is a fraction of the kinetic namespace. Each partition can be assigned multiple drives (for capacity or replication purposes). 
+message Partition {
+   required uint64 cluster_version  = 1 [default=0];    // the cluster version valid for all drives of the partition
+   repeated KineticDrive drives     = 2;                // the drives of the partition
+   optional KineticDriveReference logdrive = 3; 
+}

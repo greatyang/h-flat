@@ -77,17 +77,21 @@ int database_update(void)
 {
     std::int64_t dbVersion;
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
+    std::list<posixok::db_entry> entries;
+    posixok::db_entry entry;
 
     if (int err = get_db_version(dbVersion))
         return err;
     assert(dbVersion >= snapshotVersion);
 
-    if (dbVersion == snapshotVersion)
-        return -EALREADY;
+    if (dbVersion == snapshotVersion){
+        /* dbVersion could be outdated... make sure before failing. */
+        if (get_db_entry(dbVersion+1, entry))
+           return -EALREADY;
+        dbVersion+=1;
+    }
 
     /* Update */
-    std::list<posixok::db_entry> entries;
-    posixok::db_entry entry;
     for (std::int64_t v = snapshotVersion + 1; v <= dbVersion; v++) {
         if (int err = get_db_entry(v, entry))
             return err;
@@ -96,8 +100,6 @@ int database_update(void)
     return PRIV->pmap.updateSnapshot(entries, snapshotVersion, dbVersion);
 }
 
-/* If put_db_entry fails due to an out-of-date snapshot, the file system operation needs to be re-verified using the supplied function with
- * the updated snaphshot before put_db_entry can be retried. */
 int database_operation(posixok::db_entry &entry)
 {
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
@@ -109,10 +111,14 @@ int database_operation(posixok::db_entry &entry)
         PRIV->pmap.updateSnapshot(entries, snapshotVersion, snapshotVersion + 1);
         return 0;
     }
-    if (  err != -EEXIST) return err;
-    if (( err = database_update() )) return err;
+    if (  err != -EEXIST){
+        pok_error("put_db_entry returned error code %d",err);
+        return err;
+    }
+    if (( err = database_update() ))
+        return err;
     return database_operation(entry);
 }
 
-
 }
+

@@ -119,7 +119,10 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
 
     /* Create a new force_udpate metadata key at target location.  */
     mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
+    mdito->getMD().set_inode_number( util::generate_inode_number() );
     REQ ( create_metadata(mdito) );
+    pok_trace("succesfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
+
 
     /* Update ACtime for POSIX compliance */
     if(PRIV->posix == PosixMode::FULL)

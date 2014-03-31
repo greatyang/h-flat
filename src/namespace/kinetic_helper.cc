@@ -159,7 +159,7 @@ int delete_data(const std::shared_ptr<DataInfo> &di)
 int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
 {
     string key = db_base_name + std::to_string(version);
-    KineticRecord record(entry.SerializeAsString(), "", "", Message_Algorithm_SHA1);
+    KineticRecord record(entry.SerializeAsString(), std::to_string(version), "", Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(key, "", kinetic::REQUIRE_SAME_VERSION, record);
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)

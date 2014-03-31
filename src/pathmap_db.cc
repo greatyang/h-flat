@@ -251,7 +251,9 @@ void PathMapDB::addUnlink(std::string path)
 
     snapshotVersion++;
 
-    assert(snapshot.count(path));
+    if(!snapshot.count(path))
+        pok_warning("Received addUnlink request for key %s that IS NOT in the current database.", path.data());
+
     snapshot.erase(path);
     printSnapshot();
 }

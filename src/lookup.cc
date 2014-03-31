@@ -103,7 +103,7 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
     }
     if (mdi->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
         if (int err = util::database_update()){
-            pok_debug("encountered force_update inode in regular lookup and couldn't update database");
+            pok_warning("encountered force_update inode in regular lookup and couldn't update database");
             return err;
         }
         return lookup(user_path, mdi);

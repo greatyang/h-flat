@@ -24,7 +24,6 @@ posixok::Partition & DistributedKineticNamespace::keyToPartition(const std::stri
 {
     size_t hashvalue = std::hash<std::string>()(key.substr(0,key.find_first_of("|")));
     int partition_num = hashvalue % cluster_map.size();
-    pok_debug("Hashed key %s to partition #%d",key.c_str(),partition_num);
     return cluster_map[partition_num];
 }
 

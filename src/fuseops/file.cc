@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "kinetic_helper.h"
 #include "fuseops.h"
+#include <thread>
 
 using namespace util;
 
@@ -50,9 +51,9 @@ static int unlink_hardlink(const char *user_path, const std::shared_ptr<Metadata
     if(err) return err;
 
     /* unlink HARDLINK_T metadata key */
-    if(mdiT->getMD().link_count() == 1) err = delete_metadata(mdiT);
+    mdiT->getMD().set_link_count( mdiT->getMD().link_count() - 1 );
+    if(mdiT->getMD().link_count() == 0) err = delete_metadata(mdiT);
     else{
-        mdiT->getMD().set_link_count( mdiT->getMD().link_count() - 1 );
         mdiT->updateACtime();
         err = put_metadata(mdiT);
     }
@@ -68,8 +69,6 @@ static int unlink_hardlink(const char *user_path, const std::shared_ptr<Metadata
     return 0;
 }
 
-
-/* TODO: Hand over all data keys to Housekeeping after a successful unlink operation. */
 /** Remove a file */
 int pok_unlink(const char *user_path)
 {
@@ -101,6 +100,20 @@ int pok_unlink(const char *user_path)
 
     /* remove directory entry */
     REQ( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
+
+
+    /* start a background thread to delete now unused data blocks */
+    auto datadelete = [](int size, int ino, struct pok_priv *priv){
+        while(size > 0){
+            std::string key = std::to_string(ino) + "_" + std::to_string(size / priv->blocksize);
+            priv->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);
+            size -= priv->blocksize;
+        }
+    };
+    if(!hardlink || mdi->getMD().link_count() == 0){
+        std::thread t(std::bind(datadelete,mdi->getMD().size(), mdi->getMD().inode_number(), PRIV));
+        t.detach();
+    }
     return 0;
 }
 

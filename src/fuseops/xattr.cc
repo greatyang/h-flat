@@ -23,6 +23,8 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     /* (Ab)using setxattr as a possibility to start a fsck on a specific directory */
     if(std::string("fsck").compare(attr_name) == 0)
         return fsck_directory(user_path, mdi);
+    if(std::string("nsck").compare(attr_name) == 0)
+        return PRIV->kinetic->selfCheck() ? 0 : -EHOSTDOWN;
 
 
     posixok::Metadata_ExtendedAttribute *xattr = nullptr;

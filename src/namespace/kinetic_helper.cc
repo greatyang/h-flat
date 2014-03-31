@@ -24,19 +24,17 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     posixok::Metadata md;
     if(! md.ParseFromString( *record->value()) )
         return -EINVAL;
-    VectorClock version( *record->version() );
-
-    mdi->setMD(md, version);
+    mdi->setMD(md, *record->version() );
     return 0;
 }
 
 
 int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    VectorClock   version = mdi->getKeyVersion();
+    std::string new_version  = util::generate_uuid();
 
-    KineticRecord record(mdi->getMD().SerializeAsString(), (++version).serialize(), "", Message_Algorithm_SHA1);
-    KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), mdi->getKeyVersion().serialize(), WriteMode::REQUIRE_SAME_VERSION, record);
+    KineticRecord record(mdi->getMD().SerializeAsString(), new_version, "", Message_Algorithm_SHA1);
+    KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION, record);
 
     if(!status.ok()){
         PRIV->lookup_cache.invalidate(mdi->getSystemPath());
@@ -47,7 +45,7 @@ int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     }
 
     pok_debug("PUT key %s",mdi->getSystemPath().c_str());
-    mdi->setKeyVersion(version);
+    mdi->setKeyVersion(new_version);
     return 0;
 }
 
@@ -68,9 +66,9 @@ int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<
 int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
     pok_debug("CREATE key %s",mdi->getSystemPath().c_str());
-    VectorClock version;
+    std::string new_version = util::generate_uuid();
 
-    KineticRecord record(mdi->getMD().SerializeAsString(),  (++version).serialize(), "", Message_Algorithm_SHA1);
+    KineticRecord record(mdi->getMD().SerializeAsString(),  new_version, "", Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
@@ -79,13 +77,13 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
         pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
-    mdi->setKeyVersion(version);
+    mdi->setKeyVersion(new_version);
     return 0;
 }
 
 int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), mdi->getKeyVersion().serialize(), WriteMode::REQUIRE_SAME_VERSION);
+    KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION);
     PRIV->lookup_cache.invalidate(mdi->getSystemPath());
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
@@ -111,18 +109,19 @@ int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
     }
 
     if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
-        di.reset(new DataInfo(key, VectorClock(), std::string("")));
+        di.reset(new DataInfo(key, std::string(""), std::string("")));
     else
-        di.reset(new DataInfo(key, VectorClock(*record->version()), *record->value()));
+        di.reset(new DataInfo(key, *record->version(), *record->value()));
     return 0;
 }
 
 int put_data(const std::shared_ptr<DataInfo> &di)
 {
     pok_debug("PUT DATA %s",di->getKey().c_str());
-    VectorClock   version = di->getKeyVersion();
-    KineticRecord record(di->data(), (++version).serialize(), "", Message_Algorithm_SHA1);
-    KineticStatus status = PRIV->kinetic->Put(di->getKey(), di->getKeyVersion().serialize(), kinetic::REQUIRE_SAME_VERSION, record);
+    std::string new_version = util::generate_uuid();
+
+    KineticRecord record(di->data(), new_version, "", Message_Algorithm_SHA1);
+    KineticStatus status = PRIV->kinetic->Put(di->getKey(), di->getKeyVersion(), kinetic::REQUIRE_SAME_VERSION, record);
 
     /* If someone else has updated the data block since we read it in, just write the incremental changes */
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) {
@@ -131,7 +130,7 @@ int put_data(const std::shared_ptr<DataInfo> &di)
 
         if (status.ok()) {
             di->mergeDataChanges(*record->value());
-            di->setKeyVersion(VectorClock(*record->version()));
+            di->setKeyVersion(*record->version());
             return put_data(di);
         }
     }
@@ -141,13 +140,15 @@ int put_data(const std::shared_ptr<DataInfo> &di)
     }
 
     di->forgetUpdates();
-    di->setKeyVersion(version);
+    di->setKeyVersion(new_version);
     return 0;
 }
 
 int delete_data(const std::shared_ptr<DataInfo> &di)
 {
+    pok_debug("DELETE DATA %s",di->getKey().c_str());
     KineticStatus status = PRIV->kinetic->Delete(di->getKey(), "", WriteMode::IGNORE_VERSION);
+    PRIV->data_cache.invalidate(di->getKey());
     if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
         return -ENOENT;
     if (!status.ok())

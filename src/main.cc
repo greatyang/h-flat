@@ -2,7 +2,8 @@
 #include "debug.h"
 #include "fuseops.h"
 #include "kinetic_helper.h"
-
+#include "simple_kinetic_namespace.h"
+#include "distributed_kinetic_namespace.h"
 
 
 /**
@@ -106,7 +107,24 @@ int main(int argc, char *argv[])
     init_pok_ops(&pok_ops);
     struct pok_priv *priv = 0;
     try {
-        priv = new pok_priv();
+        // SimpleKineticNamespace *simple = new SimpleKineticNamespace();
+
+        std::vector< posixok::Partition > clustermap;
+        int port = 8123;
+
+        for(int j=0; j<2; j++){
+            posixok::Partition p;
+            for(int i=0; i<3; i++){
+                posixok::KineticDrive *d = p.mutable_drives()->Add();
+                d->set_host("localhost");
+                d->set_port(port++);
+                d->set_status(posixok::KineticDrive_Status_GREEN);
+            }
+            clustermap.push_back(p);
+        }
+
+        DistributedKineticNamespace *distributed = new DistributedKineticNamespace(clustermap);
+        priv = new pok_priv(distributed);
     }
     catch(std::exception& e){
         pok_error("Exception thrown during mount operation. Reason: %s",e.what());

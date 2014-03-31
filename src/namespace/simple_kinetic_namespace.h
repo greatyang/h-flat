@@ -19,6 +19,7 @@ public:
     KineticStatus GetVersion(const string &key, unique_ptr<string>& version);
     KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys);
     KineticStatus Capacity(kinetic::Capacity &cap);
+    bool          selfCheck();
 public:
     explicit SimpleKineticNamespace(kinetic::ConnectionOptions options);
     explicit SimpleKineticNamespace();

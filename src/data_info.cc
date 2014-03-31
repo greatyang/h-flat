@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <assert.h>
 
-DataInfo::DataInfo(std::string key, const VectorClock &keyVersion, std::string data):
+DataInfo::DataInfo(const std::string &key, const std::string &keyVersion, const std::string &data):
         key(key), keyVersion(keyVersion), d(data)
 {
 }
@@ -17,8 +17,12 @@ DataInfo::~DataInfo()
 void DataInfo::mergeDataChanges(std::string fresh)
 {
     fresh.resize(std::max(fresh.size(), d.size()));
-    for (auto& update : updates)
-        fresh.replace(update.first, update.second, d);
+    for (auto& update : updates){
+        if(update.second)
+            fresh.replace(update.first, update.second, d);
+        else
+            fresh.resize(update.first);
+    }
     d = fresh;
 }
 
@@ -37,6 +41,12 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
     return 0;
 }
 
+void DataInfo::truncate(off_t offset)
+{
+    d.resize(offset);
+    this->updates.push_back(std::pair<off_t, size_t>(offset, 0));
+}
+
 bool DataInfo::hasUpdates() const
 {
     return !this->updates.empty();
@@ -47,14 +57,14 @@ void DataInfo::forgetUpdates()
     this->updates.clear();
 }
 
-const VectorClock & DataInfo::getKeyVersion() const
+const std::string& DataInfo::getKeyVersion() const
 {
     return keyVersion;
 }
 
-void DataInfo::setKeyVersion(const VectorClock &vc)
+void DataInfo::setKeyVersion(const std::string &v)
 {
-    keyVersion=vc;
+    keyVersion=v;
 }
 
 const std::string& DataInfo::data() const

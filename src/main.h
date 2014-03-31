@@ -15,7 +15,7 @@
 
 #include "pathmap_db.h"
 #include "metadata_info.h"
-#include "simple_kinetic_namespace.h"
+#include "kinetic_namespace.h"
 #include "lru_cache.h"
 
 enum class PosixMode
@@ -40,8 +40,8 @@ struct pok_priv
     std::uint16_t   inum_counter;
     std::mutex      lock;
 
-    pok_priv() :
-            kinetic(new SimpleKineticNamespace()),
+    pok_priv(KineticNamespace *kn):
+            kinetic(kn),
             lookup_cache(1000, 10, std::mem_fn(&MetadataInfo::getSystemPath),
                     [](const std::shared_ptr<MetadataInfo> &mdi){
                         if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
@@ -81,6 +81,7 @@ namespace util
 {
     int grab_inode_generation_token(void);
     ino_t generate_inode_number(void);
+    std::string generate_uuid(void);
     std::int64_t to_int64(const std::string &version_string);
     std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);
     std::string path_to_filename(const std::string &path);

@@ -27,6 +27,7 @@ public:
 
     /* Waiting for P2P operation support
      *     virtual KineticStatus DeleteKeyRangeAsync(const string &start_key, const string &end_key); */
+    virtual bool selfCheck() = 0;
     virtual ~KineticNamespace(){};
 };
 

@@ -4,7 +4,7 @@
 #include <errno.h>
 
 MetadataInfo::MetadataInfo(const std::string &key) :
-        systemPath(key), keyVersion()
+        systemPath(key), keyVersion("0")
 {
 }
 
@@ -22,12 +22,12 @@ void MetadataInfo::setSystemPath(const std::string &path)
     systemPath = path;
 }
 
-const VectorClock & MetadataInfo::getKeyVersion() const
+const std::string & MetadataInfo::getKeyVersion() const
 {
     return keyVersion;
 }
 
-void MetadataInfo::setKeyVersion(const VectorClock &vc)
+void MetadataInfo::setKeyVersion(const std::string &vc)
 {
     keyVersion=vc;
 }
@@ -61,7 +61,7 @@ std::shared_ptr<DataInfo>& MetadataInfo::getDirtyData()
     return dirty_data;
 }
 
-void MetadataInfo::setMD(const posixok::Metadata & md, const VectorClock &vc)
+void MetadataInfo::setMD(const posixok::Metadata & md, const std::string &vc)
 {
     this->md = md;
     this->keyVersion = vc;

@@ -2,7 +2,7 @@
 #include "kinetic_helper.h"
 #include <sys/types.h>
 #include <sys/param.h>
-
+#include "fuseops.h"
 
 /** Get file attributes.
  *
@@ -15,6 +15,9 @@ int pok_getattr(const char *user_path, struct stat *attr)
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
+
+    if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
+        pok_fsync(user_path, 0, nullptr);
 
     attr->st_ino    = mdi->getMD().inode_number();
     attr->st_atime  = mdi->getMD().atime();

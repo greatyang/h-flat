@@ -18,7 +18,10 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
     }
 
     if(mode == rw::WRITE)  di->updateData(buf, inblockstart, inblocksize);
-    if(mode == rw::READ)   memcpy(buf, di->data().data() + inblockstart, inblocksize);
+    if(mode == rw::READ){
+        if((size_t)inblocksize > di->data().size()) inblocksize = di->data().size();
+        memcpy(buf, di->data().data() + inblockstart, inblocksize);
+    }
 
     return inblocksize;
 }
@@ -36,14 +39,12 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
  */
 int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
+    pok_debug("reading %d bytes at offset %d for user path %s", size, offset, user_path);
+
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    if (offset + size > mdi->getMD().size()) {
-        pok_warning("Attempting to read beyond EOF for user path %s", user_path);
-        return 0;
-    }
     std::shared_ptr<DataInfo> di;
     return do_rw(buf,size,offset,mdi,di,rw::READ);
 }
@@ -102,11 +103,32 @@ int pok_truncate(const char *user_path, off_t offset)
     if (offset > std::numeric_limits<std::uint32_t>::max())
        return -EFBIG;
 
+    off_t size = mdi->getMD().size();
+    std::shared_ptr<DataInfo> di;
+    if(offset < size){
+        char buf[1];
+        if( do_rw(buf, 1, offset,mdi,di,rw::READ) < 0 )
+            return -EIO;
+    }
+
+    /* update metadata */
     mdi->getMD().set_size(offset);
     mdi->updateACMtime();
     err = put_metadata(mdi);
     if(err == -EAGAIN) return pok_truncate(user_path, offset);
-    return err;
+    if(err) return err;
+
+    /* update data */
+    if(offset < size){
+        di->truncate(offset % PRIV->blocksize);
+        put_data(di);
+        while( (offset += PRIV->blocksize) < size){
+            std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(offset / PRIV->blocksize);
+            di.reset(new DataInfo(key, std::string(""), std::string("")));
+            delete_data(di);
+        }
+    }
+    return 0;
 }
 
 /**

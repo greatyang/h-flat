@@ -29,6 +29,15 @@ void SimpleKineticNamespace::connect()
         throw std::runtime_error(status.ToString());
 }
 
+bool SimpleKineticNamespace::selfCheck()
+{
+    unique_ptr<kinetic::DriveLog> log;
+    KineticStatus status = con->blocking().GetLog(log);
+    if(status.ok())
+        return true;
+    return false;
+}
+
 KineticStatus SimpleKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
     return con->blocking().Get(key, record);

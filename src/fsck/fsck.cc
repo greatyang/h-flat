@@ -82,7 +82,7 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
     if(origin_mdi->getMD().inode_number() == 0){
         assert(target_mdi->getMD().inode_number());
         assert(!S_ISDIR( target_mdi->getMD().mode() ));
-        KineticRecord record(target_mdi->getMD().SerializeAsString(), target_mdi->getKeyVersion().serialize(), "",
+        KineticRecord record(target_mdi->getMD().SerializeAsString(), target_mdi->getKeyVersion(), "",
                 com::seagate::kinetic::proto::Message_Algorithm_SHA1);
         KineticStatus status = PRIV->kinetic->Put(origin_mdi->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
         if(!status.ok()) return -EIO;

@@ -1,9 +1,9 @@
 #include "main.h"
 #include "debug.h"
 #include <stdint.h>
+#include <uuid/uuid.h>
 #include "kinetic_helper.h"
 #include "database.pb.h"
-
 
 namespace util
 {
@@ -25,6 +25,12 @@ std::int64_t to_int64(const std::shared_ptr<const std::string> version_string)
     return to_int64(version_string->data());
 }
 
+std::string generate_uuid()
+{
+    uuid_t uuid;
+    uuid_generate(uuid);
+    return std::string(reinterpret_cast<const char *>(uuid), sizeof(uuid_t));
+}
 
 int grab_inode_generation_token(void)
 {

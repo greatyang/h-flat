@@ -53,23 +53,45 @@ bool isPokMount(const char *path)
     return false;
 }
 
-
-int main(int argc, char *argv[])
+/* file system check */
+int fsck(char *path)
 {
-    /* A path must be supplied, the supplied path must refer to a directory in a POSIX-o-K mount*/
-    if(argc<2) return failure("No path supplied.");
-    if(argc>2) return failure("Too many arguments.");
-
-    char buffer[PATH_MAX];
-    char *path = realpath(argv[1], buffer);
-    if(!path) return failure("Invalid path supplied.");
-    if(!isPokMount(path)) return failure("Path not inside POSIX-o-K mount.");
-    if(getuid()) return failure("fsck must be run as root.");
-
     struct stat s;
     if( stat(path, &s) ) return failure("Failed to call stat on path.");
     if(!S_ISDIR(s.st_mode)) return failure("Path does not refer to a directory.");
 
-    if(setxattr(path, "fsck", "", 0, 0, XATTR_CREATE)) return failure("Failure during fsck.");
+    if(setxattr(path, "fsck", "no value", 0, 0, XATTR_CREATE)) return failure("Failure during fsck.");
     return 0;
+
+}
+
+/* name space check */
+int nsck(char *path){
+    if(setxattr(path, "nsck", "no value", 0, 0, XATTR_CREATE)) return failure("Invalid Namespace.");
+    return 0;
+}
+
+
+int main(int argc, char *argv[])
+{
+    /* A path must be supplied, the supplied path must refer to a directory in a POSIX-o-K mount*/
+    if(argc!=3 || (std::string(argv[1]).compare("-fsck") && std::string(argv[1]).compare("-nsck")) ){
+        std::cout << "Usage: " << argv[0] << " [-fsck][-nsck] /path" << std::endl;
+        std::cout << "\t fsck -> file system check limited to directory identified by the path" << std::endl;
+        std::cout << "\t nsck -> namespace check on the file system identiefied by the path" << std::endl;
+        return failure("Invalid arguments");
+    }
+
+    char buffer[PATH_MAX];
+    char *path = realpath(argv[2], buffer);
+    if(!path) return failure("Invalid path supplied.");
+    if(!isPokMount(path)) return failure("Path not inside POSIX-o-K mount.");
+    if(getuid()) return failure("Not root.");
+
+    if(std::string(argv[1]).compare("-fsck") == 0)
+        return fsck(path);
+    if(std::string(argv[1]).compare("-nsck") == 0)
+        return nsck(path);
+
+    return failure("Invalid.");
 }

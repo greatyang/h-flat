@@ -65,9 +65,9 @@ set(PROTO_GEN ${POSIX-o-K_SOURCE_DIR}/src/generated)
 set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/host/bin/protoc")
 add_custom_command(
     COMMENT "Compiling protobuf files"
-    OUTPUT  ${PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc ${PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc
+    OUTPUT  ${PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc ${PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc ${PROTO_GEN}/replication.pb.h ${PROTO_GEN}/replication.pb.cc
     COMMAND mkdir -p ${PROTO_GEN} && ${PROTOC_PATH} -I=${POSIX-o-K_SOURCE_DIR}/src/proto --cpp_out=${PROTO_GEN} ${POSIX-o-K_SOURCE_DIR}/src/proto/*.proto 
-    DEPENDS ${POSIX-o-K_SOURCE_DIR}/src/proto/database.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/metadata.proto
+    DEPENDS ${POSIX-o-K_SOURCE_DIR}/src/proto/database.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/metadata.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/replication.proto
 )
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
@@ -92,7 +92,10 @@ add_executable(POSIX-o-K
      src/fuseops/sync.cc
      src/generated/database.pb.cc
      src/generated/metadata.pb.cc
+     src/generated/replication.pb.cc
+     
      src/fsck/fsck.cc
+     src/namespace/distributed_kinetic_namespace.cc
 )
 add_dependencies(POSIX-o-K
     kinetic_cpp_client

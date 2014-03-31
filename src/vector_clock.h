@@ -29,7 +29,8 @@ public:
     }
 
     explicit VectorClock (unsigned int capacity = 4):
-        _clock( capacity, std::string(sizeof(uuid_t),'0') ){}
+        _clock( capacity, std::string(sizeof(uuid_t),'0') ){
+    }
     explicit VectorClock (const std::string &serialized){
         assert(serialized.size() % sizeof(uuid_t) == 0);
         for(size_t i=0; i<serialized.size(); i+=sizeof(uuid_t))

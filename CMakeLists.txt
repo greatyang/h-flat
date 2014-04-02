@@ -56,6 +56,7 @@ else(APPLE)
     pkg_check_modules(FUSE QUIET fuse)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FUSE_CFLAGS_OTHER}")
     LIST(APPEND LIBRARY_DEPENDENCIES pthread)
+    LIST(APPEND LIBRARY_DEPENDENCIES uuid)
     LIST(APPEND LIBRARY_DEPENDENCIES ${FUSE_LIBRARIES})
 endif(APPLE)
 
@@ -111,7 +112,6 @@ add_executable(test
     src/test/pathmap_db_test.cc
     src/pathmap_db.cc
     src/generated/database.pb.cc
-    
     src/test/vector_clock_test.cc
 )
 target_link_libraries(test

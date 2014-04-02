@@ -4,6 +4,7 @@
 
 #include "gtest/gtest.h"
 #include "pathmap_db.h"
+#include <memory>
 
 class PathmapDBTest: public ::testing::Test
 {

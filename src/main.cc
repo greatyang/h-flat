@@ -109,21 +109,31 @@ int main(int argc, char *argv[])
     try {
         // SimpleKineticNamespace *simple = new SimpleKineticNamespace();
 
-        std::vector< posixok::Partition > clustermap;
-        int port = 8123;
 
-        for(int j=0; j<2; j++){
+        int port = 8123;
+        int partitions = 2;
+        int partition_size = 3;
+
+        auto createPartition = [&](int size) -> posixok::Partition {
             posixok::Partition p;
-            for(int i=0; i<3; i++){
-                posixok::KineticDrive *d = p.mutable_drives()->Add();
-                d->set_host("localhost");
-                d->set_port(port++);
-                d->set_status(posixok::KineticDrive_Status_GREEN);
+            for(int i=0; i<size; i++){
+               posixok::KineticDrive *d = p.mutable_drives()->Add();
+               d->set_host("localhost");
+               d->set_port(port++);
+               d->set_status(posixok::KineticDrive_Status_GREEN);
             }
+            return p;
+        };
+
+        posixok::Partition logpartition = createPartition(1);
+        std::vector< posixok::Partition > clustermap;
+        for(int j=0; j<partitions; j++){
+            auto p = createPartition(partition_size);
+            p.set_partitionid(j);
             clustermap.push_back(p);
         }
 
-        DistributedKineticNamespace *distributed = new DistributedKineticNamespace(clustermap);
+        DistributedKineticNamespace *distributed = new DistributedKineticNamespace(clustermap,logpartition);
         priv = new pok_priv(distributed);
     }
     catch(std::exception& e){

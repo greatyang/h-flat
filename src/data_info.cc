@@ -16,6 +16,7 @@ DataInfo::~DataInfo()
 
 void DataInfo::mergeDataChanges(std::string fresh)
 {
+    pok_trace("merging");
     fresh.resize(std::max(fresh.size(), d.size()));
     for (auto& update : updates){
         if(update.second)
@@ -43,6 +44,7 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
 
 void DataInfo::truncate(off_t offset)
 {
+    pok_trace("Resizing data info %s to %d bytes.",key.data(),offset);
     d.resize(offset);
     this->updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }

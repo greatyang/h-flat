@@ -6,6 +6,7 @@
 #include "replication.pb.h"
 #include <vector>
 #include <random>
+#include <future>
 
 /* Template specializations for KineticDrive, allowing it to be used as a key in stl containers. */
 namespace std {
@@ -29,36 +30,43 @@ namespace std {
 class DistributedKineticNamespace final : public KineticNamespace
 {
 private:
+    /* get lock in all cases where the cluster_map is changed. */
+    std::recursive_mutex failure_lock;
+
+    posixok::Partition                                                                       log_partition;
     std::vector< posixok::Partition >                                                        cluster_map;
     std::unordered_map< posixok::KineticDrive, std::shared_ptr<kinetic::ConnectionHandle> >  connection_map;
+
     kinetic::KineticConnectionFactory connection_factory;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
 
 private:
-    const posixok::KineticDrive & drefToDrive(const posixok::KineticDriveReference & dref);
+    posixok::Partition &                       keyToPartition(const std::string &key);
     std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const posixok::KineticDrive &drive);
-    posixok::Partition & keyToPartition(const std::string &key);
-    bool updateCapacityEstimate();
 
-    bool validatePartition (posixok::Partition &p);
+    bool testConnection(const posixok::KineticDrive &drive);
+    bool testPartition (const posixok::Partition &p);
+
     bool getPartitionUpdate(posixok::Partition &p);
     bool putPartitionUpdate(posixok::Partition &p);
 
-    bool failDrive(posixok::Partition &p, int index);
-    bool enableDrive(posixok::Partition &p, int index);
-    bool synchronizeDrive(posixok::Partition &p, int index);
+    bool synchronizeDrive(posixok::Partition &p, int driveID); // parititonID << logdriveprefix
+    bool disableDrive(posixok::Partition &p, int driveID);
+    bool enableDrive(posixok::Partition &p, int driveID);     // partitionID
 
     /* repairs any version missmatches existing for the specified key.
       * fails if a drive in the partition fails during the operation.
       * if successful, the key-version considered to be correct will be stored in supplied version attribute */
-    bool repairKey(const string &key, string &version);
+    KineticStatus readRepair(const string &key, std::unique_ptr<KineticRecord> &record);
 
     /* Run PUT / DELETE operations on all drives of the partition associated with the key that are not marked DOWN. */
     KineticStatus writeOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
+    KineticStatus evaluateWriteOperation(posixok::Partition &p, std::vector<KineticStatus> &results );
     /* Run GET / GETVERSION / GETKEYRANGE operations on any single drive of the partition marked UP. */
     KineticStatus readOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
 
+    bool updateCapacityEstimate();
 public:
 
     KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);
@@ -69,13 +77,16 @@ public:
 
     /* Key-Range requests are never multi-partition. The partition that is queried depends on the start key. */
     KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys);
+
     bool          selfCheck();
 
+
     /* DEBUG ONLY */
+    void printPartition(const posixok::Partition &p);
     void printClusterMap();
 
 public:
-    explicit DistributedKineticNamespace(const std::vector< posixok::Partition > &clustermap);
+    explicit DistributedKineticNamespace(const std::vector< posixok::Partition > &clustermap, const posixok::Partition &logpartition);
     ~DistributedKineticNamespace();
 };
 

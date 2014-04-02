@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "kinetic_helper.h"
 #include "fuseops.h"
+#include <algorithm>
 
 enum class rw {READ, WRITE};
 static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, std::shared_ptr<DataInfo> &di, rw mode)
@@ -19,10 +20,13 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
 
     if(mode == rw::WRITE)  di->updateData(buf, inblockstart, inblocksize);
     if(mode == rw::READ){
-        if((size_t)inblocksize > di->data().size()) inblocksize = di->data().size();
-        memcpy(buf, di->data().data() + inblockstart, inblocksize);
+        /* After a truncate operation that increases size a client may legally read data that was never written.
+         * This data should be set to 0. */
+        memset(buf, 0, size);
+        int copysize = std::min( (int)inblocksize, (int)di->data().size() - inblockstart );
+        if(copysize>0)
+            di->data().copy(buf, copysize, inblockstart);
     }
-
     return inblocksize;
 }
 
@@ -95,6 +99,7 @@ int pok_truncate(const char *user_path, off_t offset)
     pok_debug("truncate for user path %s to size %ld",user_path,offset);
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
+    if(!err) err = pok_fsync(user_path, 0, nullptr);
     if( err) return err;
 
     if (check_access(mdi, W_OK))
@@ -104,12 +109,6 @@ int pok_truncate(const char *user_path, off_t offset)
        return -EFBIG;
 
     off_t size = mdi->getMD().size();
-    std::shared_ptr<DataInfo> di;
-    if(offset < size){
-        char buf[1];
-        if( do_rw(buf, 1, offset,mdi,di,rw::READ) < 0 )
-            return -EIO;
-    }
 
     /* update metadata */
     mdi->getMD().set_size(offset);
@@ -118,15 +117,24 @@ int pok_truncate(const char *user_path, off_t offset)
     if(err == -EAGAIN) return pok_truncate(user_path, offset);
     if(err) return err;
 
-    /* update data */
+    /* truncate last valid data block */
+    std::shared_ptr<DataInfo> di;
     if(offset < size){
+        std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(offset/PRIV->blocksize);
+        if(PRIV->data_cache.get(key, di) == false){
+            if (int err = get_data(key, di)) return err;
+            PRIV->data_cache.add(key, di);
+        }
         di->truncate(offset % PRIV->blocksize);
         put_data(di);
-        while( (offset += PRIV->blocksize) < size){
-            std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(offset / PRIV->blocksize);
-            di.reset(new DataInfo(key, std::string(""), std::string("")));
-            delete_data(di);
-        }
+    }
+
+    /* delete all data blocks existing past the specified offset */
+    for(int i=offset/PRIV->blocksize+1; i<=size/PRIV->blocksize; i++){
+        std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(i);
+        if(PRIV->data_cache.get(key, di))  PRIV->data_cache.invalidate(key);
+        else di.reset(new DataInfo(key, std::string(""), std::string("")));
+        delete_data(di);
     }
     return 0;
 }

@@ -4,7 +4,7 @@
 #include "kinetic_helper.h"
 #include "simple_kinetic_namespace.h"
 #include "distributed_kinetic_namespace.h"
-
+#include <libconfig.h>
 
 /**
  * Initialize filesystem
@@ -101,44 +101,100 @@ static void init_pok_ops(fuse_operations *ops)
     ops->destroy = pok_destroy;
 }
 
+
+bool parse_configuration(char *file, std::vector< posixok::Partition > &clustermap, posixok::Partition &logpartition)
+{
+    config_t cfg;
+    config_init(&cfg);
+
+    if(config_read_file(&cfg, file) == false){
+        pok_error("Error in configuration file %s: %s:%d - %s\n", file, config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
+        config_destroy(&cfg);
+        return false;
+    }
+
+    auto cfg_to_posixok = [&](config_setting_t *partition, posixok::Partition &p) -> bool {
+        if(partition)
+        for(int i=0; i<config_setting_length(partition); i++){
+              config_setting_t *drive = config_setting_get_elem(partition, i);
+              const char *host, *status; int port;
+
+              if( !config_setting_lookup_string(drive, "host",   &host) ||
+                  !config_setting_lookup_string(drive, "status", &status) ||
+                  !config_setting_lookup_int   (drive, "port",   &port) )
+                  return false;
+
+              posixok::KineticDrive *d = p.mutable_drives()->Add();
+              d->set_host(host);
+              d->set_port(port);
+
+              if(strcmp(status,"GREEN") == 0)
+                  d->set_status(posixok::KineticDrive_Status_GREEN);
+              else if(strcmp(status,"YELLOW") == 0)
+                  d->set_status(posixok::KineticDrive_Status_YELLOW);
+              else if(strcmp(status,"RED") == 0)
+                  d->set_status(posixok::KineticDrive_Status_RED);
+              else
+                  return false;
+
+        }
+        return true;
+    };
+
+    config_setting_t * cmap = config_lookup(&cfg, "clustermap");
+    if(cmap != NULL)
+    for(int i = 0; i < config_setting_length(cmap); i++){
+        posixok::Partition p;
+        if( cfg_to_posixok(config_setting_get_elem(cmap, i), p) == false){
+            pok_error("Failed parsing partition %d of clustermap.",i);
+            config_destroy(&cfg);
+            return false;
+        }
+
+        p.set_partitionid(i);
+        clustermap.push_back(p);
+    }
+
+    if( cfg_to_posixok(config_lookup(&cfg, "log"), logpartition) == false){
+        pok_error("Failed parsing logpartition");
+        config_destroy(&cfg);
+        return false;
+    }
+
+    config_destroy(&cfg);
+    return true;
+}
+
+
 int main(int argc, char *argv[])
 {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
-    init_pok_ops(&pok_ops);
+    std::vector< posixok::Partition > clustermap;
+    posixok::Partition logpartition;
     struct pok_priv *priv = 0;
-    try {
-        // SimpleKineticNamespace *simple = new SimpleKineticNamespace();
 
+    init_pok_ops(&pok_ops);
 
-        int port = 8123;
-        int partitions = 2;
-        int partition_size = 3;
-
-        auto createPartition = [&](int size) -> posixok::Partition {
-            posixok::Partition p;
-            for(int i=0; i<size; i++){
-               posixok::KineticDrive *d = p.mutable_drives()->Add();
-               d->set_host("localhost");
-               d->set_port(port++);
-               d->set_status(posixok::KineticDrive_Status_GREEN);
+    for(int i=0; i<argc; i++)
+        if(strncmp(argv[i],"-cfg=",5) == 0){
+            if( parse_configuration(argv[i]+5, clustermap, logpartition) == false )
+                return(EXIT_FAILURE);
+            else{
+                for(int j=i+1; j<argc; j++)
+                    argv[j-1] = argv[j];
+                argc--;
             }
-            return p;
-        };
-
-        posixok::Partition logpartition = createPartition(1);
-        std::vector< posixok::Partition > clustermap;
-        for(int j=0; j<partitions; j++){
-            auto p = createPartition(partition_size);
-            p.set_partitionid(j);
-            clustermap.push_back(p);
         }
 
-        DistributedKineticNamespace *distributed = new DistributedKineticNamespace(clustermap,logpartition);
-        priv = new pok_priv(distributed);
+    try {
+        if(clustermap.empty())
+            priv = new pok_priv(new SimpleKineticNamespace());
+        else
+            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition));
     }
     catch(std::exception& e){
-        pok_error("Exception thrown during mount operation. Reason: %s",e.what());
-        exit(EXIT_FAILURE);
+        pok_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
+        return(EXIT_FAILURE);
     }
     return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

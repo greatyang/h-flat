@@ -44,6 +44,7 @@ set(LIBRARY_DEPENDENCIES
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libprotobuf.a
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/src/gtest/libgtest.a
     ${CMAKE_THREAD_LIBS_INIT}
+    config
     dl
 )
 
@@ -79,8 +80,8 @@ add_executable(POSIX-o-K
      src/main.cc
      src/util.cc
      src/lookup.cc
-     src/metadata_info.cc
      src/data_info.cc
+     src/metadata_info.cc
      src/pathmap_db.cc
      src/fuseops/attr.cc
      src/fuseops/xattr.cc

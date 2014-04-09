@@ -14,7 +14,7 @@ The main concept behind POSIX-over-Kinetic is to provide standard hierachical fi
 
 ![Image](../../wiki/distributed-fs.png?raw=true)
 
-To achieve key-value performance characteristics the full path of a file is considered the file's key. Using this key the file metadata can be retrieved without accessing the individual directories of the path. Some detail about the implications of skipping directory traversal as well as the file system architecture can be found [here](ARCHITECTURE.md).
+To achieve key-value performance characteristics the full path of a file is considered the file's key. Using this key the file metadata can be retrieved without accessing the individual directories of the path. Some detail about the implications of skipping directory traversal as well as the file system architecture can be found [here](README_ARCH.md).
 
 
 ## Sub-Projects

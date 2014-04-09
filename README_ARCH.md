@@ -19,6 +19,13 @@ Updating all potentially affected metadata is clearly not a practical solution. 
 
 Using the knowledge that such an operation occurred can now be used to behave as expected by the user without having touched any of the actual metadata. For example, consider renaming a directory */a* to */b* and trying to access */b/file* afterwards. Due to the knowledge of the move operation the path is internally remapped to */a/file*, resulting in the correct response. The same path-substitution logic can be used for links. For changes to path permissions, the knowledge of the operation allows to detect if the path-permissions stored for a specfic file are potentially stale (older than a change in the file's path) and need to be re-verified. 
 
+# Architecture
+
+The file system code is decoupled from handling the actual kinetic drives, as shown in the following diagram.  
+![Image](../../wiki/kinetic-namespace.png?raw=true)
+
+Conceptually, the file system operates on a single kinetic namespace that it assumes is 100% reliable. How this namespace is sharded to multiple drives and reliability & redundancy issues are handled is the task of a kinetic namespace implementation. Currently there exist two implementations: The simple kinetic namespace forwards all requests to a single drive or simulator instance. The distributed kinetic namespace implements namespace sharding and replication.
+
 # Code Overview 
 **src**
 + *pathmapdb* the path-remapping logic used to support hierachical file system functionality  
@@ -41,5 +48,5 @@ Protobuf definitions for file system data structures that are serialized in orde
 + replication.proto > storing partition state for cluster management
 
 **src/namespace** 
-
+The namespace interface and simple & distributed implementations. Also contains some helper functions.
 

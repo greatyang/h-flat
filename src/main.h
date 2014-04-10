@@ -18,11 +18,7 @@
 #include "kinetic_namespace.h"
 #include "lru_cache.h"
 
-enum class PosixMode
-{
-    FULL, TIMERELAXED
-};
-
+enum class PosixMode { FULL, TIMERELAXED };
 /* Private file-system wide data, accessible from anywhere. */
 struct pok_priv
 {
@@ -42,13 +38,17 @@ struct pok_priv
 
     pok_priv(KineticNamespace *kn):
             kinetic(kn),
-            lookup_cache(1000, 10, std::mem_fn(&MetadataInfo::getSystemPath),
+            lookup_cache(1000, 100,
+                    std::mem_fn(&MetadataInfo::getSystemPath),
                     [](const std::shared_ptr<MetadataInfo> &mdi){
                         if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
                             return true;
                         return false;
             }),
-            data_cache(1000, 10, std::mem_fn(&DataInfo::getKey), std::mem_fn(&DataInfo::hasUpdates)),
+            data_cache(1000, 100,
+                    std::mem_fn(&DataInfo::getKey),
+                    std::mem_fn(&DataInfo::hasUpdates)
+            ),
             pmap(),
             blocksize(1024 * 1024),
             posix(PosixMode::FULL),
@@ -59,7 +59,10 @@ struct pok_priv
 };
 #define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
 
-/* lookup > these are utility functions provided to the various path based fuse operations. */
+
+/* these are utility functions provided to the various fuse operations */
+
+/* lookup */
 int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi);
 int lookup_parent(const char *user_path, std::shared_ptr<MetadataInfo> &mdi_parent);
 int get_metadata_userpath(const char *user_path, std::shared_ptr<MetadataInfo> &mdi);
@@ -75,8 +78,6 @@ int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode);
 void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode);
 void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent);
 
-
-/* general utility functions */
 namespace util
 {
     int grab_inode_generation_token(void);

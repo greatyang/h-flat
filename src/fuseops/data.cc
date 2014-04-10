@@ -24,7 +24,7 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
          * This data should be set to 0. */
         memset(buf, 0, size);
         int copysize = std::min( (int)inblocksize, (int)di->data().size() - inblockstart );
-        if(copysize>0)
+        if( copysize > 0)
             di->data().copy(buf, copysize, inblockstart);
     }
     return inblocksize;

@@ -29,7 +29,8 @@ void *pok_init(struct fuse_conn_info *conn)
         initialize_metadata(mdi, mdi, S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
         err = create_metadata(mdi);
     }
-    if (err) pok_error("Error encountered validating root metadata");
+    if (err)
+        pok_error("Error encountered validating root metadata");
 
     util::database_update();
     return PRIV;
@@ -108,7 +109,8 @@ bool parse_configuration(char *file, std::vector< posixok::Partition > &clusterm
     config_init(&cfg);
 
     if(config_read_file(&cfg, file) == false){
-        pok_error("Error in configuration file %s: %s:%d - %s\n", file, config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
+        pok_error("Error in configuration file %s: %s:%d - %s\n", file,
+                config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
         config_destroy(&cfg);
         return false;
     }
@@ -169,9 +171,10 @@ bool parse_configuration(char *file, std::vector< posixok::Partition > &clusterm
 int main(int argc, char *argv[])
 {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
+    struct pok_priv *priv = 0;
+
     std::vector< posixok::Partition > clustermap;
     posixok::Partition logpartition;
-    struct pok_priv *priv = 0;
 
     init_pok_ops(&pok_ops);
 

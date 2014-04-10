@@ -8,7 +8,7 @@
 #include <random>
 #include <future>
 
-/* Template specializations for KineticDrive, allowing it to be used as a key in stl containers. */
+/* Template specializations for protobuf KineticDrive, allowing it to be used as a key in STL containers. */
 namespace std {
   template <> struct hash<posixok::KineticDrive>
   {
@@ -51,9 +51,9 @@ private:
     bool getPartitionUpdate(posixok::Partition &p);
     bool putPartitionUpdate(posixok::Partition &p);
 
-    bool synchronizeDrive(posixok::Partition &p, int driveID); // parititonID << logdriveprefix
+    bool synchronizeDrive(posixok::Partition &p, int driveID);
     bool disableDrive(posixok::Partition &p, int driveID);
-    bool enableDrive(posixok::Partition &p, int driveID);     // partitionID
+    bool enableDrive(posixok::Partition &p, int driveID);
 
     /* repairs any version missmatches existing for the specified key.
       * fails if a drive in the partition fails during the operation.

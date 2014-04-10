@@ -6,10 +6,10 @@
 /* Metadata */
 int get_metadata    (const std::shared_ptr<MetadataInfo> &mdi);
 int create_metadata (const std::shared_ptr<MetadataInfo> &mdi);
-int delete_metadata (const std::shared_ptr<MetadataInfo> &mdi); // version missmatch -> -EAGAIN
-int put_metadata    (const std::shared_ptr<MetadataInfo> &mdi); // version missmatch -> -EAGAIN
+int delete_metadata (const std::shared_ptr<MetadataInfo> &mdi); // version mismatch -> -EAGAIN
+int put_metadata    (const std::shared_ptr<MetadataInfo> &mdi); // version mismatch -> -EAGAIN
 
-// forced put_metadata uses supplied md_update function on remote metadata in case on version missmatch.
+// forced put_metadata uses supplied md_update function on remote metadata in case on version mismatch.
 // E.g. updating path permissions. Never return -EAGAIN.
 int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<void()> md_update);
 

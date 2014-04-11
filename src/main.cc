@@ -143,6 +143,12 @@ bool parse_configuration(char *file, std::vector< posixok::Partition > &clusterm
         return true;
     };
 
+    if( cfg_to_posixok(config_lookup(&cfg, "log"), logpartition) == false){
+        pok_error("Failed parsing logpartition");
+        config_destroy(&cfg);
+        return false;
+    }
+
     config_setting_t * cmap = config_lookup(&cfg, "clustermap");
     if(cmap != NULL)
     for(int i = 0; i < config_setting_length(cmap); i++){
@@ -154,13 +160,13 @@ bool parse_configuration(char *file, std::vector< posixok::Partition > &clusterm
         }
 
         p.set_partitionid(i);
-        clustermap.push_back(p);
-    }
 
-    if( cfg_to_posixok(config_lookup(&cfg, "log"), logpartition) == false){
-        pok_error("Failed parsing logpartition");
-        config_destroy(&cfg);
-        return false;
+        /* Special case: 2 drives in partition. We add a logdrive to the partition to enable the namespace to
+         * differentiate between a network split and a failed drive. */
+        if(p.drives_size() == 2 && logpartition.drives_size())
+            p.set_logid(p.partitionid() % logpartition.drives_size());
+
+        clustermap.push_back(p);
     }
 
     config_destroy(&cfg);

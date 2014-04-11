@@ -197,7 +197,7 @@ bool DistributedKineticNamespace::testPartition(const posixok::Partition &p)
         pok_error("Not a single GREEN drive available. Partition has empty read quorum. ");
         return false;
     }
-    if(green+yellow == 1 && p.has_logid() == false){
+    if(green+yellow == 1 && p.drives_size() > 1 && p.has_logid() == false){
         pok_error("Only one drive reachable & no logdrive set for the partition. At least two drives "
                   "(including logdrive) have to be reachable at all times to detect a network split. ");
         return false;
@@ -212,9 +212,11 @@ bool DistributedKineticNamespace::disableDrive(posixok::Partition &p, int index)
     std::lock_guard<std::recursive_mutex> l(failure_lock);
     if(p.drives(index).status() == posixok::KineticDrive_Status_RED) return true;
 
-    /* Logdrive add-rule: Only add a new logdrive if none is set yet and all lights show green. */
+    /* Logdrive add-rule: Only add a new logdrive if none is set yet and all lights show green:
+     *   other color combinations without a logdrive mean that a previosly assigned logdrive has crashed and thus there are no
+     *   reliable logs for the other non-green drives. We shouldn't confuse the repair algorithm. */
     if(p.has_logid() == false && std::all_of(p.drives().begin(), p.drives().end(), [](const posixok::KineticDrive &d){return d.status() == d.GREEN;})
-                              && std::any_of(log_partition.drives().begin(), log_partition.drives().end(), [](const posixok::KineticDrive &d){return d.status() != d.RED;})){
+                          && std::any_of(log_partition.drives().begin(), log_partition.drives().end(), [](const posixok::KineticDrive &d){return d.status() != d.RED;})){
         std::uniform_int_distribution<int> ldist(0, log_partition.drives_size()-1);
         int lid;
         do{ lid = ldist(random_generator); } while( log_partition.drives(lid).status() == posixok::KineticDrive_Status_RED );

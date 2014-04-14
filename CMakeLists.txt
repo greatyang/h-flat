@@ -5,10 +5,12 @@ set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-o
 
 include(ExternalProject)
 
-option(USE_LOCAL_KINETIC_CLIENT "Uses the kinetic client at the KINETIC_CLIENT_PATH variable instead of downloading library from Git" ON)
-if(USE_LOCAL_KINETIC_CLIENT)
+
+if(EXISTS "$ENV{HOME}/git/Kinetic-C-Client/")
+   message("Found existing Kinetic-C-Client at ~/git/Kinetic-C-Client.")
    set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/Kinetic-C-Client")
-else(USE_LOCAL_KINETIC_CLIENT)
+else()
+   message("Existing Kinetic-C-Client not found. External project added.")
    set(KINETIC_CLIENT_PATH "${CMAKE_BINARY_DIR}/vendor/src/kinetic_cpp_client/")
 
     ExternalProject_add(
@@ -19,7 +21,7 @@ else(USE_LOCAL_KINETIC_CLIENT)
         BUILD_IN_SOURCE 1
         INSTALL_COMMAND ""
     )
-endif(USE_LOCAL_KINETIC_CLIENT)
+endif()
  
 include_directories(
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/include

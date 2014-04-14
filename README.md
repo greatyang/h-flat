@@ -1,13 +1,62 @@
 # Table of Contents
+  * [Getting Started](#getting-started)
+    * [Initial Setup](#initial-setup)
+    * [Mounting the File System](#mount)
+    * [Configuration](#configuration)
+  * [Testing](#testing)
   * [Core Concepts](#concepts)
   * [Sub-Projects](#sub-projects)  
     * [IO Interception Library](#iointercept)
     * [File System Tools](#file-system-tools)
-  * [Getting Started](#getting-started)
-    * [Initial Setup](#initial-setup)
-    * [Configuration](#configuration)
-    * [Mounting the File System](#mount)
-  * [Testing](#testing)
+
+# Getting Started
+### Dependencies
++ The Kinetic-C-Client
++ [CMake](http://www.cmake.org) is used to build the project
++ **OSX** [libosxfuse](http://osxfuse.github.io), *libconfig* (homebrew recommended for easy installation) 
++ **Linux** *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
+
+### Initial Setup
++ Install any missing dependencies
++ Clone the git repository 
++ Create a build directory. If you want you can use the cloned git repository as your build directory, but using a separate directory is recommended in order to cleanly separate sources and generated files. 
++ From your build directory call `cmake /path/to/cloned-git`, if you're using the cloned git repository as your build directory this would be `cmake .` 
++ Run `make`
+
++ Note that the *iointercept* and *tools* sub-projects have independent cmake files, if you whish to build them repeat the above process. 
+
+### Mount
+To mount run the executable given the mountpoint as a parameter. Use -o to specify mount options. Note that *allow_other*, *use_ino*, and *attr_timeout=0* fuse mount options are **required** for POSIX compliant behavior
+
+Some flags interesting for debugging: 
++ -s single threaded mode
++ -f foreground mode: sends all debug to std out 
++ -d debug mode: fuse lists internal function calls in addition to pok_debug output
+
+Example: `./POSIX-o-K -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
+
+
+### Configuration
+If no kinetic cluster configuration is supplied at mount time, the file system attempts to connect to a single kinetic simulator instance running on localhost with standard parameters. 
+
+The cluster configuration defines the **clustermap** and **log** variables using the following scheme:
+
+     Drive      = {host;port;status;}
+     Partition  = Drive+
+     clustermap = Partition+
+     log        = Partition 
+
+Keys are sharded accross all existing partitions of the clustermap. Keys written to a partition are replicated among all drives of the partition. Typical configurations would therefore be 1 drive per partition for no redundancy and 3 drives per partition for triple redundancy. The optional log partition is used to increase rebuild speed for temporarily unavailable drives in the clustermap. See [example.cfg](example.cfg) in sources for an example configuration. Use *-cfg=filename* as a mount option. This mount option can be used at any place in the parameter list, including as a last parameter beyond the mountpoint. 
+
+Example: `./POSIX-o-K -o allow_other,use_ino,attr_timeout=0 /mountpoint -cfg=example.cfg` 
+
+
+
+# Testing
+File system functionality has been tested with the following tools: 
++ [POSIX Test Suite](http://www.tuxera.com/community/posix-test-suite/)
++ [File System Exerciser](http://codemonkey.org.uk/projects/fsx/)
+
 
 # Concepts 
 The main concept behind POSIX-over-Kinetic is to provide standard hierachical file system semantics (POSIX) in a distributed setting while using a flat namepsace internally; to combine the performance and scalability of a key-value storage system with a file system interface. The key-value interface provided by Seagate Kinetic drives allows some file system functionality to be pushed to the drives. As a result, a serverless design consisting only of clients and kinetic drives becomes feasible. 
@@ -45,50 +94,5 @@ Execute a self-check on the underlying key-value namespace. In the case of a dis
 
 Example: `./tools -nsck /path/to/mountpoint` 
 
-# Getting Started
-### Dependencies
-+ The Kinetic-C-Client
-+ [CMake](http://www.cmake.org) is used to build the project
-+ **OSX** [libosxfuse](http://osxfuse.github.io), *libconfig* (homebrew recommended for easy installation) 
-+ **Linux** *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
-
-### Initial Setup
-+ Install any missing dependencies
-+ Clone the git repository 
-+ Create a build directory. If you want you can use the cloned git repository as your build directory, but using a separate directory is recommended in order to cleanly separate sources and generated files. 
-+ From your build directory call `cmake /path/to/cloned-git`, if you're using the cloned git repository as your build directory this would be `cmake .` 
-+ Run `make`
-
-+ Note that the *iointercept* and *tools* sub-projects have independent cmake files, if you whish to build them repeat the above process. 
-
-### Configuration
-If no kinetic cluster configuration is supplied at mount time, the file system attempts to connect to a single kinetic simulator instance running on localhost with standard parameters. 
-
-The cluster configuration defines the **clustermap** and **log** variables using the following scheme:
-
-     Drive      = {host;port;status;}
-     Partition  = Drive+
-     clustermap = Partition+
-     log        = Partition 
-
-Keys are sharded accross all existing partitions of the clustermap. Keys written to a partition are replicated among all drives of the partition. Typical configurations would therefore be 1 drive per partition for no redundancy and 3 drives per partition for triple redundancy. The optional log partition is used to increase rebuild speed for temporarily unavailable drives in the clustermap. See [example.cfg](example.cfg) in sources for an example configuration. Use *-cfg=filename* as a mount option. 
-
-Example: `./POSIX-o-K -cfg=example.cfg /mountpoint` 
-
-### Mount
-To mount run the executable given the mountpoint as a parameter. Use -o to specify mount options. Note that *allow_other*, *use_ino*, and *attr_timeout=0* fuse mount options are required for POSIX compliant behavior
-
-Some flags interesting for debugging: 
-+ -s single threaded mode
-+ -f foreground mode: sends all debug to std out 
-+ -d debug mode: fuse lists internal function calls in addition to pok_debug output
-
-
-Example: `./POSIX-o-K -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
-
-# Testing
-File system functionality has been tested with the following tools: 
-+ [POSIX Test Suite](http://www.tuxera.com/community/posix-test-suite/)
-+ [File System Exerciser](http://codemonkey.org.uk/projects/fsx/)
 
 

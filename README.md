@@ -37,6 +37,12 @@ Example: `./POSIX-o-K -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint`
 
 
 ### Configuration
+
+See [example.cfg](example.cfg) in sources for an example configuration. Use *-cfg=filename* as a mount option. This mount option can be used at any place in the parameter list, including as a last parameter beyond the mountpoint. 
+
+Example: `./POSIX-o-K -o allow_other,use_ino,attr_timeout=0 /mountpoint -cfg=example.cfg` 
+
+#### Cluster Configuration
 If no kinetic cluster configuration is supplied at mount time, the file system attempts to connect to a single kinetic simulator instance running on localhost with standard parameters. 
 
 The cluster configuration defines the **clustermap** and **log** variables using the following scheme:
@@ -45,11 +51,23 @@ The cluster configuration defines the **clustermap** and **log** variables using
      Partition  = Drive+
      clustermap = Partition+
      log        = Partition 
+     
+There are three valid values for status: 
+     
+     GREEN : The kinetic drive is in the read & write quorums, it is up-to-date on all keys
+     YELLOW: The drive might have missed key updates, it is in the write quorum but not the read quorum
+     RED   : The drive is currently broken / unreachable. 
 
-Keys are sharded accross all existing partitions of the clustermap. Keys written to a partition are replicated among all drives of the partition. Typical configurations would therefore be 1 drive per partition for no redundancy and 3 drives per partition for triple redundancy. The optional log partition is used to increase rebuild speed for temporarily unavailable drives in the clustermap. See [example.cfg](example.cfg) in sources for an example configuration. Use *-cfg=filename* as a mount option. This mount option can be used at any place in the parameter list, including as a last parameter beyond the mountpoint. 
+Keys are sharded accross all existing partitions of the clustermap. Keys written to a partition are replicated among all drives of the partition. Typical configurations would therefore be 1 drive per partition for no redundancy and 3 drives per partition for triple redundancy. The optional log partition is used to increase rebuild speed for temporarily unavailable drives in the clustermap. 
 
-Example: `./POSIX-o-K -o allow_other,use_ino,attr_timeout=0 /mountpoint -cfg=example.cfg` 
+#### Client Configuration
+The file system client implements a read-only cache to speed multiple requests to the same metadata / data. An auto-expiration time can be specified in miliseconds using the **cache_expiration** variable. A longer expiration time generally improves performance while a shorter expiration time improves agility: While stale cache items are detected on write & automatically resolved, multiple clients working on shared files can experience an additional delay until changes to a file become visible for read-only operations such as stat.
 
+It follows that different read-cache strategies are optimal depending on the way clients use the file system. Below are some general recommendations: 
+     
+     Single Client or Clients working in a non-overlapping manner: Disable cache expiration by setting it to 0
+     Multiple Clients, heavy workload on shared directories & files: 1 second read-cache (1000 milliseconds) 
+     Multiple Clients, but only occasionally working on shared files: 5 second read cache (5000 milliseconds)
 
 
 # Testing

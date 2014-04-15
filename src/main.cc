@@ -103,18 +103,10 @@ static void init_pok_ops(fuse_operations *ops)
 }
 
 
-bool parse_configuration(char *file, std::vector< posixok::Partition > &clustermap, posixok::Partition &logpartition)
+bool parse_configuration(char *file,
+        std::vector< posixok::Partition > &clustermap, posixok::Partition &logpartition,
+        int &cache_expiration_ms)
 {
-    config_t cfg;
-    config_init(&cfg);
-
-    if(config_read_file(&cfg, file) == false){
-        pok_error("Error in configuration file %s: %s:%d - %s\n", file,
-                config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-        config_destroy(&cfg);
-        return false;
-    }
-
     auto cfg_to_posixok = [&](config_setting_t *partition, posixok::Partition &p) -> bool {
         if(partition)
         for(int i=0; i<config_setting_length(partition); i++){
@@ -143,34 +135,38 @@ bool parse_configuration(char *file, std::vector< posixok::Partition > &clusterm
         return true;
     };
 
-    if( cfg_to_posixok(config_lookup(&cfg, "log"), logpartition) == false){
-        pok_error("Failed parsing logpartition");
-        config_destroy(&cfg);
-        return false;
-    }
 
-    config_setting_t * cmap = config_lookup(&cfg, "clustermap");
-    if(cmap != NULL)
-    for(int i = 0; i < config_setting_length(cmap); i++){
-        posixok::Partition p;
-        if( cfg_to_posixok(config_setting_get_elem(cmap, i), p) == false){
-            pok_error("Failed parsing partition %d of clustermap.",i);
-            config_destroy(&cfg);
-            return false;
+    config_t cfg;
+    config_init(&cfg);
+    bool rtn = config_read_file(&cfg, file);
+    if  (rtn) rtn = cfg_to_posixok(config_lookup(&cfg, "log"), logpartition);
+
+    if( config_setting_t * cmap = config_lookup(&cfg, "clustermap")) {
+        for(int i = 0; rtn && i < config_setting_length(cmap); i++){
+            posixok::Partition p;
+            rtn = cfg_to_posixok(config_setting_get_elem(cmap, i), p);
+
+            /* Special case: 2 drives in partition. We add a logdrive to the partition to enable the namespace to
+             * differentiate between a network split and a failed drive. */
+            if(p.drives_size() == 2 && logpartition.drives_size())
+                p.set_logid(i % logpartition.drives_size());
+
+            p.set_partitionid(i);
+            clustermap.push_back(p);
         }
-
-        p.set_partitionid(i);
-
-        /* Special case: 2 drives in partition. We add a logdrive to the partition to enable the namespace to
-         * differentiate between a network split and a failed drive. */
-        if(p.drives_size() == 2 && logpartition.drives_size())
-            p.set_logid(p.partitionid() % logpartition.drives_size());
-
-        clustermap.push_back(p);
     }
 
+
+    if (config_setting_t * options =  config_lookup(&cfg, "options")){
+        config_setting_lookup_int(options, "cache_expiration", &cache_expiration_ms);
+    }
+
+
+    if(rtn == false)
+        pok_error("Error in configuration file %s: %s:%d - %s\n", file,
+                config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
     config_destroy(&cfg);
-    return true;
+    return rtn;
 }
 
 
@@ -181,12 +177,13 @@ int main(int argc, char *argv[])
 
     std::vector< posixok::Partition > clustermap;
     posixok::Partition logpartition;
+    int cache_expiration_ms = 1000;
 
     init_pok_ops(&pok_ops);
 
     for(int i=0; i<argc; i++)
         if(strncmp(argv[i],"-cfg=",5) == 0){
-            if( parse_configuration(argv[i]+5, clustermap, logpartition) == false )
+            if( parse_configuration(argv[i]+5, clustermap, logpartition, cache_expiration_ms) == false )
                 return(EXIT_FAILURE);
             else{
                 for(int j=i+1; j<argc; j++)
@@ -197,13 +194,14 @@ int main(int argc, char *argv[])
 
     try {
         if(clustermap.empty())
-            priv = new pok_priv(new SimpleKineticNamespace());
+            priv = new pok_priv(new SimpleKineticNamespace(), cache_expiration_ms);
         else
-            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition));
+            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms);
     }
     catch(std::exception& e){
         pok_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
         return(EXIT_FAILURE);
     }
+    pok_debug("Read cache expiration time set to %d milliseconds.", cache_expiration_ms);
     return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

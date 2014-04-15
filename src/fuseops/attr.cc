@@ -84,15 +84,14 @@ int pok_statfs(const char *user_path, struct statvfs *s)
     if (!status.ok())
         return -EIO;
 
-    s->f_bsize  = PRIV->blocksize; /* File system block size */
-    s->f_blocks = (fsblkcnt_t) cap.total_bytes; /* Blocks on FS in units of f_frsize */
-    s->f_bavail = (fsblkcnt_t) cap.remaining_bytes; /* Free blocks */
-    s->f_bfree  = (fsblkcnt_t) cap.remaining_bytes; /* Blocks available to non-root */
+    s->f_frsize = PRIV->blocksize; /* Minimal allocated block size */
+    s->f_bsize  = PRIV->blocksize; /* Preferred file system block size for I/O requests */
+    s->f_blocks = (fsblkcnt_t) ( cap.total_bytes / PRIV->blocksize ); /* Blocks on FS in units of f_frsize */
+    s->f_bavail = (fsblkcnt_t) ( cap.remaining_bytes / PRIV->blocksize ); /* Free blocks */
+    s->f_bfree  = (fsblkcnt_t) ( cap.remaining_bytes / PRIV->blocksize ); /* Blocks available to non-root */
 
     s->f_namemax = NAME_MAX; /* Max file name length */
-
-    s->f_files = UINT16_MAX; /* Total inodes */
-    s->f_ffree = UINT16_MAX; /* Free inodes */
-
+    s->f_files   = PRIV->inum_base + PRIV->inum_counter; /* Total inodes */
+    s->f_ffree   = UINT16_MAX; /* Free inodes */
     return 0;
 }

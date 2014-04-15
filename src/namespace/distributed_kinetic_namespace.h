@@ -43,9 +43,9 @@ private:
 
 private:
     posixok::Partition &                       keyToPartition(const std::string &key);
-    std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const posixok::KineticDrive &drive);
+    std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const posixok::Partition &p, int driveID);
 
-    bool testConnection(const posixok::KineticDrive &drive);
+    bool testConnection(const posixok::Partition &p, int driveID);
     bool testPartition (const posixok::Partition &p);
 
     bool getPartitionUpdate(posixok::Partition &p);

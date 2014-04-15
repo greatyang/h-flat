@@ -65,9 +65,9 @@ The file system client implements a read-only cache to speed multiple requests t
 
 It follows that different read-cache strategies are optimal depending on the way clients use the file system. Below are some general recommendations: 
      
-     Single Client or Clients working in a non-overlapping manner: Disable cache expiration by setting it to 0
-     Multiple Clients, heavy workload on shared directories & files: 1 second read-cache (1000 milliseconds) 
-     Multiple Clients, but only occasionally working on shared files: 5 second read cache (5000 milliseconds)
+     0 (disabled) : single client or clients working in a non-overlapping manner
+     1000 milliseconds : multiple clients, heavy workload on shared directories & files
+     3000 milliseconds : multiple clients, but only occasionally working on shared files
 
 
 # Testing

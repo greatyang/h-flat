@@ -73,7 +73,7 @@ If **posix_mode** is set to *FULL*, ctime and mtime attributes are always update
 *Default value: FULL*
 
 # Testing
-File system functionality has been tested with the following tools: 
+The following tools can be (and have been) used to test file system functionality. 
 + [POSIX Test Suite](http://www.tuxera.com/community/posix-test-suite/)
 + [File System Exerciser](http://codemonkey.org.uk/projects/fsx/)
 

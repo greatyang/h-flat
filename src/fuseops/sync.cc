@@ -28,7 +28,7 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
        mdi->updateACMtime();
        err = put_metadata(mdi);
        /* O_APPEND -> can't allow non-serialized data changes*/
-       if(err && (fi->flags & O_APPEND)){
+       if(err && fi && (fi->flags & O_APPEND)){
            PRIV->data_cache.invalidate(di->getKey());
            return err;
        }

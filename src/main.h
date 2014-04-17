@@ -36,7 +36,7 @@ struct pok_priv
     std::uint16_t   inum_counter;
     std::mutex      lock;
 
-    pok_priv(KineticNamespace *kn, int cache_expiration_ms):
+    pok_priv(KineticNamespace *kn, int cache_expiration_ms, int block_size_bytes, PosixMode mode):
             kinetic(kn),
             lookup_cache(cache_expiration_ms, 500,
                     std::mem_fn(&MetadataInfo::getSystemPath),
@@ -50,8 +50,8 @@ struct pok_priv
                     std::mem_fn(&DataInfo::hasUpdates)
             ),
             pmap(),
-            blocksize(1024 * 1024), // 1 MB data block size
-            posix(PosixMode::FULL), // POSIX conform updating of directory time stamps, costs performance
+            blocksize(block_size_bytes),
+            posix(mode),   // POSIX conform updating of directory time stamps costs performance
             inum_base(0),
             inum_counter(0),
             lock()

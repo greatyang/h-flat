@@ -105,7 +105,7 @@ static void init_pok_ops(fuse_operations *ops)
 
 bool parse_configuration(char *file,
         std::vector< posixok::Partition > &clustermap, posixok::Partition &logpartition,
-        int &cache_expiration_ms)
+        int &cache_expiration_ms, PosixMode &pmode)
 {
     auto cfg_to_posixok = [&](config_setting_t *partition, posixok::Partition &p) -> bool {
         if(partition)
@@ -159,6 +159,11 @@ bool parse_configuration(char *file,
 
     if (config_setting_t * options =  config_lookup(&cfg, "options")){
         config_setting_lookup_int(options, "cache_expiration", &cache_expiration_ms);
+
+        const char *mode;
+        if( config_setting_lookup_string(options, "posix_mode", &mode) )
+            if(strcmp(mode,"RELAXED") == 0)
+                pmode = PosixMode::TIMERELAXED;
     }
 
 
@@ -178,12 +183,16 @@ int main(int argc, char *argv[])
     std::vector< posixok::Partition > clustermap;
     posixok::Partition logpartition;
     int cache_expiration_ms = 1000;
+    PosixMode mode = PosixMode::FULL;
 
     init_pok_ops(&pok_ops);
 
     for(int i=0; i<argc; i++)
         if(strncmp(argv[i],"-cfg=",5) == 0){
-            if( parse_configuration(argv[i]+5, clustermap, logpartition, cache_expiration_ms) == false )
+            if( false == parse_configuration(argv[i]+5,
+                    clustermap, logpartition,
+                    cache_expiration_ms,
+                    mode))
                 return(EXIT_FAILURE);
             else{
                 for(int j=i+1; j<argc; j++)
@@ -194,14 +203,18 @@ int main(int argc, char *argv[])
 
     try {
         if(clustermap.empty())
-            priv = new pok_priv(new SimpleKineticNamespace(), cache_expiration_ms);
+            priv = new pok_priv(new SimpleKineticNamespace(), cache_expiration_ms, 1024*1024, mode);
+        else if(clustermap.size() == 1 && clustermap.at(0).drives_size() == 1){
+            pok_debug("simple namespace used");
+            priv = new pok_priv(new SimpleKineticNamespace(clustermap[0].drives(0)), cache_expiration_ms, 1024*1024, mode);
+        }
         else
-            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms);
+            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms, 1024*1024, mode);
     }
     catch(std::exception& e){
         pok_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
         return(EXIT_FAILURE);
     }
-    pok_debug("Read cache expiration time set to %d milliseconds.", cache_expiration_ms);
+    pok_debug("Read cache expiration time set to %d milliseconds. Posix mode is %s", cache_expiration_ms, mode == PosixMode::FULL ? "FULL" : "RELAXED" );
     return fuse_main(argc, argv, &pok_ops, (void*)priv);
 }

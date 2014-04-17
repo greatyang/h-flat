@@ -53,22 +53,24 @@ The cluster configuration defines the **clustermap** and **log** variables using
      log        = Partition 
      
 There are three valid values for status: 
-     
-     GREEN : The kinetic drive is in the read & write quorums, it is up-to-date on all keys
-     YELLOW: The drive might have missed key updates, it is in the write quorum but not the read quorum
-     RED   : The drive is currently broken / unreachable. 
++ GREEN : The kinetic drive is in the read & write quorums, it is up-to-date on all keys
++ YELLOW: The drive might have missed key updates, it is in the write quorum but not the read quorum
++ RED   : The drive is currently broken / unreachable. 
 
 Keys are sharded accross all existing partitions of the clustermap. Keys written to a partition are replicated among all drives of the partition. Typical configurations would therefore be 1 drive per partition for no redundancy and 3 drives per partition for triple redundancy. The optional log partition is used to increase rebuild speed for temporarily unavailable drives in the clustermap. 
 
 #### Client Configuration
+##### Read Cache
 The file system client implements a read-only cache to speed multiple requests to the same metadata / data. An auto-expiration time can be specified in miliseconds using the **cache_expiration** variable. A longer expiration time generally improves performance while a shorter expiration time improves agility: While stale cache items are detected on write & automatically resolved, multiple clients working on shared files can experience an additional delay until changes to a file become visible for read-only operations such as stat.
 
-It follows that different read-cache strategies are optimal depending on the way clients use the file system. Below are some general recommendations: 
-     
-     0 (disabled) : single client or clients working in a non-overlapping manner
-     1000 milliseconds : multiple clients, heavy workload on shared directories & files
-     3000 milliseconds : multiple clients, but only occasionally working on shared files
+It follows that different read-cache strategies are optimal depending on the way clients use the file system. In case of a single client or clients working in a completely non-overlapping manner it can be disabled (set to 0) for optimal performance. A setting of 1000 millisecond combines performance and agility when many clients perform operations on shared files and directories. If sharing files / directories is done only infrequently, a higher cache timeout value can be chosen. 
 
+*Default value: 1000* 
+
+##### POSIX Compliance
+If **posix_mode** is set to *FULL*, ctime and mtime attributes are always updated according to POSIX specification. If set to *RELAXED*, ctime and mtime updates are skipped for performance reasons in certain scenarios. This allows, for example, file creation without writing to the directory (which could be a bottleneck in case of concurrent created in a distributed setting). 
+
+*Default value: FULL*
 
 # Testing
 File system functionality has been tested with the following tools: 

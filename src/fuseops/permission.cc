@@ -71,20 +71,16 @@ static int permission_lookup(const char *user_path, std::shared_ptr<MetadataInfo
     if(fuse_get_context()->uid == 0)
         return 0;
 
-    /* Non-root can't change the owner of a file.*/
-    if ((uid != (uid_t) -1) && (uid != mdi->getMD().uid()))
+    /* Non-owner isn't actually allowed to change anything. */
+    if(fuse_get_context()->uid != mdi->getMD().uid())
         return -EPERM;
 
-    /* Non-root owner can change group to a group of which he is a member.
-    *  TODO: group member-check. not possible in fuse with system groups */
-    if ((gid != (gid_t) -1) && (gid != mdi->getMD().gid()))
-        if( (fuse_get_context()->uid != mdi->getMD().uid()) )
-            return -EPERM;
+    /* Owner can change group only to a group of which he is a member.
+     * TODO: group member-check -> Not possible in fuse with system groups.
+     * We alternatively enforce that the owner can only change the group to his currently active group. */
+    if ((gid != (gid_t) -1) && (gid != fuse_get_context()->gid))
+        return -EPERM;
 
-    /* Owner can change file mode. */
-    if ((mode != (mode_t) -1) && (mode != mdi->getMD().mode()))
-        if(fuse_get_context()->uid != mdi->getMD().uid())
-            return -EPERM;
     return 0;
 }
 

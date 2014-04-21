@@ -1,12 +1,34 @@
 package posixok;
 
+enum MappingType{
+    MOVE    = 1;
+    SYMLINK = 2;
+    NONE    = 3; 
+    REUSE   = 4; 
+}; 
+
+// A serialized snapshot. It cannot be used for incremental updates, but will be much much more compact in the normal case, as 
+// mappings that have been added and removed during the history of the database do not occur at all.
+message db_snapshot{   
+    message entry {
+        required string     origin      = 1;
+        required MappingType type        = 2;
+        optional string     target      = 3;
+        optional int64      permissionTimeStamp = 4 [default=0]; 
+    };
+
+    required int64   snapshot_version = 1;    
+    repeated entry   entries = 2; 
+}
+
+
+// Note that the db_entry is different from entries pathmap_db. 
+// There is no REUSE type as in pathmapdb: This type is implicit and is only computed for the in-memory hashmap representation of the database
+// There is an additional REMOVED type to indicate that a mapping has been removed ( because the directory / link it referred to has been removed from the fs). 
+// There is no permissionTimeStamp as it is similarly implicit by the entry database version number [because NONE entries aren't merged in db_entries] 
+// As a result, db_entries can be replayed like a log to obtain an in-memory snaphot & used for incremental updates. 
 message db_entry {
-    
-    // Note that the db_entry is different from entries pathmap_db. 
-    // There is no REUSE TargetType as in pathmapdb: This type is implicit and is only computed for the in-memory hashmap representation of the database
-    // There is an additional REMOVED TargetType to indicate that a mapping has been removed ( because the directory / link it referred to has been removed from the fs). 
-    // There is no permissionTimeStamp as it is similarly implicit by the entry database version number [because NONE entries aren't merged in db_entry list] 
-    enum TargetType{
+    enum Type{
         MOVE    = 1;
         SYMLINK = 2;
         NONE    = 3;
@@ -14,11 +36,6 @@ message db_entry {
     };
     
     required string     origin      = 1;
-    required TargetType type        = 2;
+    required Type       type        = 2;
     optional string     target      = 3;
-}
-
-// A list of db-entries, to be stored in a single key. Used to update clients that are out-of-date by a lot. 
-message db_entries {
-    repeated db_entry data = 1;
 }

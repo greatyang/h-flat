@@ -1,6 +1,7 @@
 #ifndef SIMPLE_KINETIC_NAMESPACE_H_
 #define SIMPLE_KINETIC_NAMESPACE_H_
 #include "kinetic_namespace.h"
+#include "replication.pb.h"
 
 /* Simple one-drive implementation. */
 class SimpleKineticNamespace final : public KineticNamespace
@@ -12,6 +13,10 @@ private:
 private:
     void connect();
 
+    /* Run operation, retry in case of potential network problems or temporary drive problems. */
+    KineticStatus Run(std::function<KineticStatus()> op);
+
+
 public:
     KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);
     KineticStatus Delete(const string &key, const string& version, WriteMode mode);
@@ -21,7 +26,7 @@ public:
     KineticStatus Capacity(kinetic::Capacity &cap);
     bool          selfCheck();
 public:
-    explicit SimpleKineticNamespace(kinetic::ConnectionOptions options);
+    explicit SimpleKineticNamespace(const posixok::KineticDrive &d);
     explicit SimpleKineticNamespace();
     ~SimpleKineticNamespace();
 };

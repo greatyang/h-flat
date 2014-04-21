@@ -85,12 +85,10 @@ int pok_unlink(const char *user_path)
     if( err == -EAGAIN) return pok_unlink(user_path);
     if( err) return err;
 
-   /* Remove associated path mappings. The following sequence for example should not leave a mapping behind.
-    *  mkdir a   mv a b   rmdir b.
-    *  Since serialization has been done over the md-key, no verification is necessary */
+   /* Remove associated path mapping if it exists. */
     if(PRIV->pmap.hasMapping(user_path)){
         posixok::db_entry entry;
-        entry.set_type(posixok::db_entry_TargetType_REMOVED);
+        entry.set_type(posixok::db_entry_Type_REMOVED);
         entry.set_origin(user_path);
         REQ( database_operation(entry) );
     }
@@ -100,7 +98,6 @@ int pok_unlink(const char *user_path)
 
     /* remove directory entry */
     REQ( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
-
 
     /* start a background thread to delete now unused data blocks */
     auto datadelete = [](int size, int ino, struct pok_priv *priv){
@@ -113,6 +110,23 @@ int pok_unlink(const char *user_path)
     if(!hardlink || mdi->getMD().link_count() == 0){
         std::thread t(std::bind(datadelete,mdi->getMD().size(), mdi->getMD().inode_number(), PRIV));
         t.detach();
+    }
+
+
+    /* Look for a potential unused reuse mapping.
+     * The following sequence should not leave a mapping behind.
+     *      mkdir a -> mv a b -> rmdir b.
+     * In contrast, the following sequence should leave the reuse mapping intact:
+     *      mkdir a -> mv a b -> mkdir a -> rmdir b
+     *
+     * To check if the name exists and remove the mapping if it doesn't in a way
+     * that is unproblematic considering concurrency issues, use existing create &
+     * unlink functionality.
+     */
+    const char * reuse = mdi->getSystemPath().c_str();
+    if(PRIV->pmap.hasMapping(reuse)){
+        if(pok_create (reuse, S_IFREG) == 0)
+            pok_unlink(reuse);
     }
     return 0;
 }

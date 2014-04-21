@@ -1,9 +1,10 @@
 #include "main.h"
 #include "debug.h"
-#include <stdint.h>
-#include <uuid/uuid.h>
 #include "kinetic_helper.h"
 #include "database.pb.h"
+#include <stdint.h>
+#include <uuid/uuid.h>
+#include <future>
 
 namespace util
 {
@@ -72,12 +73,12 @@ std::string path_to_filename(const std::string &path)
     return path.substr(path.find_last_of("/:") + 1);
 }
 
-
+/* Update the local database snapshot from remotely stored db_entries. Returns -EALREADY if
+ * the local snapshot is already at the newest version. */
 int database_update(void)
 {
     std::int64_t dbVersion;
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
-    std::list<posixok::db_entry> entries;
     posixok::db_entry entry;
 
     if (int err = get_db_version(dbVersion))
@@ -91,7 +92,17 @@ int database_update(void)
         dbVersion+=1;
     }
 
-    /* Update */
+    /* See if it makes sense to get a full snapshot instead of an incremental update. */
+    if(dbVersion - snapshotVersion > 42){
+        posixok::db_snapshot s;
+        if(get_db_snapshot(s) == 0){
+            PRIV->pmap.loadSnapshot(s);
+            snapshotVersion = PRIV->pmap.getSnapshotVersion();
+        }
+    }
+
+    /* Update using single db_entries. */
+    std::list<posixok::db_entry> entries;
     for (std::int64_t v = snapshotVersion + 1; v <= dbVersion; v++) {
         if (int err = get_db_entry(v, entry))
             return err;
@@ -109,6 +120,10 @@ int database_operation(posixok::db_entry &entry)
         std::list<posixok::db_entry> entries;
         entries.push_back(entry);
         PRIV->pmap.updateSnapshot(entries, snapshotVersion, snapshotVersion + 1);
+        if(snapshotVersion % 42 == 0){
+            posixok::db_snapshot s = PRIV->pmap.serializeSnapshot();
+            put_db_snapshot(s);
+        }
         return 0;
     }
     if (  err != -EEXIST){

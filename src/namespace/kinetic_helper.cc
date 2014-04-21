@@ -16,7 +16,8 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
     if(!status.ok()){
-        if(status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND) return -ENOENT;
+        if(status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
+            return -ENOENT;
         pok_warning("status == %s",status.message().c_str());
         return -EIO;
     }
@@ -208,5 +209,35 @@ int get_db_version(std::int64_t &version)
         return -EIO;
     }
     version = to_int64(keyVersion->data());
+    return 0;
+}
+
+
+int put_db_snapshot (const posixok::db_snapshot &s)
+{
+    string key = db_base_name + "SNAPSHOT";
+    KineticRecord record(s.SerializeAsString(), "", "", Message_Algorithm_SHA1);
+    KineticStatus status = PRIV->kinetic->Put(key, "", kinetic::IGNORE_VERSION, record);
+
+    if (!status.ok())
+        return -EIO;
+
+    pok_trace("Stored serialized snapshot for database version %ld",s.snapshot_version());
+    return 0;
+
+}
+int get_db_snapshot (posixok::db_snapshot &s)
+{
+    string key = db_base_name + "SNAPSHOT";
+    unique_ptr<KineticRecord> record;
+    KineticStatus status = PRIV->kinetic->Get(key, record);
+
+    if (!status.ok())
+        return -EIO;
+
+    if(!s.ParseFromString(*record->value()))
+        return -EINVAL;
+
+    pok_trace("Loaded serialized snapshot for database version %ld",s.snapshot_version());
     return 0;
 }

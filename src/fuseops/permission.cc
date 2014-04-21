@@ -117,7 +117,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren())
     {
         posixok::db_entry entry;
-        entry.set_type(posixok::db_entry_TargetType_NONE);
+        entry.set_type(posixok::db_entry_Type_NONE);
         entry.set_origin(user_path);
 
         REQ( util::database_operation(entry) );

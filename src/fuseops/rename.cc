@@ -76,7 +76,7 @@ static int rename_softlink(const char *user_path_from, const char *user_path_to,
     char buffer[PATH_MAX];
     REQ( pok_readlink(user_path_from, buffer, PATH_MAX) );
 
-    entry.set_type(posixok::db_entry_TargetType_REMOVED);
+    entry.set_type(posixok::db_entry_Type_REMOVED);
     entry.set_origin(user_path_from);
     REQ( util::database_operation(entry) );
 
@@ -113,7 +113,9 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     REQ ( util::database_operation( entry ) );
 
     /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it. */
-    std::shared_ptr<MetadataInfo> mdi_fu(new MetadataInfo( dir_mdifrom->getSystemPath()+"/"+util::path_to_filename(user_path_from) ));
+    std::string fu_dir =  dir_mdifrom->getSystemPath().length() > 1 ? dir_mdifrom->getSystemPath()+"/" : "/";
+    std::shared_ptr<MetadataInfo> mdi_fu( new MetadataInfo( fu_dir + util::path_to_filename(user_path_from) ));
+    pok_debug("Checking path %s for existing FORCE_UPDATE inode.",mdi_fu->getSystemPath().c_str());
     if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE)
         REQ ( delete_metadata(mdi_fu) );
 
@@ -121,7 +123,7 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
     mdito->getMD().set_inode_number( util::generate_inode_number() );
     REQ ( create_metadata(mdito) );
-    pok_trace("succesfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
+    pok_trace("successfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
 
 
     /* Update ACtime for POSIX compliance */

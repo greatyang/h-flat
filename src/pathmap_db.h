@@ -14,19 +14,14 @@ enum class CallingType
     LOOKUP, READLINK
 };
 
-class PathMapDB
-final
+class PathMapDB final
 {
     private:
-        enum class TargetType
-        {
-            MOVE, REUSE, SYMLINK, NONE
-        };
         struct PMEntry
         {
-            TargetType   type;
-            std::string  target;
-            std::int64_t permissionTimeStamp;
+            posixok::MappingType    type;
+            std::string             target;
+            std::int64_t            permissionTimeStamp;
         };
 
         /* Version & hashmap of current snapshot */
@@ -55,6 +50,12 @@ final
 
         /* Return current database snapshot version */
         std::int64_t getSnapshotVersion() const;
+
+        /* Serialize the current snapshot version into a db_snapshot protobuf structure so it can be stored in remote storage. */
+        posixok::db_snapshot serializeSnapshot();
+
+        /* Load a the supplied database snapshot. Current in-memory snapshot will be overwritten. */
+        int loadSnapshot(const posixok::db_snapshot & snap);
 
         /* Update the current database snapshot to given version using the supplied list of new entries.
          * Returns 0 on success or a negative error code */

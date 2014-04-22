@@ -28,6 +28,10 @@ Executed operations are stored in system-level files on the regular file system 
 This slightly changes file system semantics: If client **A** moves a directory, this will not be immediately visible to client **B**. Instead, client **B** will be able to keep using the old path of the directory until it updates the database. The same delayed update semantics apply to the other two hierachical file system operations. 
 
 # Architecture
+The key-value interface provided by Seagate Kinetic drives allows some file system functionality to be pushed to the drives. As a result, a serverless design consisting only of clients and kinetic drives becomes feasible. 
+
+![Image](../../wiki/distributed-fs.png?raw=true)
+
 
 The file system code is decoupled from handling the actual kinetic drives, as shown in the following diagram.  
 ![Image](../../wiki/kinetic-namespace.png?raw=true)

@@ -6,6 +6,8 @@
 #include <uuid/uuid.h>
 #include <future>
 
+using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
+
 namespace util
 {
 
@@ -46,7 +48,7 @@ int grab_inode_generation_token(void)
     else
         return -EIO;
 
-    KineticRecord empty("", std::to_string(PRIV->inum_base + UINT16_MAX), "", com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+    KineticRecord empty("", std::to_string(PRIV->inum_base + UINT16_MAX), "", Message_Algorithm_SHA1);
     status = PRIV->kinetic->Put(inode_base_key, PRIV->inum_base ? std::to_string(PRIV->inum_base) : "", WriteMode::REQUIRE_SAME_VERSION, empty);
     if (status.statusCode() ==  kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
         return grab_inode_generation_token();

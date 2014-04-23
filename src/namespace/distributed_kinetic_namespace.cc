@@ -3,7 +3,7 @@
 #include "distributed_kinetic_namespace.h"
 #include "debug.h"
 
-using com::seagate::kinetic::proto::Message_Algorithm_SHA1;
+using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
 
 static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
@@ -91,7 +91,7 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
         }
     }
 
-    kinetic::Capacity cap = {0.0, 0.0};
+    kinetic::Capacity cap = {0, 0};
     for(auto &f : futures){
         kinetic::Capacity c = f.get();
         if(!c.total_bytes)

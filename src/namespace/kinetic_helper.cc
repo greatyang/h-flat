@@ -4,7 +4,7 @@
 
 using namespace util;
 using kinetic::StatusCode;
-using com::seagate::kinetic::proto::Message_Algorithm_SHA1;
+using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
 
 static const string db_base_name = "pathmapDB_";
 static const string db_version_key = db_base_name + "version";

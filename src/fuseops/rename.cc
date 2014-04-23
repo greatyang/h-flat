@@ -4,6 +4,7 @@
 #include "kinetic_helper.h"
 #include <sys/param.h>
 
+using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
 
 static int rename_lookup(
         const char *user_path_from, const char *user_path_to,
@@ -56,8 +57,7 @@ static int rename_regular(
     mdifrom->updateACtime();
 
     /* store md-key referenced by mdfrom in location pointed to be mdito */
-    KineticRecord record(mdifrom->getMD().SerializeAsString(), mdito->getKeyVersion(), "",
-            com::seagate::kinetic::proto::Message_Algorithm_SHA1);
+    KineticRecord record(mdifrom->getMD().SerializeAsString(), mdito->getKeyVersion(), "", Message_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdito->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
     if(!status.ok()) return -EIO;
 

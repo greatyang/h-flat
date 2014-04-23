@@ -14,12 +14,12 @@ void getMountPoints(void)
 {
     if(mountpoints.size())
         return;
-    std::string pok("POSIX-o-K");
+    std::string hf("hflat");
 #ifdef __APPLE__
     struct statfs *buf = NULL;
     int count = getmntinfo(&buf, 0);
     for (int i=0; i<count; i++){
-       if(!pok.compare(0, pok.length(), buf[i].f_mntfromname, pok.length())){
+       if(!hf.compare(0, hf.length(), buf[i].f_mntfromname, hf.length())){
            mountpoints.push_back(buf[i].f_mntonname);
        }
     }
@@ -28,7 +28,7 @@ void getMountPoints(void)
     struct mntent * part = NULL;
     if ( ( mtab = setmntent ("/etc/mtab", "r") ) != NULL) {
         while ( ( part = getmntent ( mtab) ) != NULL) {
-            if ( ( part->mnt_fsname != NULL ) && !pok.compare(0, pok.length(), part->mnt_fsname, pok.length())){
+            if ( ( part->mnt_fsname != NULL ) && !hf.compare(0, hf.length(), part->mnt_fsname, hf.length())){
                 mountpoints.push_back(part->mnt_dir);
             }
         }

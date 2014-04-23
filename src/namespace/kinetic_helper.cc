@@ -11,18 +11,18 @@ static const string db_version_key = db_base_name + "version";
 
 int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    pok_debug("GET key %s",mdi->getSystemPath().c_str());
+    hflat_debug("GET key %s",mdi->getSystemPath().c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
     if(!status.ok()){
         if(status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
             return -ENOENT;
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
-    posixok::Metadata md;
+    hflat::Metadata md;
     if(! md.ParseFromString( *record->value()) )
         return -EINVAL;
     mdi->setMD(md, *record->version() );
@@ -32,6 +32,7 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
+    hflat_debug("PUT key %s",mdi->getSystemPath().c_str());
     std::string new_version  = util::generate_uuid();
 
     KineticRecord record(mdi->getMD().SerializeAsString(), new_version, "", Message_Algorithm_SHA1);
@@ -41,11 +42,11 @@ int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
         PRIV->lookup_cache.invalidate(mdi->getSystemPath());
         if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH) return -EAGAIN;
         if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND) return -ENOENT;
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
-    pok_debug("PUT key %s",mdi->getSystemPath().c_str());
+    hflat_debug("PUT key %s",mdi->getSystemPath().c_str());
     mdi->setKeyVersion(new_version);
     return 0;
 }
@@ -66,7 +67,7 @@ int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<
 
 int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    pok_debug("CREATE key %s",mdi->getSystemPath().c_str());
+    hflat_debug("CREATE key %s",mdi->getSystemPath().c_str());
     std::string new_version = util::generate_uuid();
 
     KineticRecord record(mdi->getMD().SerializeAsString(),  new_version, "", Message_Algorithm_SHA1);
@@ -75,7 +76,7 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
         return -EEXIST;
     if (!status.ok()){
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
     mdi->setKeyVersion(new_version);
@@ -84,15 +85,16 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION);
+    hflat_debug("DELETE key %s",mdi->getSystemPath().c_str());
     PRIV->lookup_cache.invalidate(mdi->getSystemPath());
+    KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION);
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
         return -EAGAIN;
     if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
         return -ENOENT;
     if (!status.ok()){
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
     return 0;
@@ -100,12 +102,12 @@ int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
 {
-    pok_debug("GET DATA %s",key.c_str());
+    hflat_debug("GET DATA %s",key.c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(key, record);
 
     if (!status.ok() && status.statusCode() !=  StatusCode::REMOTE_NOT_FOUND){
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
@@ -118,7 +120,7 @@ int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
 
 int put_data(const std::shared_ptr<DataInfo> &di)
 {
-    pok_debug("PUT DATA %s",di->getKey().c_str());
+    hflat_debug("PUT DATA %s",di->getKey().c_str());
     std::string new_version = util::generate_uuid();
 
     KineticRecord record(di->data(), new_version, "", Message_Algorithm_SHA1);
@@ -136,7 +138,7 @@ int put_data(const std::shared_ptr<DataInfo> &di)
         }
     }
     if (!status.ok()){
-        pok_warning("status == %s",status.message().c_str());
+        hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
 
@@ -147,7 +149,7 @@ int put_data(const std::shared_ptr<DataInfo> &di)
 
 int delete_data(const std::shared_ptr<DataInfo> &di)
 {
-    pok_debug("DELETE DATA %s",di->getKey().c_str());
+    hflat_debug("DELETE DATA %s",di->getKey().c_str());
     KineticStatus status = PRIV->kinetic->Delete(di->getKey(), "", WriteMode::IGNORE_VERSION);
     PRIV->data_cache.invalidate(di->getKey());
     if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
@@ -157,7 +159,7 @@ int delete_data(const std::shared_ptr<DataInfo> &di)
     return 0;
 }
 
-int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
+int put_db_entry(std::int64_t version, const hflat::db_entry &entry)
 {
     string key = db_base_name + std::to_string(version);
     KineticRecord record(entry.SerializeAsString(), std::to_string(version), "", Message_Algorithm_SHA1);
@@ -173,11 +175,11 @@ int put_db_entry(std::int64_t version, const posixok::db_entry &entry)
     KineticRecord empty("", std::to_string(version), "", Message_Algorithm_SHA1);
     status = PRIV->kinetic->Put(db_version_key, "", WriteMode::IGNORE_VERSION, empty);
     if (!status.ok())
-        pok_warning("Failed updating database version key.");
+        hflat_warning("Failed updating database version key.");
     return 0;
 }
 
-int get_db_entry(std::int64_t version, posixok::db_entry &entry)
+int get_db_entry(std::int64_t version, hflat::db_entry &entry)
 {
     string key = db_base_name + std::to_string(version);
     unique_ptr<KineticRecord> record;
@@ -185,7 +187,7 @@ int get_db_entry(std::int64_t version, posixok::db_entry &entry)
     if (status.statusCode() ==  StatusCode::REMOTE_NOT_FOUND)
         return -ENOENT;
     if (!status.ok()){
-        pok_warning("encountered status '%s' when attempting to obtain %s. Returning -EIO.",
+        hflat_warning("encountered status '%s' when attempting to obtain %s. Returning -EIO.",
                 status.message().c_str(), key.c_str());
         return -EIO;
     }
@@ -204,7 +206,7 @@ int get_db_version(std::int64_t &version)
         return 0;
     }
     if (!status.ok()){
-        pok_warning("encountered status '%s' when calling getVersion on %s. Returning -EIO.",
+        hflat_warning("encountered status '%s' when calling getVersion on %s. Returning -EIO.",
                 status.message().c_str(), db_version_key.c_str());
         return -EIO;
     }
@@ -213,7 +215,7 @@ int get_db_version(std::int64_t &version)
 }
 
 
-int put_db_snapshot (const posixok::db_snapshot &s)
+int put_db_snapshot (const hflat::db_snapshot &s)
 {
     string key = db_base_name + "SNAPSHOT";
     KineticRecord record(s.SerializeAsString(), "", "", Message_Algorithm_SHA1);
@@ -222,11 +224,11 @@ int put_db_snapshot (const posixok::db_snapshot &s)
     if (!status.ok())
         return -EIO;
 
-    pok_trace("Stored serialized snapshot for database version %ld",s.snapshot_version());
+    hflat_trace("Stored serialized snapshot for database version %ld",s.snapshot_version());
     return 0;
 
 }
-int get_db_snapshot (posixok::db_snapshot &s)
+int get_db_snapshot (hflat::db_snapshot &s)
 {
     string key = db_base_name + "SNAPSHOT";
     unique_ptr<KineticRecord> record;
@@ -238,6 +240,6 @@ int get_db_snapshot (posixok::db_snapshot &s)
     if(!s.ParseFromString(*record->value()))
         return -EINVAL;
 
-    pok_trace("Loaded serialized snapshot for database version %ld",s.snapshot_version());
+    hflat_trace("Loaded serialized snapshot for database version %ld",s.snapshot_version());
     return 0;
 }

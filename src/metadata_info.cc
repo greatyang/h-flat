@@ -61,13 +61,13 @@ std::shared_ptr<DataInfo>& MetadataInfo::getDirtyData()
     return dirty_data;
 }
 
-void MetadataInfo::setMD(const posixok::Metadata & md, const std::string &vc)
+void MetadataInfo::setMD(const hflat::Metadata & md, const std::string &vc)
 {
     this->md = md;
     this->keyVersion = vc;
 }
 
-posixok::Metadata & MetadataInfo::getMD()
+hflat::Metadata & MetadataInfo::getMD()
 {
     return md;
 }
@@ -79,11 +79,11 @@ bool MetadataInfo::computePathPermissionChildren()
     bool group = md.mode() & S_IXGRP;
     bool other = md.mode() & S_IXOTH;
 
-    std::vector<posixok::Metadata_ReachabilityEntry> v;
-    posixok::Metadata_ReachabilityEntry e;
+    std::vector<hflat::Metadata_ReachabilityEntry> v;
+    hflat::Metadata_ReachabilityEntry e;
     e.set_uid(md.uid());
     e.set_gid(md.gid());
-    auto addEntry = [&v,&e](posixok::Metadata_ReachabilityType type) -> void {
+    auto addEntry = [&v,&e](hflat::Metadata_ReachabilityType type) -> void {
         e.set_type(type);
         v.push_back(e);
         assert(v.size() <= 2);
@@ -92,24 +92,24 @@ bool MetadataInfo::computePathPermissionChildren()
     /* Check if access is restricted to a specific user and / or group */
     if (!other) {
         if (user && group)
-            addEntry(posixok::Metadata_ReachabilityType_UID_OR_GID);
+            addEntry(hflat::Metadata_ReachabilityType_UID_OR_GID);
         if (user && !group)
-            addEntry(posixok::Metadata_ReachabilityType_UID);
+            addEntry(hflat::Metadata_ReachabilityType_UID);
         if (!user && group)
-            addEntry(posixok::Metadata_ReachabilityType_GID);
+            addEntry(hflat::Metadata_ReachabilityType_GID);
     }
 
     /* Check if a specific user and / or group is excluded. */
     if (!user)
-        addEntry(posixok::Metadata_ReachabilityType_NOT_UID);
+        addEntry(hflat::Metadata_ReachabilityType_NOT_UID);
     if (!group) {
         if (!user)
-            addEntry(posixok::Metadata_ReachabilityType_NOT_GID);
+            addEntry(hflat::Metadata_ReachabilityType_NOT_GID);
         if (user && other) // owner can access despite excluded group
-            addEntry(posixok::Metadata_ReachabilityType_GID_REQ_UID);
+            addEntry(hflat::Metadata_ReachabilityType_GID_REQ_UID);
     }
 
-    auto equal = [](const posixok::Metadata_ReachabilityEntry &lhs, const posixok::Metadata_ReachabilityEntry &rhs) -> bool {
+    auto equal = [](const hflat::Metadata_ReachabilityEntry &lhs, const hflat::Metadata_ReachabilityEntry &rhs) -> bool {
         if(lhs.uid() != rhs.uid())      return false;
         if(lhs.gid() != rhs.gid())      return false;
         if(lhs.type() != rhs.type())    return false;
@@ -123,7 +123,7 @@ bool MetadataInfo::computePathPermissionChildren()
                 v.erase(it);
 
 
-    auto ppc_contains = [this, equal](const posixok::Metadata_ReachabilityEntry &e) -> bool {
+    auto ppc_contains = [this, equal](const hflat::Metadata_ReachabilityEntry &e) -> bool {
         for (int i = 0; i < md.path_permission_children_size(); i++)
             if (equal(md.path_permission_children(i), e))
                 return true;
@@ -138,7 +138,7 @@ bool MetadataInfo::computePathPermissionChildren()
     if (changed) {
         md.mutable_path_permission_children()->Clear();
         for (auto it = v.begin(); it != v.end(); it++) {
-            posixok::Metadata_ReachabilityEntry *entry = md.mutable_path_permission_children()->Add();
+            hflat::Metadata_ReachabilityEntry *entry = md.mutable_path_permission_children()->Add();
             entry->CopyFrom(*it);
         }
     }
@@ -147,7 +147,7 @@ bool MetadataInfo::computePathPermissionChildren()
 
 
 /* If someone has a reasonable idea how to code this function PLEASE let me know
-bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t version)
+bool MetadataInfo::mergeMD(const hflat::Metadata & md_update, std::int64_t version)
 {
     // type change disallows merge
     if(md_mutable.type() != md_update.type() )
@@ -177,10 +177,10 @@ bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t ver
          else if(md_const.blocks() != md_update.blocks()) return false;
      }
 
-     typedef ::google::protobuf::RepeatedPtrField< ::posixok::Metadata_ReachabilityEntry > rEntries;
+     typedef ::google::protobuf::RepeatedPtrField< ::hflat::Metadata_ReachabilityEntry > rEntries;
      auto equal = [](const rEntries &a, const rEntries &b)
      {
-         auto equal = [](const posixok::Metadata_ReachabilityEntry &lhs, const posixok::Metadata_ReachabilityEntry &rhs) -> bool {
+         auto equal = [](const hflat::Metadata_ReachabilityEntry &lhs, const hflat::Metadata_ReachabilityEntry &rhs) -> bool {
                 if(lhs.uid() != rhs.uid())   return false;
                 if(lhs.gid() != rhs.gid())   return false;
                 if(lhs.type()!= rhs.type())  return false;
@@ -215,10 +215,10 @@ bool MetadataInfo::mergeMD(const posixok::Metadata & md_update, std::int64_t ver
      }
 
 
-     typedef ::google::protobuf::RepeatedPtrField< ::posixok::Metadata_ExtendedAttribute > xAttrs;
+     typedef ::google::protobuf::RepeatedPtrField< ::hflat::Metadata_ExtendedAttribute > xAttrs;
      auto equalX = [](const xAttrs &a, const xAttrs &b)
      {
-         auto equal = [](const posixok::Metadata_ExtendedAttribute &lhs, const posixok::Metadata_ExtendedAttribute &rhs) -> bool {
+         auto equal = [](const hflat::Metadata_ExtendedAttribute &lhs, const hflat::Metadata_ExtendedAttribute &rhs) -> bool {
                 if(lhs.name().compare(rhs.name()))   return false;
                 if(lhs.value().compare(rhs.value())) return false;
                   return true;

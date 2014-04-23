@@ -20,11 +20,11 @@ int put_data    (const std::shared_ptr<DataInfo> &di);          // will always r
 int delete_data (const std::shared_ptr<DataInfo> &di);          // ignores version
 
 /* Database */
-int put_db_entry    (std::int64_t version, const posixok::db_entry &entry);
-int get_db_entry    (std::int64_t version, posixok::db_entry &entry);
+int put_db_entry    (std::int64_t version, const hflat::db_entry &entry);
+int get_db_entry    (std::int64_t version, hflat::db_entry &entry);
 int get_db_version  (std::int64_t &version);
 
-int put_db_snapshot (const posixok::db_snapshot &s);
-int get_db_snapshot (posixok::db_snapshot &s);
+int put_db_snapshot (const hflat::db_snapshot &s);
+int get_db_snapshot (hflat::db_snapshot &s);
 
 #endif

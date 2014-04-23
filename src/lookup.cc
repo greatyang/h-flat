@@ -1,7 +1,6 @@
 #include "main.h"
 #include "debug.h"
 #include "kinetic_helper.h"
-
 #include <execinfo.h>
 
 /* This version of the lookup function bypasses the lookup cache and all verification / manipulation of read in metadata, making
@@ -24,36 +23,36 @@ int get_metadata_userpath(const char *user_path, std::shared_ptr<MetadataInfo> &
 
 /* For full functionality, all group checks should do in_group checks instead of straight
  * comparisons, compare chown. */
-static int check_path_permissions(const google::protobuf::RepeatedPtrField<posixok::Metadata_ReachabilityEntry > &path_permissions){
+static int check_path_permissions(const google::protobuf::RepeatedPtrField<hflat::Metadata_ReachabilityEntry > &path_permissions){
 
 
     for(int i=0; i < path_permissions.size(); i++){
-        const posixok::Metadata_ReachabilityEntry &e = path_permissions.Get(i);
+        const hflat::Metadata_ReachabilityEntry &e = path_permissions.Get(i);
 
         switch(e.type()){
 
-        case posixok::Metadata_ReachabilityType_UID:
+        case hflat::Metadata_ReachabilityType_UID:
             if(fuse_get_context()->uid != e.uid())
                 return -EACCES;
             break;
-        case posixok::Metadata_ReachabilityType_GID:
+        case hflat::Metadata_ReachabilityType_GID:
             if(fuse_get_context()->gid != e.gid())
                 return -EACCES;
             break;
-        case posixok::Metadata_ReachabilityType_UID_OR_GID:
+        case hflat::Metadata_ReachabilityType_UID_OR_GID:
             if(fuse_get_context()->uid != e.uid())
                 if(fuse_get_context()->gid != e.gid())
                     return -EACCES;
             break;
-        case posixok::Metadata_ReachabilityType_NOT_GID:
+        case hflat::Metadata_ReachabilityType_NOT_GID:
             if(fuse_get_context()->gid == e.gid())
                return -EACCES;
             break;
-        case posixok::Metadata_ReachabilityType_NOT_UID:
+        case hflat::Metadata_ReachabilityType_NOT_UID:
             if(fuse_get_context()->uid == e.uid())
                 return -EACCES;
             break;
-        case posixok::Metadata_ReachabilityType_GID_REQ_UID:
+        case hflat::Metadata_ReachabilityType_GID_REQ_UID:
             if(fuse_get_context()->gid == e.gid())
                 if(fuse_get_context()->uid != e.uid())
                     return -EACCES;
@@ -89,11 +88,11 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         return -ENOENT;
 
     /* Step 3: Special inode types: Follow hardlink_source inode types in the lookup operation, update on force_update. */
-    if (mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S) {
+    if (mdi->getMD().type() == hflat::Metadata_InodeType_HARDLINK_S) {
         if(!cached){
-            pok_debug("type HARDLINK_S for user_path %s",user_path);
+            hflat_debug("type HARDLINK_S for user_path %s",user_path);
             std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo(key));
-            mdi_source->getMD().set_type( posixok::Metadata_InodeType_HARDLINK_S );
+            mdi_source->getMD().set_type( hflat::Metadata_InodeType_HARDLINK_S );
             mdi_source->getMD().set_inode_number( mdi->getMD().inode_number() );
             PRIV->lookup_cache.add(key,mdi_source);
         }
@@ -101,9 +100,9 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         return lookup(hlkey.c_str(), mdi);
 
     }
-    if (mdi->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE) {
+    if (mdi->getMD().type() == hflat::Metadata_InodeType_FORCE_UPDATE) {
         if (int err = util::database_update()){
-            pok_warning("encountered force_update inode in regular lookup and couldn't update database."
+            hflat_warning("encountered force_update inode in regular lookup and couldn't update database."
                     "user path: %s, system path: %s",user_path,mdi->getSystemPath().c_str());
             return err;
         }
@@ -115,7 +114,7 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
     /* Step 4: check path permissions, update (recursively as necessary) in case of staleness */
     bool stale = mdi->getMD().path_permission_verified() < pathPermissionTimeStamp;
     if (stale) {
-        pok_debug("stale path permission for path %s (%d vs required %d )",user_path, mdi->getMD().path_permission_verified(), pathPermissionTimeStamp);
+        hflat_debug("stale path permission for path %s (%d vs required %d )",user_path, mdi->getMD().path_permission_verified(), pathPermissionTimeStamp);
         std::shared_ptr<MetadataInfo> mdi_parent;
         if (int err = lookup_parent(user_path, mdi_parent)){
             if(err != -EACCES) return err;

@@ -11,21 +11,21 @@
         backtrace (caller, 2);
         char ** strings = backtrace_symbols (caller, 2);
         strings[1][strchr(strchr(strings[1],'p'),'P') - strings[1] ] = '\0';
-        pok_trace("%s > LOOKUP %s  ->  %s", strchr(strings[1],'p'),
+        hflat_trace("%s > LOOKUP %s  ->  %s", strchr(strings[1],'p'),
                         user_path, key.c_str());
  *
  */
 
 static int llconfig = 0;
 
-#define pok_trace(message...)   pok_printlog(1, __FUNCTION__, __FILE__, __LINE__, ## message)
-#define pok_debug(message...)   pok_printlog(2, __FUNCTION__, __FILE__, __LINE__, ## message)
-#define pok_warning(message...) pok_printlog(3, __FUNCTION__, __FILE__, __LINE__, ## message)
-#define pok_error(message...)   pok_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message)
+#define hflat_trace(message...)   hflat_printlog(1, __FUNCTION__, __FILE__, __LINE__, ## message)
+#define hflat_debug(message...)   hflat_printlog(2, __FUNCTION__, __FILE__, __LINE__, ## message)
+#define hflat_warning(message...) hflat_printlog(3, __FUNCTION__, __FILE__, __LINE__, ## message)
+#define hflat_error(message...)   hflat_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message)
 
-#define REQ(fun) if(fun){ pok_error("Unrecoverable File System Error. \n Killing myself now. Goodbye."); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
+#define REQ(fun) if(fun){ hflat_error("Unrecoverable File System Error. \n Killing myself now. Goodbye."); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
 
-static void pok_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
+static void hflat_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
 {
     if (loglevel < llconfig)
         return;

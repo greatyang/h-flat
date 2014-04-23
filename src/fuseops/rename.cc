@@ -72,11 +72,11 @@ static int rename_softlink(const char *user_path_from, const char *user_path_to,
     std::shared_ptr<MetadataInfo> &mdifrom
     )
 {
-    posixok::db_entry entry;
+    hflat::db_entry entry;
     char buffer[PATH_MAX];
-    REQ( pok_readlink(user_path_from, buffer, PATH_MAX) );
+    REQ( hflat_readlink(user_path_from, buffer, PATH_MAX) );
 
-    entry.set_type(posixok::db_entry_Type_REMOVED);
+    entry.set_type(hflat::db_entry_Type_REMOVED);
     entry.set_origin(user_path_from);
     REQ( util::database_operation(entry) );
 
@@ -92,7 +92,7 @@ static int rename_hardlink(const char *user_path_from, std::shared_ptr<MetadataI
 {
     std::shared_ptr<MetadataInfo> mdifrom;
     REQ( get_metadata_userpath(user_path_from, mdifrom) );
-    assert(mdifrom->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
+    assert(mdifrom->getMD().type() == hflat::Metadata_InodeType_HARDLINK_S);
 
     REQ (rename_regular(mdito, mdifrom));
     PRIV->lookup_cache.invalidate(mdifrom->getSystemPath());
@@ -106,7 +106,7 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     std::shared_ptr<MetadataInfo> &dir_mdifrom )
 {
     /* Add database entry */
-    posixok::db_entry entry;
+    hflat::db_entry entry;
     entry.set_type(entry.MOVE);
     entry.set_origin(user_path_from);
     entry.set_target(user_path_to);
@@ -115,15 +115,15 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it. */
     std::string fu_dir =  dir_mdifrom->getSystemPath().length() > 1 ? dir_mdifrom->getSystemPath()+"/" : "/";
     std::shared_ptr<MetadataInfo> mdi_fu( new MetadataInfo( fu_dir + util::path_to_filename(user_path_from) ));
-    pok_debug("Checking path %s for existing FORCE_UPDATE inode.",mdi_fu->getSystemPath().c_str());
-    if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE)
+    hflat_debug("Checking path %s for existing FORCE_UPDATE inode.",mdi_fu->getSystemPath().c_str());
+    if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == hflat::Metadata_InodeType_FORCE_UPDATE)
         REQ ( delete_metadata(mdi_fu) );
 
     /* Create a new force_udpate metadata key at target location.  */
-    mdito->getMD().set_type(posixok::Metadata_InodeType_FORCE_UPDATE);
+    mdito->getMD().set_type(hflat::Metadata_InodeType_FORCE_UPDATE);
     mdito->getMD().set_inode_number( util::generate_inode_number() );
     REQ ( create_metadata(mdito) );
-    pok_trace("successfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
+    hflat_trace("successfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
 
 
     /* Update ACtime for POSIX compliance */
@@ -134,9 +134,9 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
 
 
 /** Rename a file or directory. */
-int pok_rename(const char *user_path_from, const char *user_path_to)
+int hflat_rename(const char *user_path_from, const char *user_path_to)
 {
-    pok_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
+    hflat_trace("Rename '%s' to '%s'", user_path_from, user_path_to);
     std::shared_ptr<MetadataInfo> dir_mdifrom;
     std::shared_ptr<MetadataInfo> dir_mdito;
     std::shared_ptr<MetadataInfo> mdifrom;
@@ -147,8 +147,8 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
     /* Remove potentially existing target if possible */
     if(mdito->getMD().inode_number()){
         if (S_ISDIR(mdito->getMD().mode()))
-             err = pok_rmdir(user_path_to);
-        else err = pok_unlink(user_path_to);
+             err = hflat_rmdir(user_path_to);
+        else err = hflat_unlink(user_path_to);
         if (err) return err;
     }
 
@@ -168,12 +168,12 @@ int pok_rename(const char *user_path_from, const char *user_path_to)
         return err;
     }
 
-    pok_trace("passed serialization points");
+    hflat_trace("passed serialization points");
 
     /* The actual move operation is type dependent */
     bool directory = S_ISDIR(mdifrom->getMD().mode());
     bool softlink  = S_ISLNK(mdifrom->getMD().mode());
-    bool hardlink  = posixok::Metadata_InodeType_HARDLINK_T == mdifrom->getMD().type();
+    bool hardlink  = hflat::Metadata_InodeType_HARDLINK_T == mdifrom->getMD().type();
     bool regular   = !directory && !hardlink && !softlink;
 
     if( directory ) REQ( rename_directory(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom) );

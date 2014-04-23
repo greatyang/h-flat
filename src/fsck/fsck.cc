@@ -47,8 +47,8 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
     PRIV->lookup_cache.invalidate(target);
 
     /* if hardlink -> obtain HARDLINK_S md-keys before continuing */
-    if( (target_mdi->getMD().inode_number() && target_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
-      ||(origin_mdi->getMD().inode_number() && origin_mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T)
+    if( (target_mdi->getMD().inode_number() && target_mdi->getMD().type() == hflat::Metadata_InodeType_HARDLINK_T)
+      ||(origin_mdi->getMD().inode_number() && origin_mdi->getMD().type() == hflat::Metadata_InodeType_HARDLINK_T)
       )
     {
         get_metadata_userpath(target.c_str(), target_mdi);
@@ -61,15 +61,15 @@ static int recover_rename(const char *dir_path, const std::shared_ptr<MetadataIn
       )
     {
         if(PRIV->pmap.hasMapping(target.c_str())){
-             posixok::db_entry entry;
-             entry.set_type(posixok::db_entry_Type_REMOVED);
+             hflat::db_entry entry;
+             entry.set_type(hflat::db_entry_Type_REMOVED);
              entry.set_origin(target);
              int err = util::database_operation(entry);
              if(err) return err;
          }
         if(PRIV->pmap.hasMapping(origin.c_str())){
-             posixok::db_entry entry;
-             entry.set_type(posixok::db_entry_Type_REMOVED);
+             hflat::db_entry entry;
+             entry.set_type(hflat::db_entry_Type_REMOVED);
              entry.set_origin(origin);
              int err = util::database_operation(entry);
              if(err) return err;
@@ -124,8 +124,8 @@ int fsck_directory(const char* user_path, const std::shared_ptr<MetadataInfo> &m
         /* standard behavior for resolving dangling direntries: just delete it (and possibly existing database entries)*/
         std::string filepath = user_path + entry;
         if(PRIV->pmap.hasMapping(filepath.c_str())){
-             posixok::db_entry entry;
-             entry.set_type(posixok::db_entry_Type_REMOVED);
+             hflat::db_entry entry;
+             entry.set_type(hflat::db_entry_Type_REMOVED);
              entry.set_origin(filepath);
              err = util::database_operation(entry);
              if(err) return err;

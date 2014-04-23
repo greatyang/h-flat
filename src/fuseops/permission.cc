@@ -46,7 +46,7 @@ int check_access(const std::shared_ptr<MetadataInfo> &mdi, int mode)
  *
  * Introduced in version 2.5
  */
-int pok_access(const char *user_path, int mode)
+int hflat_access(const char *user_path, int mode)
 {
     /* OSX tries to verify access to root a hundred times or so... let's not go too crazy. */
     if (strlen(user_path) == 1)
@@ -116,8 +116,8 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
     /* note in database if path permissions changed */
     if(S_ISDIR(mdi->getMD().mode()) && mdi->computePathPermissionChildren())
     {
-        posixok::db_entry entry;
-        entry.set_type(posixok::db_entry_Type_NONE);
+        hflat::db_entry entry;
+        entry.set_type(hflat::db_entry_Type_NONE);
         entry.set_origin(user_path);
 
         REQ( util::database_operation(entry) );
@@ -130,13 +130,13 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
 
 
 /** Change the permission bits of a file */
-int pok_chmod(const char *user_path, mode_t mode)
+int hflat_chmod(const char *user_path, mode_t mode)
 {
     return  do_permission_change(user_path, mode, -1, -1);
 }
 
 /** Change the owner and group of a file */
-int pok_chown(const char *user_path, uid_t uid, gid_t gid)
+int hflat_chown(const char *user_path, uid_t uid, gid_t gid)
 {
     return do_permission_change(user_path, -1, uid, gid);
 }

@@ -19,7 +19,7 @@ class PathMapDB final
     private:
         struct PMEntry
         {
-            posixok::MappingType    type;
+            hflat::MappingType    type;
             std::string             target;
             std::int64_t            permissionTimeStamp;
         };
@@ -52,14 +52,14 @@ class PathMapDB final
         std::int64_t getSnapshotVersion() const;
 
         /* Serialize the current snapshot version into a db_snapshot protobuf structure so it can be stored in remote storage. */
-        posixok::db_snapshot serializeSnapshot();
+        hflat::db_snapshot serializeSnapshot();
 
         /* Load a the supplied database snapshot. Current in-memory snapshot will be overwritten. */
-        int loadSnapshot(const posixok::db_snapshot & snap);
+        int loadSnapshot(const hflat::db_snapshot & snap);
 
         /* Update the current database snapshot to given version using the supplied list of new entries.
          * Returns 0 on success or a negative error code */
-        int updateSnapshot(const std::list<posixok::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion);
+        int updateSnapshot(const std::list<hflat::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion);
 
         /* It is the responsiblity of the client to ensure that these functions are only called after
          * a successful update of the remote database (as an alternative of calling updateSnapshot()). */

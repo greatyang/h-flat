@@ -1,7 +1,7 @@
 #include "simple_kinetic_namespace.h"
 #include <exception>
 
-SimpleKineticNamespace::SimpleKineticNamespace(const posixok::KineticDrive &d)
+SimpleKineticNamespace::SimpleKineticNamespace(const hflat::KineticDrive &d)
 {
     options.host = d.host();
     options.port = d.port();
@@ -56,7 +56,7 @@ KineticStatus SimpleKineticNamespace::Run(std::function<KineticStatus()> op)
     if(s.statusCode() == kinetic::StatusCode::REMOTE_SERVICE_BUSY ||
        s.statusCode() == kinetic::StatusCode::REMOTE_INTERNAL_ERROR ||
        s.statusCode() == kinetic::StatusCode::CLIENT_IO_ERROR)
-        pok_warning("Giving up retrying for error code %d. %s",s.statusCode(),s.message().c_str());
+        hflat_warning("Giving up retrying for error code %d. %s",s.statusCode(),s.message().c_str());
     return s;
 }
 

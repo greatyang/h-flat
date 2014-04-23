@@ -11,10 +11,11 @@ int unlink_force_update(const char *user_path)
     std::shared_ptr<MetadataInfo> mdi_fu;
     int err = get_metadata_userpath(user_path, mdi_fu);
     if( err == -ENOENT) return 0;
+    hflat_warning("returning %d",err);
     if( err) return err;
 
-    pok_debug("Found force_update entry.");
-    assert(mdi_fu->getMD().type() == posixok::Metadata_InodeType_FORCE_UPDATE);
+    hflat_debug("Found force_update entry.");
+    assert(mdi_fu->getMD().type() == hflat::Metadata_InodeType_FORCE_UPDATE);
     return delete_metadata(mdi_fu);
 }
 
@@ -42,7 +43,7 @@ static int unlink_hardlink(const char *user_path, const std::shared_ptr<Metadata
     std::shared_ptr<MetadataInfo> mdiS;
     int err = get_metadata_userpath(user_path, mdiS);
     if( err) return err;
-    assert(mdiS->getMD().type() == posixok::Metadata_InodeType_HARDLINK_S);
+    assert(mdiS->getMD().type() == hflat::Metadata_InodeType_HARDLINK_S);
 
     /* set HARDLINK_S link count to 0 */
     if(mdiS->getMD().link_count() == 0) return -EINVAL;
@@ -70,25 +71,25 @@ static int unlink_hardlink(const char *user_path, const std::shared_ptr<Metadata
 }
 
 /** Remove a file */
-int pok_unlink(const char *user_path)
+int hflat_unlink(const char *user_path)
 {
     std::shared_ptr<MetadataInfo> mdi;
     std::shared_ptr<MetadataInfo> mdi_dir;
     int err = unlink_lookup(user_path, mdi, mdi_dir);
     if( err) return err;
 
-    bool hardlink  = mdi->getMD().type() == posixok::Metadata_InodeType_HARDLINK_T;
+    bool hardlink  = mdi->getMD().type() == hflat::Metadata_InodeType_HARDLINK_T;
     bool directory = S_ISDIR(mdi->getMD().mode());
 
     if(hardlink)  err = unlink_hardlink(user_path, mdi);
     else          err = delete_metadata(mdi);
-    if( err == -EAGAIN) return pok_unlink(user_path);
+    if( err == -EAGAIN) return hflat_unlink(user_path);
     if( err) return err;
 
    /* Remove associated path mapping if it exists. */
     if(PRIV->pmap.hasMapping(user_path)){
-        posixok::db_entry entry;
-        entry.set_type(posixok::db_entry_Type_REMOVED);
+        hflat::db_entry entry;
+        entry.set_type(hflat::db_entry_Type_REMOVED);
         entry.set_origin(user_path);
         REQ( database_operation(entry) );
     }
@@ -100,7 +101,7 @@ int pok_unlink(const char *user_path)
     REQ( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
 
     /* start a background thread to delete now unused data blocks */
-    auto datadelete = [](int size, int ino, struct pok_priv *priv){
+    auto datadelete = [](int size, int ino, struct hflat_priv *priv){
         while(size > 0){
             std::string key = std::to_string(ino) + "_" + std::to_string(size / priv->blocksize);
             priv->kinetic->Delete(key, "", WriteMode::IGNORE_VERSION);
@@ -123,10 +124,11 @@ int pok_unlink(const char *user_path)
      * that is unproblematic considering concurrency issues, use existing create &
      * unlink functionality.
      */
+
     const char * reuse = mdi->getSystemPath().c_str();
     if(PRIV->pmap.hasMapping(reuse)){
-        if(pok_create (reuse, S_IFREG) == 0)
-            pok_unlink(reuse);
+        if(hflat_create (reuse, S_IFREG) == 0)
+            hflat_unlink(reuse);
     }
     return 0;
 }
@@ -148,7 +150,7 @@ int pok_unlink(const char *user_path)
  *
  * Changed in version 2.2
  */
-int pok_open(const char *user_path, struct fuse_file_info *fi)
+int hflat_open(const char *user_path, struct fuse_file_info *fi)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -180,9 +182,9 @@ int pok_open(const char *user_path, struct fuse_file_info *fi)
  *
  * Changed in version 2.2
  */
-int pok_release(const char *user_path, struct fuse_file_info *fi)
+int hflat_release(const char *user_path, struct fuse_file_info *fi)
 {
-    return pok_fsync(user_path, 0, fi);
+    return hflat_fsync(user_path, 0, fi);
 }
 
 void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent)
@@ -193,7 +195,7 @@ void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const st
 
      /* Add path permissions precomputed for directory's children. */
      for (int i = 0; i < mdi_parent->getMD().path_permission_children_size(); i++) {
-         posixok::Metadata::ReachabilityEntry *e = mdi->getMD().add_path_permission();
+         hflat::Metadata::ReachabilityEntry *e = mdi->getMD().add_path_permission();
          e->CopyFrom(mdi_parent->getMD().path_permission_children(i));
      }
      if (S_ISDIR(mdi->getMD().mode())) mdi->computePathPermissionChildren();
@@ -202,7 +204,7 @@ void inherit_path_permissions(const std::shared_ptr<MetadataInfo> &mdi, const st
 void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::shared_ptr<MetadataInfo> &mdi_parent, mode_t mode)
 {
     mdi->updateACMtime();
-    mdi->getMD().set_type(posixok::Metadata_InodeType_POSIX);
+    mdi->getMD().set_type(hflat::Metadata_InodeType_POSIX);
     mdi->getMD().set_gid(fuse_get_context()->gid);
     mdi->getMD().set_uid(fuse_get_context()->uid);
     mdi->getMD().set_mode(mode);
@@ -210,7 +212,7 @@ void initialize_metadata(const std::shared_ptr<MetadataInfo> &mdi, const std::sh
     inherit_path_permissions(mdi,mdi_parent);
 }
 
-int pok_create(const char *user_path, mode_t mode)
+int hflat_create(const char *user_path, mode_t mode)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -250,9 +252,9 @@ int pok_create(const char *user_path, mode_t mode)
  *
  * Introduced in version 2.5
  */
-int pok_fcreate(const char *user_path, mode_t mode, struct fuse_file_info *fi)
+int hflat_fcreate(const char *user_path, mode_t mode, struct fuse_file_info *fi)
 {
-    return pok_create(user_path, mode);
+    return hflat_create(user_path, mode);
 }
 
 
@@ -262,7 +264,7 @@ int pok_fcreate(const char *user_path, mode_t mode, struct fuse_file_info *fi)
  * nodes.  If the filesystem defines a create() method, then for
  * regular files that will be called instead.
  */
-int pok_mknod(const char* user_path, mode_t mode, dev_t rdev)
+int hflat_mknod(const char* user_path, mode_t mode, dev_t rdev)
 {
-    return pok_create(user_path, mode);
+    return hflat_create(user_path, mode);
 }

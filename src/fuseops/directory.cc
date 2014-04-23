@@ -5,13 +5,13 @@
 #include <algorithm>
 
 /** Create a directory */
-int pok_mkdir(const char *user_path, mode_t mode)
+int hflat_mkdir(const char *user_path, mode_t mode)
 {
-    return pok_create(user_path, mode | S_IFDIR);
+    return hflat_create(user_path, mode | S_IFDIR);
 }
 
 /** Remove a directory */
-int pok_rmdir(const char *user_path)
+int hflat_rmdir(const char *user_path)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -22,12 +22,12 @@ int pok_rmdir(const char *user_path)
     unique_ptr<vector<string>> keys(new vector<string>());
     PRIV->kinetic->GetKeyRange(keystart, keyend, 1, keys);
 
-    pok_debug("Found %d entries for user_path '%s' (inode number %d) ",keys->size(), user_path, mdi->getMD().inode_number());
+    hflat_debug("Found %d entries for user_path '%s' (inode number %d) ",keys->size(), user_path, mdi->getMD().inode_number());
     if (keys->size())
         return -ENOTEMPTY;
 
     util::database_update();
-    return pok_unlink(user_path);
+    return hflat_unlink(user_path);
 }
 
 int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std::string filename)
@@ -39,14 +39,16 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
 
     if (status.statusCode() ==  kinetic::StatusCode::REMOTE_VERSION_MISMATCH)
         return -EEXIST;
-    if (!status.ok())
+    if (!status.ok()){
+        hflat_warning("Failed creating entry for file '%s' due to errno %d %s",filename.c_str(), status.statusCode(), status.message().c_str());
         return -EIO;
+    }
 
-    pok_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+    hflat_debug("created key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
     if(PRIV->posix == PosixMode::FULL){
         int err = put_metadata_forced(mdi_parent, [&mdi_parent](){mdi_parent->updateACMtime();});
-        if (err)  pok_warning("Failed updating parent directory time stamps after successfully adding directory entry.");
+        if (err)  hflat_warning("Failed updating parent directory time stamps after successfully adding directory entry.");
     }
     return 0;
 }
@@ -56,14 +58,16 @@ int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
     string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + "|" + filename;
 
     KineticStatus status = PRIV->kinetic->Delete(direntry_key, std::to_string(1), WriteMode::REQUIRE_SAME_VERSION);
-    if (!status.ok())
+    if (!status.ok()){
+        hflat_warning("Failed deleting entry for file '%s' due to errno %d %s",filename.c_str(), status.statusCode(), status.message().c_str());
         return -EIO;
+    }
 
-    pok_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
+    hflat_debug("deleted key %s for system path %s",direntry_key.c_str(),mdi_parent->getSystemPath().c_str());
 
     if(PRIV->posix == PosixMode::FULL){
         int err = put_metadata_forced(mdi_parent, [&mdi_parent](){mdi_parent->updateACMtime();});
-        if (err)  pok_warning("Failed updating parent directory time stamps after successfully removing directory entry.");
+        if (err)  hflat_warning("Failed updating parent directory time stamps after successfully removing directory entry.");
     }
     return 0;
 }
@@ -89,7 +93,7 @@ int delete_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
  *
  * Introduced in version 2.3
  */
-int pok_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, off_t offset, struct fuse_file_info *fi)
+int hflat_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, off_t offset, struct fuse_file_info *fi)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);

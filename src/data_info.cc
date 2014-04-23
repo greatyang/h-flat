@@ -11,12 +11,12 @@ DataInfo::DataInfo(const std::string &key, const std::string &keyVersion, const 
 DataInfo::~DataInfo()
 {
     if(this->hasUpdates())
-        pok_warning("Deleting data info structure containing updates.");
+        hflat_warning("Deleting data info structure containing updates.");
 }
 
 void DataInfo::mergeDataChanges(std::string fresh)
 {
-    pok_trace("merging");
+    hflat_trace("merging");
     fresh.resize(std::max(fresh.size(), d.size()));
     for (auto& update : updates){
         if(update.second)
@@ -34,7 +34,7 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
     try {
          d.replace(offset, size, data, size);
     } catch (std::exception& e) {
-        pok_warning("Exception thrown trying to replace byte range [%d,%d] in string Reason: %s", offset, size, e.what());
+        hflat_warning("Exception thrown trying to replace byte range [%d,%d] in string Reason: %s", offset, size, e.what());
         return -EINVAL;
     }
 
@@ -44,7 +44,7 @@ int DataInfo::updateData(const char *data, off_t offset, size_t size)
 
 void DataInfo::truncate(off_t offset)
 {
-    pok_trace("Resizing data info %s to %d bytes.",key.data(),offset);
+    hflat_trace("Resizing data info %s to %d bytes.",key.data(),offset);
     d.resize(offset);
     this->updates.push_back(std::pair<off_t, size_t>(offset, 0));
 }

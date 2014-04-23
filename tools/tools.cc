@@ -21,15 +21,15 @@ int failure(std::string reason)
 }
 
 
-bool isPokMount(const char *path)
+bool isHFMount(const char *path)
 {
     std::vector<std::string> mountpoints;
-    std::string pok("POSIX-o-K");
+    std::string hf("hflat");
 #ifdef __APPLE__
     struct statfs *buf = NULL;
     int count = getmntinfo(&buf, 0);
     for (int i=0; i<count; i++){
-       if(!pok.compare(0, pok.length(), buf[i].f_mntfromname, pok.length())){
+       if(!hf.compare(0, hf.length(), buf[i].f_mntfromname, hf.length())){
            mountpoints.push_back(buf[i].f_mntonname);
        }
     }
@@ -38,7 +38,7 @@ bool isPokMount(const char *path)
     struct mntent * part = NULL;
     if ( ( mtab = setmntent ("/etc/mtab", "r") ) != NULL) {
         while ( ( part = getmntent ( mtab) ) != NULL) {
-            if ( ( part->mnt_fsname != NULL ) && !pok.compare(0, pok.length(), part->mnt_fsname, pok.length())){
+            if ( ( part->mnt_fsname != NULL ) && !hf.compare(0, hf.length(), part->mnt_fsname, hf.length())){
                 mountpoints.push_back(part->mnt_dir);
             }
         }
@@ -60,21 +60,33 @@ int fsck(char *path)
     if( stat(path, &s) ) return failure("Failed to call stat on path.");
     if(!S_ISDIR(s.st_mode)) return failure("Path does not refer to a directory.");
 
-    if(setxattr(path, "fsck", "no value", 0, 0, XATTR_CREATE)) return failure("Failure during fsck.");
+
+    int err = 0;
+    #ifdef __APPLE__
+        err = setxattr(path, "fsck", "no value", 0, 0, XATTR_CREATE);
+    #else
+        err = setxattr(path, "fsck", "no value", 0, XATTR_CREATE);
+    #endif
+    if(err) return failure("Failure during fsck.");
     return 0;
 
 }
 
 /* name space check */
 int nsck(char *path){
-    if(setxattr(path, "nsck", "no value", 0, 0, XATTR_CREATE)) return failure("Invalid Namespace.");
+    int err = 0;
+    #ifdef __APPLE__
+        err = setxattr(path, "nsck", "no value", 0, 0, XATTR_CREATE);
+    #else
+        err = setxattr(path, "nsck", "no value", 0, XATTR_CREATE);
+    #endif
+    if(err) return failure("Invalid Namespace.");
     return 0;
 }
 
 
 int main(int argc, char *argv[])
 {
-    /* A path must be supplied, the supplied path must refer to a directory in a POSIX-o-K mount*/
     if(argc!=3 || (std::string(argv[1]).compare("-fsck") && std::string(argv[1]).compare("-nsck")) ){
         std::cout << "Usage: " << argv[0] << " [-fsck][-nsck] /path" << std::endl;
         std::cout << "\t fsck -> file system check limited to directory identified by the path" << std::endl;
@@ -85,7 +97,7 @@ int main(int argc, char *argv[])
     char buffer[PATH_MAX];
     char *path = realpath(argv[2], buffer);
     if(!path) return failure("Invalid path supplied.");
-    if(!isPokMount(path)) return failure("Path not inside POSIX-o-K mount.");
+    if(!isHFMount(path)) return failure("Path not inside H-Flat mount.");
     if(getuid()) return failure("Not root.");
 
     if(std::string(argv[1]).compare("-fsck") == 0)

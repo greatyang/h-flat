@@ -10,15 +10,15 @@
 
 /* Template specializations for protobuf KineticDrive, allowing it to be used as a key in STL containers. */
 namespace std {
-  template <> struct hash<posixok::KineticDrive>
+  template <> struct hash<hflat::KineticDrive>
   {
-    std::size_t operator()(const posixok::KineticDrive& d) const {
+    std::size_t operator()(const hflat::KineticDrive& d) const {
       return std::hash<string>()( d.host() + std::to_string(d.port()));
     }
   };
-  template <> struct equal_to<posixok::KineticDrive>
+  template <> struct equal_to<hflat::KineticDrive>
   {
-      bool operator() (const posixok::KineticDrive &a, const posixok::KineticDrive &b) const {
+      bool operator() (const hflat::KineticDrive &a, const hflat::KineticDrive &b) const {
           return std::string(a.host()+std::to_string(a.port())).compare(
                              b.host()+std::to_string(b.port()))
                  ? false : true;
@@ -33,27 +33,27 @@ private:
     /* get lock in all cases where the cluster_map is changed. */
     std::recursive_mutex failure_lock;
 
-    posixok::Partition                                                                       log_partition;
-    std::vector< posixok::Partition >                                                        cluster_map;
-    std::unordered_map< posixok::KineticDrive, std::shared_ptr<kinetic::ConnectionHandle> >  connection_map;
+    hflat::Partition                                                                       log_partition;
+    std::vector< hflat::Partition >                                                        cluster_map;
+    std::unordered_map< hflat::KineticDrive, std::shared_ptr<kinetic::ConnectionHandle> >  connection_map;
 
     kinetic::KineticConnectionFactory connection_factory;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
 
 private:
-    posixok::Partition &                       keyToPartition(const std::string &key);
-    std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const posixok::Partition &p, int driveID);
+    hflat::Partition &                       keyToPartition(const std::string &key);
+    std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const hflat::Partition &p, int driveID);
 
-    bool testConnection(const posixok::Partition &p, int driveID);
-    bool testPartition (const posixok::Partition &p);
+    bool testConnection(const hflat::Partition &p, int driveID);
+    bool testPartition (const hflat::Partition &p);
 
-    bool getPartitionUpdate(posixok::Partition &p);
-    bool putPartitionUpdate(posixok::Partition &p);
+    bool getPartitionUpdate(hflat::Partition &p);
+    bool putPartitionUpdate(hflat::Partition &p);
 
-    bool synchronizeDrive(posixok::Partition &p, int driveID);
-    bool disableDrive(posixok::Partition &p, int driveID);
-    bool enableDrive(posixok::Partition &p, int driveID);
+    bool synchronizeDrive(hflat::Partition &p, int driveID);
+    bool disableDrive(hflat::Partition &p, int driveID);
+    bool enableDrive(hflat::Partition &p, int driveID);
 
     /* repairs any version missmatches existing for the specified key.
       * fails if a drive in the partition fails during the operation.
@@ -62,7 +62,7 @@ private:
 
     /* Run PUT / DELETE operations on all drives of the partition associated with the key that are not marked DOWN. */
     KineticStatus writeOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
-    KineticStatus evaluateWriteOperation(posixok::Partition &p, std::vector<KineticStatus> &results );
+    KineticStatus evaluateWriteOperation(hflat::Partition &p, std::vector<KineticStatus> &results );
     /* Run GET / GETVERSION / GETKEYRANGE operations on any single drive of the partition marked UP. */
     KineticStatus readOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
 
@@ -82,11 +82,11 @@ public:
 
 
     /* DEBUG ONLY */
-    void printPartition(const posixok::Partition &p);
+    void printPartition(const hflat::Partition &p);
     void printClusterMap();
 
 public:
-    explicit DistributedKineticNamespace(const std::vector< posixok::Partition > &clustermap, const posixok::Partition &logpartition);
+    explicit DistributedKineticNamespace(const std::vector< hflat::Partition > &clustermap, const hflat::Partition &logpartition);
     ~DistributedKineticNamespace();
 };
 

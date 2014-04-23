@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 2.8.6)
-project(POSIX-o-K CXX C)
+project(hflat CXX C)
 
 set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -Wno-null-dereference -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS")
 
 include(ExternalProject)
-
 
 if(EXISTS "$ENV{HOME}/git/Kinetic-C-Client/")
    message("Found existing Kinetic-C-Client at ~/git/Kinetic-C-Client.")
@@ -65,18 +64,18 @@ endif(APPLE)
 
 
 # protobuf code generation rules
-set(PROTO_GEN ${POSIX-o-K_SOURCE_DIR}/src/generated)
+set(PROTO_GEN ${hflat_SOURCE_DIR}/src/generated)
 set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/host/bin/protoc")
 add_custom_command(
     COMMENT "Compiling protobuf files"
     OUTPUT  ${PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc ${PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc ${PROTO_GEN}/replication.pb.h ${PROTO_GEN}/replication.pb.cc
-    COMMAND mkdir -p ${PROTO_GEN} && ${PROTOC_PATH} -I=${POSIX-o-K_SOURCE_DIR}/src/proto --cpp_out=${PROTO_GEN} ${POSIX-o-K_SOURCE_DIR}/src/proto/*.proto 
-    DEPENDS ${POSIX-o-K_SOURCE_DIR}/src/proto/database.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/metadata.proto ${POSIX-o-K_SOURCE_DIR}/src/proto/replication.proto
+    COMMAND mkdir -p ${PROTO_GEN} && ${PROTOC_PATH} -I=${hflat_SOURCE_DIR}/src/proto --cpp_out=${PROTO_GEN} ${hflat_SOURCE_DIR}/src/proto/*.proto 
+    DEPENDS ${hflat_SOURCE_DIR}/src/proto/database.proto ${hflat_SOURCE_DIR}/src/proto/metadata.proto ${hflat_SOURCE_DIR}/src/proto/replication.proto
 )
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES ${PROTO_GEN})
 
 
-add_executable(POSIX-o-K
+add_executable(hflat
      src/namespace/simple_kinetic_namespace.cc
      src/namespace/kinetic_helper.cc
      src/main.cc
@@ -101,10 +100,10 @@ add_executable(POSIX-o-K
      src/fsck/fsck.cc
      src/namespace/distributed_kinetic_namespace.cc
 )
-add_dependencies(POSIX-o-K
+add_dependencies(hflat
     kinetic_cpp_client
 )
-target_link_libraries(POSIX-o-K
+target_link_libraries(hflat
     ${LIBRARY_DEPENDENCIES}
 )
 

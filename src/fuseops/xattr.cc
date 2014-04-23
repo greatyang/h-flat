@@ -13,9 +13,9 @@ extern int fsck_directory(const char*, const std::shared_ptr<MetadataInfo>&);
  * XATTR_REPLACE specifies a pure replace operation, which fails if the named attribute does not already exist.
  * By default (no flags), the extended attribute will be created if need be, or will simply replace the value if the attribute exists.
  */
-int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags)
+int hflat_setxattr(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags)
 {
-    pok_trace("Setting extended attribute for user path %s:  %s = %s", user_path, attr_name, attr_value);
+    hflat_trace("Setting extended attribute for user path %s:  %s = %s", user_path, attr_name, attr_value);
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
@@ -27,7 +27,7 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
         return PRIV->kinetic->selfCheck() ? 0 : -EHOSTDOWN;
 
 
-    posixok::Metadata_ExtendedAttribute *xattr = nullptr;
+    hflat::Metadata_ExtendedAttribute *xattr = nullptr;
 
     /* Search the existing xattrs for the supplied key */
     for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
@@ -48,24 +48,24 @@ int pok_setxattr(const char *user_path, const char *attr_name, const char *attr_
     xattr->set_value(attr_value, attr_size);
 
     err = put_metadata(mdi);
-    if(err == -EAGAIN) return pok_setxattr(user_path, attr_name, attr_value, attr_size, flags);
+    if(err == -EAGAIN) return hflat_setxattr(user_path, attr_name, attr_value, attr_size, flags);
     return err;
 }
 
-int pok_setxattr_apple(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags, uint32_t position)
+int hflat_setxattr_apple(const char *user_path, const char *attr_name, const char *attr_value, size_t attr_size, int flags, uint32_t position)
 {
     assert(position <= attr_size);
-    return pok_setxattr(user_path, attr_name, attr_value + position, attr_size - position, flags);
+    return hflat_setxattr(user_path, attr_name, attr_value + position, attr_size - position, flags);
 }
 
 /** Get extended attributes */
-int pok_getxattr(const char *user_path, const char *attr_name, char *attr_value, size_t attr_size)
+int hflat_getxattr(const char *user_path, const char *attr_name, char *attr_value, size_t attr_size)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
 
-    posixok::Metadata_ExtendedAttribute *xattr = nullptr;
+    hflat::Metadata_ExtendedAttribute *xattr = nullptr;
 
     /* Search the existing xattrs for the supplied key */
     for (int i = 0; i < mdi->getMD().xattr_size(); i++) {
@@ -84,7 +84,7 @@ int pok_getxattr(const char *user_path, const char *attr_name, char *attr_value,
         return xattr->value().size() + 1;
 
     if (xattr->value().size() > attr_size) {
-        pok_debug("buffer size: %d, xattr size: %d", attr_size, xattr->value().size());
+        hflat_debug("buffer size: %d, xattr size: %d", attr_size, xattr->value().size());
         return -ERANGE;
     }
     /* Copy the value of the attribute into the supplied buffer. */
@@ -92,14 +92,14 @@ int pok_getxattr(const char *user_path, const char *attr_name, char *attr_value,
     return xattr->value().size();
 }
 
-int pok_getxattr_apple(const char *user_path, const char *attr_name, char *attr_value, size_t attr_size, uint32_t position)
+int hflat_getxattr_apple(const char *user_path, const char *attr_name, char *attr_value, size_t attr_size, uint32_t position)
 {
     assert(position <= attr_size);
-    return pok_getxattr(user_path, attr_name, attr_value + position, attr_size - position);
+    return hflat_getxattr(user_path, attr_name, attr_value + position, attr_size - position);
 }
 
 /** Remove extended attributes */
-int pok_removexattr(const char *user_path, const char *attr_name)
+int hflat_removexattr(const char *user_path, const char *attr_name)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -111,7 +111,7 @@ int pok_removexattr(const char *user_path, const char *attr_name)
         if (!mdi->getMD().xattr(i).name().compare(attr_name)) {
             mdi->getMD().mutable_xattr()->DeleteSubrange(i, 1);
             err = put_metadata(mdi);
-            if(err == -EAGAIN) return pok_removexattr(user_path, attr_name);
+            if(err == -EAGAIN) return hflat_removexattr(user_path, attr_name);
             return err;
         }
     }
@@ -119,7 +119,7 @@ int pok_removexattr(const char *user_path, const char *attr_name)
 }
 
 /** List extended attributes */
-int pok_listxattr(const char *user_path, char *buffer, size_t size)
+int hflat_listxattr(const char *user_path, char *buffer, size_t size)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -136,7 +136,7 @@ int pok_listxattr(const char *user_path, char *buffer, size_t size)
          * which can be used to estimate the size of a buffer which is sufficiently large to hold the list of names. */
         if (size) {
             if (bytesize > size) {
-                pok_debug("buffer size: %d listsize: %d", size, bytesize);
+                hflat_debug("buffer size: %d listsize: %d", size, bytesize);
                 return -ERANGE;
             }
             strcpy(buffer, mdi->getMD().xattr(i).name().c_str());

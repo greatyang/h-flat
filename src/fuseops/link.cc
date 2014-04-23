@@ -11,14 +11,14 @@
  * buffer, it should be truncated.	The return value should be 0
  * for success.
  */
-int pok_readlink(const char *user_path, char *buffer, size_t size)
+int hflat_readlink(const char *user_path, char *buffer, size_t size)
 {
     std::string link_destination;
     std::int64_t pathPermissionTimeStamp = 0;
     link_destination = PRIV->pmap.toSystemPath(user_path, pathPermissionTimeStamp, CallingType::READLINK);
 
     if (link_destination.length() >= size) {
-        pok_debug("buffer too small to fit link destination.");
+        hflat_debug("buffer too small to fit link destination.");
         strncpy(buffer, link_destination.c_str(), size);
         buffer[size - 1] = '\0';
     } else
@@ -27,7 +27,7 @@ int pok_readlink(const char *user_path, char *buffer, size_t size)
 }
 
 /** Create a symbolic link */
-int pok_symlink(const char *target, const char *origin)
+int hflat_symlink(const char *target, const char *origin)
 {
     std::shared_ptr<MetadataInfo> mdi;
     std::shared_ptr<MetadataInfo> mdi_dir;
@@ -42,7 +42,7 @@ int pok_symlink(const char *target, const char *origin)
     if(!err) err = create_directory_entry(mdi_dir, util::path_to_filename(origin));
     if (err) return err;
 
-    posixok::db_entry entry;
+    hflat::db_entry entry;
     entry.set_type(entry.SYMLINK);
     entry.set_origin(origin);
     entry.set_target(target);
@@ -50,7 +50,7 @@ int pok_symlink(const char *target, const char *origin)
     /* do database operation... after adding the filename to directory, no other client can disallow it */
     err = util::database_operation(entry);
     if(err){
-        pok_warning("Database operation failed. Dangling directory entry!");
+        hflat_warning("Database operation failed. Dangling directory entry!");
         return err;
     }
 
@@ -62,16 +62,16 @@ int pok_symlink(const char *target, const char *origin)
 
 static int toHardlinkT(const std::shared_ptr<MetadataInfo> &mdi_target)
 {
-    assert(mdi_target->getMD().type() == posixok::Metadata_InodeType_POSIX);
+    assert(mdi_target->getMD().type() == hflat::Metadata_InodeType_POSIX);
 
     std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo( mdi_target->getSystemPath() ));
     mdi_source->setKeyVersion(mdi_target->getKeyVersion());
-    mdi_source->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
+    mdi_source->getMD().set_type(hflat::Metadata_InodeType_HARDLINK_S);
     mdi_source->getMD().set_inode_number(mdi_target->getMD().inode_number());
     mdi_source->getMD().set_link_count(1);
 
     mdi_target->setSystemPath("hardlink_" + std::to_string(mdi_target->getMD().inode_number()));
-    mdi_target->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_T);
+    mdi_target->getMD().set_type(hflat::Metadata_InodeType_HARDLINK_T);
 
     /* create the forwarding to the hardlink-key. */
     if (int err = put_metadata(mdi_source))
@@ -83,9 +83,9 @@ static int toHardlinkT(const std::shared_ptr<MetadataInfo> &mdi_target)
 }
 
 /** Create a hard link to a file */
-int pok_hardlink(const char *target, const char *origin)
+int hflat_hardlink(const char *target, const char *origin)
 {
-    pok_debug("Hardlink %s->%s", origin, target);
+    hflat_debug("Hardlink %s->%s", origin, target);
 
     std::shared_ptr<MetadataInfo> mdi_target;
     std::shared_ptr<MetadataInfo> mdi_target_dir;
@@ -114,10 +114,10 @@ int pok_hardlink(const char *target, const char *origin)
         return err;
 
     /* If the target metadata is not already a hardlink_target, make it so. */
-    if (mdi_target->getMD().type() != posixok::Metadata_InodeType_HARDLINK_T) {
+    if (mdi_target->getMD().type() != hflat::Metadata_InodeType_HARDLINK_T) {
         if (( err = toHardlinkT(mdi_target) )){
             REQ ( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
-            if(err == -EAGAIN) return pok_hardlink(target, origin);
+            if(err == -EAGAIN) return hflat_hardlink(target, origin);
             return err;
         }
     }
@@ -127,11 +127,11 @@ int pok_hardlink(const char *target, const char *origin)
     if ((err = put_metadata(mdi_target))) {
         /* another client could have changed / deleted hardlink_t inode. */
         REQ ( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
-        if(err == -EAGAIN) return pok_hardlink(target, origin);
+        if(err == -EAGAIN) return hflat_hardlink(target, origin);
         return err;
     }
 
-    mdi_origin->getMD().set_type(posixok::Metadata_InodeType_HARDLINK_S);
+    mdi_origin->getMD().set_type(hflat::Metadata_InodeType_HARDLINK_S);
     mdi_origin->getMD().set_inode_number(mdi_target->getMD().inode_number());
     mdi_origin->getMD().set_link_count(1);
     REQ(create_metadata(mdi_origin));

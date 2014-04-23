@@ -11,7 +11,7 @@ class MetadataInfo final
 private:
     std::string       systemPath;       // key in flat namespace where metadata is stored
     std::string       keyVersion;
-    posixok::Metadata md;               // metadata structure
+    hflat::Metadata md;               // metadata structure
 
     // write aggregation support
     std::shared_ptr<DataInfo> dirty_data; // reference to data block updated by a write call compare data.cc
@@ -21,8 +21,8 @@ public:
     ~MetadataInfo();
 
 public:
-    void                setMD(const posixok::Metadata& md, const std::string& version);
-    posixok::Metadata & getMD();
+    void                setMD(const hflat::Metadata& md, const std::string& version);
+    hflat::Metadata & getMD();
     void                setSystemPath(const std::string &key);
     const std::string & getSystemPath() const;
     void                setKeyVersion(const std::string &version);

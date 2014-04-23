@@ -8,7 +8,7 @@ using com::seagate::kinetic::proto::Message_Algorithm_SHA1;
 static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
 
-DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< posixok::Partition > &cmap, const posixok::Partition &lpart):
+DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hflat::Partition > &cmap, const hflat::Partition &lpart):
         failure_lock(), log_partition(lpart), cluster_map(cmap), connection_factory(kinetic::NewKineticConnectionFactory())
 {
     if(selfCheck() == false)
@@ -21,14 +21,14 @@ DistributedKineticNamespace::~DistributedKineticNamespace()
 }
 
 
-posixok::Partition & DistributedKineticNamespace::keyToPartition(const std::string &key)
+hflat::Partition & DistributedKineticNamespace::keyToPartition(const std::string &key)
 {
     size_t hashvalue = std::hash<std::string>()(key.substr(0,key.find_first_of("|")));
     int index = hashvalue % cluster_map.size();
     return cluster_map[index];
 }
 
-std::shared_ptr<kinetic::ConnectionHandle>  DistributedKineticNamespace::driveToConnection(const posixok::Partition &p, int driveID)
+std::shared_ptr<kinetic::ConnectionHandle>  DistributedKineticNamespace::driveToConnection(const hflat::Partition &p, int driveID)
 {
     if(connection_map.count(p.drives(driveID))) return connection_map[p.drives(driveID)];
 
@@ -44,19 +44,19 @@ std::shared_ptr<kinetic::ConnectionHandle>  DistributedKineticNamespace::driveTo
         connection_map[p.drives(driveID)] = std::shared_ptr<kinetic::ConnectionHandle>(con.release());
         if(p.cluster_version()){
             connection_map[p.drives(driveID)]->blocking().SetClientClusterVersion(p.cluster_version());
-            pok_trace("Set cluster version of connection for drive %s:%d to %d",
+            hflat_trace("Set cluster version of connection for drive %s:%d to %d",
                     p.drives(driveID).host().c_str(),p.drives(driveID).port(),p.cluster_version());
         }
         return connection_map[p.drives(driveID)];
     }
 
-    if(p.drives(driveID).status() != posixok::KineticDrive_Status_RED)
-        pok_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
+    if(p.drives(driveID).status() != hflat::KineticDrive_Status_RED)
+        hflat_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
     return std::shared_ptr<kinetic::ConnectionHandle>();
 }
 
 
-bool DistributedKineticNamespace::testConnection(const posixok::Partition &p, int driveID)
+bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int driveID)
 {
     auto con = driveToConnection(p, driveID);
     if(! con) return false;
@@ -64,7 +64,7 @@ bool DistributedKineticNamespace::testConnection(const posixok::Partition &p, in
     std::unique_ptr<kinetic::DriveLog> unused;
     KineticStatus status = con->blocking().GetLog(unused);
     if( !status.ok() ){
-        pok_debug("Failed getLog on drive %s:%d due to: '%s'",p.drives(driveID).host().c_str(),p.drives(driveID).port(),status.message().c_str());
+        hflat_debug("Failed getLog on drive %s:%d due to: '%s'",p.drives(driveID).host().c_str(),p.drives(driveID).port(),status.message().c_str());
         return false;
     }
     return true;
@@ -77,7 +77,7 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
 
     for(auto &p : cluster_map){
         for(int i=0; i<p.drives_size(); i++){
-            if(p.drives(i).status() == posixok::KineticDrive_Status_GREEN){
+            if(p.drives(i).status() == hflat::KineticDrive_Status_GREEN){
                 futures.push_back( std::async( [&](){
                     std::shared_ptr<kinetic::ConnectionHandle>  con = driveToConnection(p,i);
                     std::unique_ptr<kinetic::DriveLog> dlog;
@@ -105,13 +105,13 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
 
 bool DistributedKineticNamespace::selfCheck()
 {
-    pok_debug("Checking Clustermap: ");
+    hflat_debug("Checking Clustermap: ");
     printClusterMap();
 
-    auto check = [&](posixok::Partition &p){
+    auto check = [&](hflat::Partition &p){
 
         for(int i=0; i<p.drives_size(); i++)
-               if(p.drives(i).status() == posixok::KineticDrive_Status_RED)
+               if(p.drives(i).status() == hflat::KineticDrive_Status_RED)
                    enableDrive(p, i);
 
            if (testPartition(p)) return true;
@@ -127,13 +127,13 @@ bool DistributedKineticNamespace::selfCheck()
 
 
 /* Try to get a higher-version partition from any of it's drives. */
-bool DistributedKineticNamespace::getPartitionUpdate(posixok::Partition & p)
+bool DistributedKineticNamespace::getPartitionUpdate(hflat::Partition & p)
 {
     if(p.has_partitionid() == false) return false;
     std::lock_guard<std::recursive_mutex> l(failure_lock);
 
     for(int i=0; i<p.drives_size(); i++){
-        if(p.drives(i).status() == posixok::KineticDrive_Status_RED) continue;
+        if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
         auto con = driveToConnection(p,i);
         if( !con) continue;
 
@@ -145,19 +145,19 @@ bool DistributedKineticNamespace::getPartitionUpdate(posixok::Partition & p)
             cversion++;
             con->blocking().SetClientClusterVersion(cversion);
             status = con->blocking().Get(cv_base_name+std::to_string(cversion), record);
-            pok_debug("trying cluster version %d for drive %s:%d",cversion,p.drives(i).host().c_str(),p.drives(i).port());
+            hflat_debug("trying cluster version %d for drive %s:%d",cversion,p.drives(i).host().c_str(),p.drives(i).port());
         }while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH);
 
         if(status.ok()){
            p.ParseFromString(*record->value());
-           pok_debug("Updated partition to cluster version %d from drive %s:%d.",p.cluster_version(),p.drives(i).host().c_str(),p.drives(i).port());
+           hflat_debug("Updated partition to cluster version %d from drive %s:%d.",p.cluster_version(),p.drives(i).host().c_str(),p.drives(i).port());
            return true;
         }
     }
     return false;
 }
 
-bool DistributedKineticNamespace::putPartitionUpdate(posixok::Partition &p)
+bool DistributedKineticNamespace::putPartitionUpdate(hflat::Partition &p)
 {
     if(p.has_partitionid() == false) return true;
     std::lock_guard<std::recursive_mutex> l(failure_lock);
@@ -168,30 +168,30 @@ bool DistributedKineticNamespace::putPartitionUpdate(posixok::Partition &p)
      /* Serialize write accesses to ensure that multiple clients attempting to update the same cluster version don't conflict.
       * The first write may thus fail in case of concurrency. */
      for(int i=0; i < p.drives_size(); i++){
-         if(p.drives(i).status() == posixok::KineticDrive_Status_RED) continue;
+         if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
 
          std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,i);
          KineticStatus status = KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "connection error");
          if(con)       status = con->blocking().Put(key, "" , WriteMode::REQUIRE_SAME_VERSION, record);
          if(!status.ok()){
-             pok_warning("Failure.");
+             hflat_warning("Failure.");
              return false;
          }
          con->blocking().SetClusterVersion(p.cluster_version());
          con->blocking().SetClientClusterVersion(p.cluster_version());
      }
-     pok_debug("Put Partition successful: ");
+     hflat_debug("Put Partition successful: ");
      printPartition(p);
      return true;
 }
 
-bool DistributedKineticNamespace::testPartition(const posixok::Partition &p)
+bool DistributedKineticNamespace::testPartition(const hflat::Partition &p)
 {
     if(p.has_partitionid() == false) return true;
     /* count various states existing in the partition and test connections */
     int green=0; int yellow=0;
     for(int i=0; i<p.drives_size(); i++){
-       const posixok::KineticDrive &d = p.drives(i);
+       const hflat::KineticDrive &d = p.drives(i);
        if(d.status() == d.RED)    continue;
        if(d.status() == d.GREEN)  green++;
        if(d.status() == d.YELLOW) yellow++;
@@ -204,11 +204,11 @@ bool DistributedKineticNamespace::testPartition(const posixok::Partition &p)
             return false;
 
     if(green == 0){
-        pok_error("Not a single GREEN drive available. Partition has empty read quorum. ");
+        hflat_error("Not a single GREEN drive available. Partition has empty read quorum. ");
         return false;
     }
     if(green+yellow == 1 && p.drives_size() > 1 && p.has_logid() == false){
-        pok_error("Only one drive reachable & no logdrive set for the partition. At least two drives "
+        hflat_error("Only one drive reachable & no logdrive set for the partition. At least two drives "
                   "(including logdrive) have to be reachable at all times to detect a network split. ");
         return false;
     }
@@ -217,23 +217,23 @@ bool DistributedKineticNamespace::testPartition(const posixok::Partition &p)
 }
 
 
-bool DistributedKineticNamespace::disableDrive(posixok::Partition &p, int index)
+bool DistributedKineticNamespace::disableDrive(hflat::Partition &p, int index)
 {
     std::lock_guard<std::recursive_mutex> l(failure_lock);
-    if(p.drives(index).status() == posixok::KineticDrive_Status_RED) return true;
+    if(p.drives(index).status() == hflat::KineticDrive_Status_RED) return true;
 
     /* Logdrive add-rule: Only add a new logdrive if none is set yet and all lights show green:
      *   other color combinations without a logdrive mean that a previosly assigned logdrive has crashed and thus there are no
      *   reliable logs for the other non-green drives. We shouldn't confuse the repair algorithm. */
-    if(p.has_logid() == false && std::all_of(p.drives().begin(), p.drives().end(), [](const posixok::KineticDrive &d){return d.status() == d.GREEN;})
-                          && std::any_of(log_partition.drives().begin(), log_partition.drives().end(), [](const posixok::KineticDrive &d){return d.status() != d.RED;})){
+    if(p.has_logid() == false && std::all_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() == d.GREEN;})
+                          && std::any_of(log_partition.drives().begin(), log_partition.drives().end(), [](const hflat::KineticDrive &d){return d.status() != d.RED;})){
         std::uniform_int_distribution<int> ldist(0, log_partition.drives_size()-1);
         int lid;
-        do{ lid = ldist(random_generator); } while( log_partition.drives(lid).status() == posixok::KineticDrive_Status_RED );
+        do{ lid = ldist(random_generator); } while( log_partition.drives(lid).status() == hflat::KineticDrive_Status_RED );
         p.set_logid(lid);
     }
 
-     p.mutable_drives(index)->set_status(posixok::KineticDrive_Status_RED);
+     p.mutable_drives(index)->set_status(hflat::KineticDrive_Status_RED);
      p.set_cluster_version( p.cluster_version()+1 );
      if(testPartition(p)){
         if(putPartitionUpdate(p)){
@@ -243,16 +243,16 @@ bool DistributedKineticNamespace::disableDrive(posixok::Partition &p, int index)
         if(getPartitionUpdate(p))
             return disableDrive(p, index);
     }
-    pok_warning("Unexpected error code while failing a drive. Probably encountering multiple concurrent failures or network split.");
+    hflat_warning("Unexpected error code while failing a drive. Probably encountering multiple concurrent failures or network split.");
     return false;
 }
 
 
 
-bool DistributedKineticNamespace::enableDrive(posixok::Partition &p, int index)
+bool DistributedKineticNamespace::enableDrive(hflat::Partition &p, int index)
 {
     std::lock_guard<std::recursive_mutex> l(failure_lock);
-    if(p.drives(index).status() != posixok::KineticDrive_Status_RED) return true;
+    if(p.drives(index).status() != hflat::KineticDrive_Status_RED) return true;
 
     std::shared_ptr<kinetic::ConnectionHandle>  con = driveToConnection(p, index);
     if(!con) return false;
@@ -269,7 +269,7 @@ bool DistributedKineticNamespace::enableDrive(posixok::Partition &p, int index)
         return false;
     }
 
-    p.mutable_drives(index)->set_status(posixok::KineticDrive_Status_YELLOW);
+    p.mutable_drives(index)->set_status(hflat::KineticDrive_Status_YELLOW);
     p.set_cluster_version(p.cluster_version()+1);
     if(testPartition(p)){
       if(putPartitionUpdate(p)){
@@ -279,7 +279,7 @@ bool DistributedKineticNamespace::enableDrive(posixok::Partition &p, int index)
       if(getPartitionUpdate(p))
           return enableDrive(p, index);
     }
-    p.mutable_drives(index)->set_status(posixok::KineticDrive_Status_RED);
+    p.mutable_drives(index)->set_status(hflat::KineticDrive_Status_RED);
     p.set_cluster_version(p.cluster_version()-1);
     return false;
 }
@@ -287,9 +287,9 @@ bool DistributedKineticNamespace::enableDrive(posixok::Partition &p, int index)
 /*
  * If a logdrive is available, use it to get a list of keys that are possibly out of date.
  * Otherwise, use a drive of the partition with GREEN status to check every single key. */
-bool DistributedKineticNamespace::synchronizeDrive(posixok::Partition &p, int index)
+bool DistributedKineticNamespace::synchronizeDrive(hflat::Partition &p, int index)
 {
-    if(p.drives(index).status() != posixok::KineticDrive_Status_YELLOW) return false;
+    if(p.drives(index).status() != hflat::KineticDrive_Status_YELLOW) return false;
     unsigned int maxsize = 100;
     unique_ptr<vector<std::string>> keys(new vector<string>());
     unique_ptr<KineticRecord> record;
@@ -297,7 +297,7 @@ bool DistributedKineticNamespace::synchronizeDrive(posixok::Partition &p, int in
     string keyend   = "|";
     std::shared_ptr<kinetic::ConnectionHandle> con;
     std::string prefix = std::to_string(p.partitionid()) + logkey_prefix;
-    bool write_quorum_all = std::all_of(p.drives().begin(), p.drives().end(), [](const posixok::KineticDrive &d){return d.status() != d.RED;});
+    bool write_quorum_all = std::all_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() != d.RED;});
 
     if(p.has_logid()){
         keystart.insert(0,prefix);
@@ -308,12 +308,12 @@ bool DistributedKineticNamespace::synchronizeDrive(posixok::Partition &p, int in
         std::uniform_int_distribution<int> dist(0, p.drives_size()-1);
         int index;
         do{ index = dist(random_generator); }
-        while(p.drives(index).status() != posixok::KineticDrive_Status_GREEN);
+        while(p.drives(index).status() != hflat::KineticDrive_Status_GREEN);
         con = driveToConnection(p,index);
     }
     if(!con) return false;
 
-    pok_trace("Synchronizing drive %s:%d from %s",
+    hflat_trace("Synchronizing drive %s:%d from %s",
             p.drives(index).host().data(),p.drives(index).port(),p.has_logid() ? "logdrive":"scratch... complete rebuild is required");
 
     do{
@@ -322,13 +322,13 @@ bool DistributedKineticNamespace::synchronizeDrive(posixok::Partition &p, int in
          keys->clear();
          if( con->blocking().GetKeyRange(keystart,true,keyend,true,false,maxsize,keys).ok() == false)
              return false;
-         pok_debug("obtained %d keys that might need to be repaired",keys->size());
+         hflat_debug("obtained %d keys that might need to be repaired",keys->size());
 
          for (auto& element : *keys) {
              if(p.has_logid()) element.erase(0, prefix.length());
 
              if(readRepair(element,record).ok() == false){
-                 pok_warning(" Error encountered while repairing key %s. Aborting drive synchronization.",element.data());
+                 hflat_warning(" Error encountered while repairing key %s. Aborting drive synchronization.",element.data());
                  return false;
              }
 
@@ -341,30 +341,30 @@ bool DistributedKineticNamespace::synchronizeDrive(posixok::Partition &p, int in
          }
      } while (keys->size() == maxsize);
 
-     pok_trace("drive completely synchronized.");
+     hflat_trace("drive completely synchronized.");
 
      std::lock_guard<std::recursive_mutex> l(failure_lock);
-     p.mutable_drives(index)->set_status(posixok::KineticDrive_Status_GREEN);
+     p.mutable_drives(index)->set_status(hflat::KineticDrive_Status_GREEN);
      p.set_cluster_version(p.cluster_version()+1);
-     if(p.has_logid() && std::all_of(p.drives().begin(), p.drives().end(), [](const posixok::KineticDrive &d){return d.status() == d.GREEN;}))
+     if(p.has_logid() && std::all_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() == d.GREEN;}))
          p.clear_logid();
      if(putPartitionUpdate(p)){
          return true;
      }
-     p.mutable_drives(index)->set_status(posixok::KineticDrive_Status_YELLOW);
+     p.mutable_drives(index)->set_status(hflat::KineticDrive_Status_YELLOW);
      p.set_cluster_version(p.cluster_version()-1);
-     pok_warning("Failed updating partition after successfully synchronizing drive.");
+     hflat_warning("Failed updating partition after successfully synchronizing drive.");
      return false;
 }
 
 
 KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::unique_ptr<KineticRecord> &record)
 {
-    posixok::Partition &p = keyToPartition(key);
+    hflat::Partition &p = keyToPartition(key);
 
     /* Get reference drive & record: First green drive in partition. */
     int index = 0;
-    while(p.drives(index).status() != posixok::KineticDrive_Status_GREEN) index++;
+    while(p.drives(index).status() != hflat::KineticDrive_Status_GREEN) index++;
 
     auto con = driveToConnection(p,index);
     KineticStatus status = con->blocking().Get(key,record);
@@ -379,7 +379,7 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
      *    the same version on all drives. Following, a successful write operation could be executed
      *    by another client between reading & enforcing the reference record.  */
     for(int i = 0; i<p.drives_size(); i++){
-          if(p.drives(i).status() == posixok::KineticDrive_Status_RED) continue;
+          if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
 
           std::unique_ptr<std::string> version(new std::string(""));
           con = driveToConnection(p,i);
@@ -390,7 +390,7 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
           /* Delete record or */
           if(!record && status.ok()){
               status = con->blocking().Delete(key, *version, WriteMode::REQUIRE_SAME_VERSION);
-              pok_debug("Removing key %s from drive %s:%d",
+              hflat_debug("Removing key %s from drive %s:%d",
                       key.c_str(),p.drives(i).host().c_str(), p.drives(i).port());
           }
           /* Copy record. */
@@ -398,7 +398,7 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
               if(status.ok() && *version == *record->version())
                   continue;
               status = con->blocking().Put(key, *version, WriteMode::REQUIRE_SAME_VERSION, *record);
-              pok_debug("Copying key %s to drive %s:%d",
+              hflat_debug("Copying key %s to drive %s:%d",
                       key.c_str(),p.drives(i).host().c_str(), p.drives(i).port());
           }
 
@@ -416,27 +416,27 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
 
 
 
-KineticStatus DistributedKineticNamespace::evaluateWriteOperation( posixok::Partition &p,  std::vector<KineticStatus> &results )
+KineticStatus DistributedKineticNamespace::evaluateWriteOperation( hflat::Partition &p,  std::vector<KineticStatus> &results )
 {
     /* B) the same result for all threads -> no replication specific error handling required. */
     bool allequal=true; int green = 0;
-    while(p.drives(green).status() != posixok::KineticDrive_Status_GREEN) green++;
+    while(p.drives(green).status() != hflat::KineticDrive_Status_GREEN) green++;
     for(int i=0; i<p.drives_size(); i++){
-          if(p.drives(i).status() == posixok::KineticDrive_Status_RED) continue;
+          if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
           if( results.at(i).statusCode() != results.at(green).statusCode() ) allequal = false;
     }
     if(allequal) return results.at(green);
 
     /* C) Any kind of unexpected I/O error -> retry operation if drive in question can be failed successfully. */
     for(int i=0; i<p.drives_size(); i++){
-        if(p.drives(i).status() == posixok::KineticDrive_Status_RED) continue;
+        if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
 
         if( results.at(i).statusCode() != kinetic::StatusCode::OK &&
             results.at(i).statusCode() != kinetic::StatusCode::REMOTE_VERSION_MISMATCH &&
             results.at(i).statusCode() != kinetic::StatusCode::REMOTE_NOT_AUTHORIZED ){
             if(disableDrive(p, i))
                 return evaluateWriteOperation(p, results);
-            pok_error("Couldn't fail drive after write error");
+            hflat_error("Couldn't fail drive after write error");
             return results.at(i);
         }
     }
@@ -449,19 +449,19 @@ KineticStatus DistributedKineticNamespace::evaluateWriteOperation( posixok::Part
 
 KineticStatus DistributedKineticNamespace::writeOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation)
 {
-    posixok::Partition &p = keyToPartition(key);
+    hflat::Partition &p = keyToPartition(key);
     std::vector<std::future<KineticStatus>> futures;
     std::vector<KineticStatus> results;
     for(int i=0; i<p.drives_size(); i++){
        futures.push_back( std::async( [this, i, &p, &operation](){
-                       if(p.drives(i).status() == posixok::KineticDrive_Status_RED) return KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "Unreachable");
+                       if(p.drives(i).status() == hflat::KineticDrive_Status_RED) return KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "Unreachable");
                        std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,i);
                        return operation( con->blocking() );
                }));
     }
 
     /* Try to log operation if at least one drive is missing from the write quorum. */
-    if(p.has_logid() && std::any_of(p.drives().begin(), p.drives().end(), [](const posixok::KineticDrive &d){return d.status() == posixok::KineticDrive_Status_RED;})){
+    if(p.has_logid() && std::any_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() == hflat::KineticDrive_Status_RED;})){
 
        std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(log_partition, p.logid());
 
@@ -475,7 +475,7 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
            p.clear_logid();
            p.set_cluster_version(p.cluster_version()+1);
            if(putPartitionUpdate(p) == false)
-               pok_warning("Do not use logs to rebuild currently failed drives.");
+               hflat_warning("Do not use logs to rebuild currently failed drives.");
        }
     }
 
@@ -485,7 +485,7 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
     for(auto &r : results){
      if( r.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH){
          if(getPartitionUpdate(p)) return writeOperation(key, operation);
-         pok_error("Non-resolvable cluster version mismatch");
+         hflat_error("Non-resolvable cluster version mismatch");
          return r;
      }
     }
@@ -495,11 +495,11 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
 KineticStatus DistributedKineticNamespace::readOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation)
 {
     /* Step 1) Pick a drive, obtain connection, execute operation */
-    posixok::Partition &p = keyToPartition(key);
+    hflat::Partition &p = keyToPartition(key);
     std::uniform_int_distribution<int> dist(0, p.drives_size()-1);
     int index;
     do{ index = dist(random_generator); }
-    while(p.drives(index).status() != posixok::KineticDrive_Status_GREEN);
+    while(p.drives(index).status() != hflat::KineticDrive_Status_GREEN);
 
     std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,index);
     KineticStatus status = KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "");
@@ -509,7 +509,7 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
     if(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH){
         if(getPartitionUpdate(p))
             return readOperation(key, operation);
-        pok_debug("Failed partition update after a cluster_version_mismatch for drive %s:%d. Returning %s.",
+        hflat_debug("Failed partition update after a cluster_version_mismatch for drive %s:%d. Returning %s.",
                 p.drives(index).host().data(),p.drives(index).port(),status.message().data());
         return status;
     }
@@ -519,7 +519,7 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
             status.statusCode() != kinetic::StatusCode::REMOTE_NOT_AUTHORIZED ){
         if(disableDrive(p, index))
             return readOperation(key, operation);
-        pok_debug("Didn't fail drive %s:%d successfully after encountering status %s.",p.drives(index).host().data(),p.drives(index).port(),status.message().data());
+        hflat_debug("Didn't fail drive %s:%d successfully after encountering status %s.",p.drives(index).host().data(),p.drives(index).port(),status.message().data());
         return status;
     }
 
@@ -614,13 +614,13 @@ KineticStatus DistributedKineticNamespace::Capacity(kinetic::Capacity &cap)
 }
 
 
-void DistributedKineticNamespace::printPartition(const posixok::Partition &p)
+void DistributedKineticNamespace::printPartition(const hflat::Partition &p)
 {
-    auto statusToString = [](posixok::KineticDrive_Status s) -> std::string {
+    auto statusToString = [](hflat::KineticDrive_Status s) -> std::string {
            switch(s) {
-               case posixok::KineticDrive_Status_GREEN:    return "GREEN";
-               case posixok::KineticDrive_Status_YELLOW:   return "YELLOW";
-               case posixok::KineticDrive_Status_RED:      return "RED";
+               case hflat::KineticDrive_Status_GREEN:    return "GREEN";
+               case hflat::KineticDrive_Status_YELLOW:   return "YELLOW";
+               case hflat::KineticDrive_Status_RED:      return "RED";
            }
            return "INVALID";
        };

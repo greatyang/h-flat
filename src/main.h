@@ -1,9 +1,3 @@
-/*
- * POSIX-o-K is either  POSIX over Key-Value
- * or                   POSIX over Kinetic
- *
- * Either way, the goal is to be POSIX compliant in a flat namespace and support file lookup without path traversal.
- */
 #ifndef MAIN_H_
 #define MAIN_H_
 
@@ -20,7 +14,7 @@
 
 enum class PosixMode { FULL, TIMERELAXED };
 /* Private file-system wide data, accessible from anywhere. */
-struct pok_priv
+struct hflat_priv
 {
     std::unique_ptr<KineticNamespace> kinetic;
     LRUcache<std::string, std::shared_ptr<MetadataInfo>> lookup_cache;
@@ -36,7 +30,7 @@ struct pok_priv
     std::uint16_t   inum_counter;
     std::mutex      lock;
 
-    pok_priv(KineticNamespace *kn, int cache_expiration_ms, int block_size_bytes, PosixMode mode):
+    hflat_priv(KineticNamespace *kn, int cache_expiration_ms, int block_size_bytes, PosixMode mode):
             kinetic(kn),
             lookup_cache(cache_expiration_ms, 500,
                     std::mem_fn(&MetadataInfo::getSystemPath),
@@ -57,7 +51,7 @@ struct pok_priv
             lock()
     {}
 };
-#define PRIV ((struct pok_priv*) fuse_get_context()->private_data)
+#define PRIV ((struct hflat_priv*) fuse_get_context()->private_data)
 
 
 /* these are utility functions provided to the various fuse operations */
@@ -87,7 +81,7 @@ namespace util
     std::int64_t to_int64(const std::shared_ptr<const std::string> version_string);
     std::string path_to_filename(const std::string &path);
     int database_update(void);
-    int database_operation(posixok::db_entry &entry);
+    int database_operation(hflat::db_entry &entry);
 }
 
 #endif

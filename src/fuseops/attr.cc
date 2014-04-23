@@ -10,14 +10,14 @@
  * ignored. The 'st_ino' field is ignored except if the 'use_ino'
  * mount option is given.
  */
-int pok_getattr(const char *user_path, struct stat *attr)
+int hflat_getattr(const char *user_path, struct stat *attr)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
     if( err) return err;
 
     if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
-        pok_fsync(user_path, 0, nullptr);
+        hflat_fsync(user_path, 0, nullptr);
 
     attr->st_ino    = mdi->getMD().inode_number();
     attr->st_atime  = mdi->getMD().atime();
@@ -46,9 +46,9 @@ int pok_getattr(const char *user_path, struct stat *attr)
  *
  * Introduced in version 2.5
  */
-int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi)
+int hflat_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info *fi)
 {
-   return pok_getattr(user_path, attr);
+   return hflat_getattr(user_path, attr);
 }
 
 /**
@@ -57,7 +57,7 @@ int pok_fgetattr(const char *user_path, struct stat *attr, struct fuse_file_info
  *
  * Introduced in version 2.6
  */
-int pok_utimens(const char *user_path, const struct timespec tv[2])
+int hflat_utimens(const char *user_path, const struct timespec tv[2])
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -66,7 +66,7 @@ int pok_utimens(const char *user_path, const struct timespec tv[2])
     mdi->getMD().set_atime(tv[0].tv_sec);
     mdi->getMD().set_mtime(tv[1].tv_sec);
     err = put_metadata(mdi);
-    if(err == -EAGAIN) return pok_utimens(user_path, tv);
+    if(err == -EAGAIN) return hflat_utimens(user_path, tv);
     return err;
 }
 
@@ -77,7 +77,7 @@ int pok_utimens(const char *user_path, const struct timespec tv[2])
  * Replaced 'struct statfs' parameter with 'struct statvfs' in
  * version 2.5
  */
-int pok_statfs(const char *user_path, struct statvfs *s)
+int hflat_statfs(const char *user_path, struct statvfs *s)
 {
     kinetic::Capacity cap;
     KineticStatus status = PRIV->kinetic->Capacity(cap);

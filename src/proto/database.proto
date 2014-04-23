@@ -1,4 +1,4 @@
-package posixok;
+package hflat;
 
 enum MappingType{
     MOVE    = 1;

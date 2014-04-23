@@ -16,11 +16,11 @@
  * Introduced in version 2.3
  * Changed in version 2.6
  */
-void *pok_init(struct fuse_conn_info *conn)
+void *hflat_init(struct fuse_conn_info *conn)
 {
     /* Setup values required for inode generation. */
     if ( util::grab_inode_generation_token() )
-        pok_error("Error encountered during setup of inode number generation");
+        hflat_error("Error encountered during setup of inode number generation");
 
     /* Verify that root metadata is available. If it isn't, initialize it. */
     std::shared_ptr<MetadataInfo> mdi(new MetadataInfo("/"));
@@ -30,7 +30,7 @@ void *pok_init(struct fuse_conn_info *conn)
         err = create_metadata(mdi);
     }
     if (err)
-        pok_error("Error encountered validating root metadata");
+        hflat_error("Error encountered validating root metadata");
 
     util::database_update();
     return PRIV;
@@ -43,71 +43,71 @@ void *pok_init(struct fuse_conn_info *conn)
  *
  * Introduced in version 2.3
  */
-void pok_destroy(void *priv)
+void hflat_destroy(void *priv)
 {
     google::protobuf::ShutdownProtobufLibrary();
     delete PRIV;
 }
 
-static struct fuse_operations pok_ops;
-static void init_pok_ops(fuse_operations *ops)
+static struct fuse_operations hflat_ops;
+static void init_hflat_ops(fuse_operations *ops)
 {
-    ops->create = pok_fcreate;
-    ops->mknod = pok_mknod;
-    ops->unlink = pok_unlink;
-    ops->open = pok_open;
-    ops->release = pok_release;
+    ops->create = hflat_fcreate;
+    ops->mknod = hflat_mknod;
+    ops->unlink = hflat_unlink;
+    ops->open = hflat_open;
+    ops->release = hflat_release;
 
-    ops->mkdir = pok_mkdir;
-    ops->rmdir = pok_rmdir;
-    ops->opendir = pok_open;
-    ops->releasedir = pok_release;
-    ops->readdir = pok_readdir;
+    ops->mkdir = hflat_mkdir;
+    ops->rmdir = hflat_rmdir;
+    ops->opendir = hflat_open;
+    ops->releasedir = hflat_release;
+    ops->readdir = hflat_readdir;
 
-    ops->access = pok_access;
-    ops->chown = pok_chown;
-    ops->chmod = pok_chmod;
+    ops->access = hflat_access;
+    ops->chown = hflat_chown;
+    ops->chmod = hflat_chmod;
 
-    ops->getattr = pok_getattr;
-    ops->fgetattr = pok_fgetattr;
-    ops->utimens = pok_utimens;
-    ops->statfs = pok_statfs;
+    ops->getattr = hflat_getattr;
+    ops->fgetattr = hflat_fgetattr;
+    ops->utimens = hflat_utimens;
+    ops->statfs = hflat_statfs;
 
 #ifdef __APPLE__
-    ops->setxattr = pok_setxattr_apple;
-    ops->getxattr = pok_getxattr_apple;
+    ops->setxattr = hflat_setxattr_apple;
+    ops->getxattr = hflat_getxattr_apple;
 #else
-    ops->setxattr = pok_setxattr;
-    ops->getxattr = pok_getxattr;
+    ops->setxattr = hflat_setxattr;
+    ops->getxattr = hflat_getxattr;
 #endif
-    ops->listxattr = pok_listxattr;
-    ops->removexattr = pok_removexattr;
+    ops->listxattr = hflat_listxattr;
+    ops->removexattr = hflat_removexattr;
 
-    ops->symlink = pok_symlink;
-    ops->readlink = pok_readlink;
-    ops->link = pok_hardlink;
+    ops->symlink = hflat_symlink;
+    ops->readlink = hflat_readlink;
+    ops->link = hflat_hardlink;
 
-    ops->read = pok_read;
-    ops->write = pok_write;
-    ops->truncate = pok_truncate;
-    ops->ftruncate = pok_ftruncate;
+    ops->read = hflat_read;
+    ops->write = hflat_write;
+    ops->truncate = hflat_truncate;
+    ops->ftruncate = hflat_ftruncate;
 
-    ops->rename = pok_rename;
+    ops->rename = hflat_rename;
 
-    ops->fsync = pok_fsync;
-    ops->fsyncdir = pok_fsyncdir;
-    ops->flush = pok_flush;
+    ops->fsync = hflat_fsync;
+    ops->fsyncdir = hflat_fsyncdir;
+    ops->flush = hflat_flush;
 
-    ops->init = pok_init;
-    ops->destroy = pok_destroy;
+    ops->init = hflat_init;
+    ops->destroy = hflat_destroy;
 }
 
 
 bool parse_configuration(char *file,
-        std::vector< posixok::Partition > &clustermap, posixok::Partition &logpartition,
+        std::vector< hflat::Partition > &clustermap, hflat::Partition &logpartition,
         int &cache_expiration_ms, PosixMode &pmode)
 {
-    auto cfg_to_posixok = [&](config_setting_t *partition, posixok::Partition &p) -> bool {
+    auto cfg_to_hflat = [&](config_setting_t *partition, hflat::Partition &p) -> bool {
         if(partition)
         for(int i=0; i<config_setting_length(partition); i++){
               config_setting_t *drive = config_setting_get_elem(partition, i);
@@ -118,16 +118,16 @@ bool parse_configuration(char *file,
                   !config_setting_lookup_int   (drive, "port",   &port) )
                   return false;
 
-              posixok::KineticDrive *d = p.mutable_drives()->Add();
+              hflat::KineticDrive *d = p.mutable_drives()->Add();
               d->set_host(host);
               d->set_port(port);
 
               if(strcmp(status,"GREEN") == 0)
-                  d->set_status(posixok::KineticDrive_Status_GREEN);
+                  d->set_status(hflat::KineticDrive_Status_GREEN);
               else if(strcmp(status,"YELLOW") == 0)
-                  d->set_status(posixok::KineticDrive_Status_YELLOW);
+                  d->set_status(hflat::KineticDrive_Status_YELLOW);
               else if(strcmp(status,"RED") == 0)
-                  d->set_status(posixok::KineticDrive_Status_RED);
+                  d->set_status(hflat::KineticDrive_Status_RED);
               else
                   return false;
 
@@ -139,12 +139,12 @@ bool parse_configuration(char *file,
     config_t cfg;
     config_init(&cfg);
     bool rtn = config_read_file(&cfg, file);
-    if  (rtn) rtn = cfg_to_posixok(config_lookup(&cfg, "log"), logpartition);
+    if  (rtn) rtn = cfg_to_hflat(config_lookup(&cfg, "log"), logpartition);
 
     if( config_setting_t * cmap = config_lookup(&cfg, "clustermap")) {
         for(int i = 0; rtn && i < config_setting_length(cmap); i++){
-            posixok::Partition p;
-            rtn = cfg_to_posixok(config_setting_get_elem(cmap, i), p);
+            hflat::Partition p;
+            rtn = cfg_to_hflat(config_setting_get_elem(cmap, i), p);
 
             /* Special case: 2 drives in partition. We add a logdrive to the partition to enable the namespace to
              * differentiate between a network split and a failed drive. */
@@ -168,7 +168,7 @@ bool parse_configuration(char *file,
 
 
     if(rtn == false)
-        pok_error("Error in configuration file %s: %s:%d - %s\n", file,
+        hflat_error("Error in configuration file %s: %s:%d - %s\n", file,
                 config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
     config_destroy(&cfg);
     return rtn;
@@ -178,14 +178,14 @@ bool parse_configuration(char *file,
 int main(int argc, char *argv[])
 {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
-    struct pok_priv *priv = 0;
+    struct hflat_priv *priv = 0;
 
-    std::vector< posixok::Partition > clustermap;
-    posixok::Partition logpartition;
+    std::vector< hflat::Partition > clustermap;
+    hflat::Partition logpartition;
     int cache_expiration_ms = 1000;
     PosixMode mode = PosixMode::FULL;
 
-    init_pok_ops(&pok_ops);
+    init_hflat_ops(&hflat_ops);
 
     for(int i=0; i<argc; i++)
         if(strncmp(argv[i],"-cfg=",5) == 0){
@@ -203,18 +203,18 @@ int main(int argc, char *argv[])
 
     try {
         if(clustermap.empty())
-            priv = new pok_priv(new SimpleKineticNamespace(), cache_expiration_ms, 1024*1024, mode);
+            priv = new hflat_priv(new SimpleKineticNamespace(), cache_expiration_ms, 1024*1024, mode);
         else if(clustermap.size() == 1 && clustermap.at(0).drives_size() == 1){
-            pok_debug("simple namespace used");
-            priv = new pok_priv(new SimpleKineticNamespace(clustermap[0].drives(0)), cache_expiration_ms, 1024*1024, mode);
+            hflat_debug("simple namespace used");
+            priv = new hflat_priv(new SimpleKineticNamespace(clustermap[0].drives(0)), cache_expiration_ms, 1024*1024, mode);
         }
         else
-            priv = new pok_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms, 1024*1024, mode);
+            priv = new hflat_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms, 1024*1024, mode);
     }
     catch(std::exception& e){
-        pok_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
+        hflat_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
         return(EXIT_FAILURE);
     }
-    pok_debug("Read cache expiration time set to %d milliseconds. Posix mode is %s", cache_expiration_ms, mode == PosixMode::FULL ? "FULL" : "RELAXED" );
-    return fuse_main(argc, argv, &pok_ops, (void*)priv);
+    hflat_debug("Read cache expiration time set to %d milliseconds. Posix mode is %s", cache_expiration_ms, mode == PosixMode::FULL ? "FULL" : "RELAXED" );
+    return fuse_main(argc, argv, &hflat_ops, (void*)priv);
 }

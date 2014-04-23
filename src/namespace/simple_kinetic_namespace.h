@@ -26,7 +26,7 @@ public:
     KineticStatus Capacity(kinetic::Capacity &cap);
     bool          selfCheck();
 public:
-    explicit SimpleKineticNamespace(const posixok::KineticDrive &d);
+    explicit SimpleKineticNamespace(const hflat::KineticDrive &d);
     explicit SimpleKineticNamespace();
     ~SimpleKineticNamespace();
 };

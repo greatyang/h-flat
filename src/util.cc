@@ -15,7 +15,7 @@ std::int64_t to_int64(const std::string &version_string)
     try {
         version = std::stoll(version_string);
     } catch (std::exception& e) {
-        pok_warning("Illegal version string '%s'. Setting version to 0.", version_string.c_str());
+        hflat_warning("Illegal version string '%s'. Setting version to 0.", version_string.c_str());
         version = 0;
     }
     return version;
@@ -61,7 +61,7 @@ ino_t generate_inode_number(void)
     PRIV->inum_counter++;
     if (PRIV->inum_counter == std::numeric_limits<std::uint16_t>::max()){
        if( grab_inode_generation_token() )
-           pok_error(" Error encountered when attempting to refresh inode generation token. "
+           hflat_error(" Error encountered when attempting to refresh inode generation token. "
                      " Cannot generate inode numbers. Quitting. ");
        PRIV->inum_counter = 0;
     }
@@ -79,7 +79,7 @@ int database_update(void)
 {
     std::int64_t dbVersion;
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
-    posixok::db_entry entry;
+    hflat::db_entry entry;
 
     if (int err = get_db_version(dbVersion))
         return err;
@@ -94,7 +94,7 @@ int database_update(void)
 
     /* See if it makes sense to get a full snapshot instead of an incremental update. */
     if(dbVersion - snapshotVersion > 42){
-        posixok::db_snapshot s;
+        hflat::db_snapshot s;
         if(get_db_snapshot(s) == 0){
             PRIV->pmap.loadSnapshot(s);
             snapshotVersion = PRIV->pmap.getSnapshotVersion();
@@ -102,7 +102,7 @@ int database_update(void)
     }
 
     /* Update using single db_entries. */
-    std::list<posixok::db_entry> entries;
+    std::list<hflat::db_entry> entries;
     for (std::int64_t v = snapshotVersion + 1; v <= dbVersion; v++) {
         if (int err = get_db_entry(v, entry))
             return err;
@@ -111,23 +111,23 @@ int database_update(void)
     return PRIV->pmap.updateSnapshot(entries, snapshotVersion, dbVersion);
 }
 
-int database_operation(posixok::db_entry &entry)
+int database_operation(hflat::db_entry &entry)
 {
     std::int64_t snapshotVersion = PRIV->pmap.getSnapshotVersion();
 
     int err = put_db_entry(snapshotVersion + 1, entry);
     if(!err){
-        std::list<posixok::db_entry> entries;
+        std::list<hflat::db_entry> entries;
         entries.push_back(entry);
         PRIV->pmap.updateSnapshot(entries, snapshotVersion, snapshotVersion + 1);
         if(snapshotVersion % 42 == 0){
-            posixok::db_snapshot s = PRIV->pmap.serializeSnapshot();
+            hflat::db_snapshot s = PRIV->pmap.serializeSnapshot();
             put_db_snapshot(s);
         }
         return 0;
     }
     if (  err != -EEXIST){
-        pok_error("put_db_entry returned error code %d",err);
+        hflat_error("put_db_entry returned error code %d",err);
         return err;
     }
     if (( err = database_update() ))

@@ -9,7 +9,7 @@
  *
  * Changed in version 2.2
  */
-int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
+int hflat_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -32,8 +32,8 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
            PRIV->data_cache.invalidate(di->getKey());
            return err;
        }
-       if(err == -EAGAIN) return pok_fsync(user_path, datasync, fi);
-       if(err) pok_error("Impossible Error. ");
+       if(err == -EAGAIN) return hflat_fsync(user_path, datasync, fi);
+       if(err) hflat_error("Impossible Error. ");
     }
    /* write data key */
    return put_data(di);
@@ -46,7 +46,7 @@ int pok_fsync(const char *user_path, int datasync, struct fuse_file_info *fi)
  *
  * Introduced in version 2.3
  */
-int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
+int hflat_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
 {
     /* No action required in this file system, directories are never dirty. */
     return 0;
@@ -75,7 +75,7 @@ int pok_fsyncdir(const char *user_path, int datasync, struct fuse_file_info *fi)
  *
  * Changed in version 2.2
  */
-int pok_flush(const char *user_path, struct fuse_file_info *fi)
+int hflat_flush(const char *user_path, struct fuse_file_info *fi)
 {
     /* This seems like too much of a random place to do much of anything. */
     return 0;

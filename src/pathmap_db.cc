@@ -7,7 +7,7 @@
 #include <cassert>
 #include "debug.h"
 
-using posixok::MappingType;
+using hflat::MappingType;
 
 PathMapDB::PathMapDB() :
         snapshotVersion(0), snapshot(), currentReaders(), lock()
@@ -55,7 +55,7 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 
     /* Take this opportunity to check for component-by-component POSIX name compliance. */
     if (path.size() - 1 - pos > NAME_MAX) {
-        pok_debug("Last component of path '%s' has %d size.",path.c_str(),path.size()-1-pos);
+        hflat_debug("Last component of path '%s' has %d size.",path.c_str(),path.size()-1-pos);
         maxTimeStamp = -ENAMETOOLONG;
         return false;
     }
@@ -88,7 +88,7 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
 
     /* Take this opportunity to check for path POSIX name compliance. */
     if (temp.size() > PATH_MAX) {
-        pok_debug("path size > %d",PATH_MAX);
+        hflat_debug("path size > %d",PATH_MAX);
         maxTimeStamp = -ENAMETOOLONG;
         return systemPath;
     }
@@ -116,18 +116,18 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
     return systemPath;
 }
 
-posixok::db_snapshot PathMapDB::serializeSnapshot()
+hflat::db_snapshot PathMapDB::serializeSnapshot()
 {
-    posixok::db_snapshot s;
+    hflat::db_snapshot s;
 
     std::lock_guard<std::mutex> locker(lock);
     while (currentReaders.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    pok_debug("Serializing snapshot version %d.",snapshotVersion);
+    hflat_debug("Serializing snapshot version %d.",snapshotVersion);
 
     for( auto e : snapshot ){
-        posixok::db_snapshot_entry * re = s.add_entries();
+        hflat::db_snapshot_entry * re = s.add_entries();
 
         re->set_origin(e.first);
         re->set_target(e.second.target);
@@ -138,9 +138,9 @@ posixok::db_snapshot PathMapDB::serializeSnapshot()
     return s;
 }
 
-int PathMapDB::loadSnapshot(const posixok::db_snapshot & serialized)
+int PathMapDB::loadSnapshot(const hflat::db_snapshot & serialized)
 {
-    pok_debug("Current snapshot version is %d, loading remote snapshot version %d. ", snapshotVersion, serialized.snapshot_version());
+    hflat_debug("Current snapshot version is %d, loading remote snapshot version %d. ", snapshotVersion, serialized.snapshot_version());
 
     /* No need to update */
     if (serialized.snapshot_version() <= snapshotVersion)
@@ -158,12 +158,12 @@ int PathMapDB::loadSnapshot(const posixok::db_snapshot & serialized)
     return 0;
 }
 
-int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion)
+int PathMapDB::updateSnapshot(const std::list<hflat::db_entry> &entries, std::int64_t fromVersion, std::int64_t toVersion)
 {
     /* sanity checks */
     assert(entries.size() == (size_t )(toVersion - fromVersion));
     assert(fromVersion <= snapshotVersion);
-    pok_debug("Current snapshot version = %d, updating interval [%d , %d]", snapshotVersion, fromVersion, toVersion);
+    hflat_debug("Current snapshot version = %d, updating interval [%d , %d]", snapshotVersion, fromVersion, toVersion);
 
     /* No need to update */
     if (toVersion <= snapshotVersion)
@@ -177,20 +177,20 @@ int PathMapDB::updateSnapshot(const std::list<posixok::db_entry> &entries, std::
             continue;
 
         switch (entry.type()) {
-        case posixok::db_entry_Type_MOVE:
+        case hflat::db_entry_Type_MOVE:
             addDirectoryMove(entry.origin(), entry.target());
             break;
-        case posixok::db_entry_Type_SYMLINK:
+        case hflat::db_entry_Type_SYMLINK:
             addSoftLink(entry.origin(), entry.target());
             break;
-        case posixok::db_entry_Type_NONE:
+        case hflat::db_entry_Type_NONE:
             addPermissionChange(entry.origin());
             break;
-        case posixok::db_entry_Type_REMOVED:
+        case hflat::db_entry_Type_REMOVED:
             addUnlink(entry.origin());
             break;
         default:
-            pok_warning("Invalid database entry supplied. Resetting pathmapDB");
+            hflat_warning("Invalid database entry supplied. Resetting pathmapDB");
             std::lock_guard<std::mutex> locker(lock);
             while (currentReaders.load())
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -296,7 +296,7 @@ void PathMapDB::addUnlink(std::string path)
     snapshotVersion++;
 
     if(!snapshot.count(path))
-        pok_warning("Received addUnlink request for key %s that IS NOT in the current database.", path.data());
+        hflat_warning("Received addUnlink request for key %s that IS NOT in the current database.", path.data());
 
     snapshot.erase(path);
     printSnapshot();

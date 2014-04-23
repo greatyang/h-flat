@@ -41,9 +41,9 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
  *
  * Changed in version 2.2
  */
-int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
+int hflat_read(const char* user_path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
-    pok_debug("reading %d bytes at offset %d for user path %s", size, offset, user_path);
+    hflat_debug("reading %d bytes at offset %d for user path %s", size, offset, user_path);
 
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -61,9 +61,9 @@ int pok_read(const char* user_path, char *buf, size_t size, off_t offset, struct
  *
  * Changed in version 2.2
  */
-int pok_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
+int hflat_write(const char* user_path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi)
 {
-    pok_debug("writing %d bytes at offset %d for user path %s, O_APPEND: %d", size, offset, user_path, fi->flags & O_APPEND);
+    hflat_debug("writing %d bytes at offset %d for user path %s, O_APPEND: %d", size, offset, user_path, fi->flags & O_APPEND);
 
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
@@ -75,9 +75,9 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 
     /* set updated datainfo structure in mdi, flush existing dirty data if required */
     if(! mdi->setDirtyData(di) ){
-        err = pok_fsync(user_path, 0, fi);
+        err = hflat_fsync(user_path, 0, fi);
         if(err){
-            pok_warning("Failed flushing dirty metadata&data kept for write aggregation.");
+            hflat_warning("Failed flushing dirty metadata&data kept for write aggregation.");
             return err;
         }
         mdi->setDirtyData(di);
@@ -85,8 +85,8 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 
     /* check if the write should be immediately flushed or aggregated */
     if( (fi->flags & O_APPEND) || ((offset+size) % PRIV->blocksize == 0) ){
-        err = pok_fsync(user_path,0,fi);
-        if(err == -EAGAIN) return pok_write(user_path, buf, size, offset, fi);
+        err = hflat_fsync(user_path,0,fi);
+        if(err == -EAGAIN) return hflat_write(user_path, buf, size, offset, fi);
         if(err) return err;
     }
 
@@ -94,12 +94,12 @@ int pok_write(const char* user_path, const char *buf, size_t size, off_t offset,
 }
 
 /** Change the size of a file */
-int pok_truncate(const char *user_path, off_t offset)
+int hflat_truncate(const char *user_path, off_t offset)
 {
-    pok_debug("truncate for user path %s to size %ld",user_path,offset);
+    hflat_debug("truncate for user path %s to size %ld",user_path,offset);
     std::shared_ptr<MetadataInfo> mdi;
     int err = lookup(user_path, mdi);
-    if(!err) err = pok_fsync(user_path, 0, nullptr);
+    if(!err) err = hflat_fsync(user_path, 0, nullptr);
     if( err) return err;
 
     if (check_access(mdi, W_OK))
@@ -114,7 +114,7 @@ int pok_truncate(const char *user_path, off_t offset)
     mdi->getMD().set_size(offset);
     mdi->updateACMtime();
     err = put_metadata(mdi);
-    if(err == -EAGAIN) return pok_truncate(user_path, offset);
+    if(err == -EAGAIN) return hflat_truncate(user_path, offset);
     if(err) return err;
 
     /* truncate last valid data block */
@@ -151,8 +151,8 @@ int pok_truncate(const char *user_path, off_t offset)
  *
  * Introduced in version 2.5
  */
-int pok_ftruncate(const char *user_path, off_t offset, struct fuse_file_info *fi)
+int hflat_ftruncate(const char *user_path, off_t offset, struct fuse_file_info *fi)
 {
-    return  pok_truncate(user_path, offset);
+    return  hflat_truncate(user_path, offset);
 }
 

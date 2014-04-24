@@ -1,5 +1,5 @@
 # Table of Contents
-  * [Core Concepts](#the-h-flat-file-system)
+  * [Core Concepts](#the-file-system)
   * [Getting Started](#getting-started)
     * [Initial Setup](#initial-setup)
     * [Mounting the File System](#mount)
@@ -9,8 +9,8 @@
     * [File System Tools](#file-system-tools)
   * [Testing](#testing)
 
-# The h-flat File System 
-*H-flat* stands for *Hierarchical Functionality in a Flat Namespace*. The core concept, accordingly, is to provide standard hierarchical file system semantics (POSIX) in a distributed setting while using a flat namespace internally; to combine the performance and scalability of a key-value storage system with a file system interface. 
+# The File System 
+*H-flat* stands for *Hierarchical Functionality in a Flat Namespace*. The core concept, accordingly, is to provide standard hierarchical file system semantics (POSIX) while using a flat namespace internally; to combine the performance and scalability of a key-value storage system with a file system interface. 
 
 To achieve key-value performance characteristics the full path of a file is considered the file's key. Using this key the file metadata can be retrieved without accessing the individual directories of the path. Some detail about the implications of skipping directory traversal as well as the file system architecture can be found [here](README_ARCH.md).
 

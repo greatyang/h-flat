@@ -9,7 +9,7 @@
     * [File System Tools](#file-system-tools)
   * [Testing](#testing)
 
-# The H-flat File System 
+# The h-flat File System 
 *H-flat* stands for *Hierarchical Functionality in a Flat Namespace*. The core concept, accordingly, is to provide standard hierarchical file system semantics (POSIX) in a distributed setting while using a flat namespace internally; to combine the performance and scalability of a key-value storage system with a file system interface. 
 
 To achieve key-value performance characteristics the full path of a file is considered the file's key. Using this key the file metadata can be retrieved without accessing the individual directories of the path. Some detail about the implications of skipping directory traversal as well as the file system architecture can be found [here](README_ARCH.md).
@@ -27,8 +27,6 @@ To achieve key-value performance characteristics the full path of a file is cons
 + Create a build directory. If you want you can use the cloned git repository as your build directory, but using a separate directory is recommended in order to cleanly separate sources and generated files. 
 + From your build directory call `cmake /path/to/cloned-git`, if you're using the cloned git repository as your build directory this would be `cmake .` 
 + Run `make`
-
-+ Note that the *iointercept* and *tools* sub-projects have independent cmake files, if you whish to build them repeat the above process. 
 
 ### Mount
 To mount run the executable given the mountpoint as a parameter. Use -o to specify mount options. Note that *allow_other*, *use_ino*, and *attr_timeout=0* fuse mount options are **required** for POSIX compliant behavior

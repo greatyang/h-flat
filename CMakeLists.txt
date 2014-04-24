@@ -5,23 +5,23 @@ set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-o
 
 include(ExternalProject)
 
-if(EXISTS "$ENV{HOME}/git/Kinetic-C-Client/")
-   message("Found existing Kinetic-C-Client at ~/git/Kinetic-C-Client.")
-   set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/Kinetic-C-Client")
+if(EXISTS "$ENV{HOME}/git/kinetic-cpp-client/")
+   message("Found existing kinetic-cpp-client at ~/git/kinetic-cpp-client.")
+   set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client/")
 else()
-   message("Existing Kinetic-C-Client not found. External project added.")
+   message("Existing kinetic-cpp-client not found. External project added.")
    set(KINETIC_CLIENT_PATH "${CMAKE_BINARY_DIR}/vendor/src/kinetic_cpp_client/")
 
     ExternalProject_add(
         kinetic_cpp_client
         PREFIX "vendor"
-        GIT_REPOSITORY "git@github.com:Seagate/Kinetic-C-Client.git"
+        GIT_REPOSITORY "git@github.com:Seagate/kinetic-cpp-client.git"
         GIT_TAG ""
         BUILD_IN_SOURCE 1
         INSTALL_COMMAND ""
     )
 endif()
- 
+
 include_directories(
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/include
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/include
@@ -106,3 +106,16 @@ target_link_libraries(hflat
     ${LIBRARY_DEPENDENCIES}
 )
 
+add_executable(hflat-tools
+     tools/tools.cc
+)
+target_link_libraries(hflat-tools
+    dl
+)
+add_library(iointer SHARED
+     iointercept/pathchange.cc
+     iointercept/iointercept.cc
+)
+target_link_libraries(iointer
+    dl
+)

@@ -1,3 +1,20 @@
+
+/* h-flat file system: Hierarchical Functionality in a Flat Namespace
+ * Copyright (c) 2014 Seagate
+ * Written by Paul Hermann Lensing
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef DEBUG_H_
 #define DEBUG_H_
 
@@ -5,16 +22,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
-
-/*
- *      void *caller[2];
-        backtrace (caller, 2);
-        char ** strings = backtrace_symbols (caller, 2);
-        strings[1][strchr(strchr(strings[1],'p'),'P') - strings[1] ] = '\0';
-        hflat_trace("%s > LOOKUP %s  ->  %s", strchr(strings[1],'p'),
-                        user_path, key.c_str());
- *
- */
 
 static int llconfig = 0;
 

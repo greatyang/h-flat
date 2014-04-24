@@ -1,4 +1,19 @@
-/* Fsck command line utility. The functional implementation is done inside the file system itself. */
+/* file system tools
+ * Copyright (c) 2014 Seagate
+ * Written by Paul Hermann Lensing
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -89,8 +104,8 @@ int main(int argc, char *argv[])
 {
     if(argc!=3 || (std::string(argv[1]).compare("-fsck") && std::string(argv[1]).compare("-nsck")) ){
         std::cout << "Usage: " << argv[0] << " [-fsck][-nsck] /path" << std::endl;
-        std::cout << "\t fsck -> file system check limited to directory identified by the path" << std::endl;
-        std::cout << "\t nsck -> namespace check on the file system identiefied by the path" << std::endl;
+        std::cout << "\t -fsck -> file system check limited to directory identified by the path" << std::endl;
+        std::cout << "\t -nsck -> namespace check on the file system identiefied by the path" << std::endl;
         return failure("Invalid arguments");
     }
 

@@ -9,15 +9,14 @@
     * [File System Tools](#file-system-tools)
   * [Testing](#testing)
 
-# The H-Flat File System 
-*H-Flat* stands for *Hierarchical Functionality in a Flat Namespace*. The core concept, accordingly, is to provide standard hierarchical file system semantics (POSIX) in a distributed setting while using a flat namespace internally; to combine the performance and scalability of a key-value storage system with a file system interface. 
+# The H-flat File System 
+*H-flat* stands for *Hierarchical Functionality in a Flat Namespace*. The core concept, accordingly, is to provide standard hierarchical file system semantics (POSIX) in a distributed setting while using a flat namespace internally; to combine the performance and scalability of a key-value storage system with a file system interface. 
 
 To achieve key-value performance characteristics the full path of a file is considered the file's key. Using this key the file metadata can be retrieved without accessing the individual directories of the path. Some detail about the implications of skipping directory traversal as well as the file system architecture can be found [here](README_ARCH.md).
 
 
 # Getting Started
 ### Dependencies
-+ The Kinetic-C-Client
 + [CMake](http://www.cmake.org) is used to build the project
 + **OSX** [libosxfuse](http://osxfuse.github.io), *libconfig* (homebrew recommended for easy installation) 
 + **Linux** *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
@@ -39,14 +38,14 @@ Some flags interesting for debugging:
 + -f foreground mode: sends all debug to std out 
 + -d debug mode: list internal fuse function calls in addition to file system debug output
 
-Example: `./h-flat -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
+Example: `./hflat -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
 
 
 ### Configuration
 
 See [example.cfg](example.cfg) in sources for an example configuration. Use *-cfg=filename* as a mount option. This mount option can be used at any place in the parameter list, including as a last parameter beyond the mount point. 
 
-Example: `./h-flat -o allow_other,use_ino,attr_timeout=0 /mountpoint -cfg=example.cfg` 
+Example: `./hflat -o allow_other,use_ino,attr_timeout=0 /mountpoint -cfg=example.cfg` 
 
 #### Cluster Configuration
 If no kinetic cluster configuration is supplied at mount time, the file system attempts to connect to a single kinetic simulator instance running on localhost with standard parameters. 

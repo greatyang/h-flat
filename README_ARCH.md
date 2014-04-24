@@ -15,7 +15,7 @@ File systems traditionally implement a component-based lookup strategy, reflecti
 
 Storage systems that operate in a flat namespace (key-value, object storage), in contrast, use only a single component. This changes lookup performance characteristics fundamentally: Lookup is no longer cache dependant (except for direct hits) and it is no longer file set dependant (doesn't matter how many other files there are or where a file is located in the directory tree). Both of these characteristics gain importance as a file system grows: While for small systems caching can mask the effect of component based lookup almost completely, metadata performance can become the defining performance characteristic in big file systems. 
 
-The interface offered by flat-namespace storage systems is usually a get-put type of interface that is much less feature rich than the POSIX file system interface. The H-Flat file system attempts to provide full POSIX functionality while retaining the performance and scalability characteristics of a key-value storage system. However, some file system functionality is inherrently hierachical and can't be directly mapped to a flat namespace. The following section will discuss these cases. 
+The interface offered by flat-namespace storage systems is usually a get-put type of interface that is much less feature rich than the POSIX file system interface. The h-flat file system attempts to provide full POSIX functionality while retaining the performance and scalability characteristics of a key-value storage system. However, some file system functionality is inherrently hierachical and can't be directly mapped to a flat namespace. The following section will discuss these cases. 
 
 ## Hierachical Functionality in a Flat Namespace
 

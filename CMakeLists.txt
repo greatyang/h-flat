@@ -16,7 +16,7 @@ else()
         kinetic_cpp_client
         PREFIX "vendor"
         GIT_REPOSITORY "git@github.com:Seagate/Kinetic-C-Client.git"
-        GIT_TAG "" 
+        GIT_TAG ""
         BUILD_IN_SOURCE 1
         INSTALL_COMMAND ""
     )
@@ -43,7 +43,6 @@ set(LIBRARY_DEPENDENCIES
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libssl.a
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libcrypto.a
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libprotobuf.a
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/src/gtest/libgtest.a
     ${CMAKE_THREAD_LIBS_INIT}
     config
     dl

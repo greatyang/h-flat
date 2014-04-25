@@ -18,7 +18,8 @@ To achieve key-value performance characteristics the full path of a file is cons
 # Getting Started
 ### Dependencies
 + [CMake](http://www.cmake.org) is used to build the project
-+ **OSX** [libosxfuse](http://osxfuse.github.io), *libconfig* (homebrew recommended for easy installation) 
++ **OSX** [libosxfuse](http://osxfuse.github.io), [libconfig](http://www.hyperrealm.com/libconfig/)
+ + Tip: make your life easier by using [homebrew](http://brew.sh) to install all of the dependencies 
 + **Linux** *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
 
 ### Initial Setup

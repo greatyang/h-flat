@@ -4,7 +4,7 @@ Seagate Kinetic drives provide a low-level key-value interface (get/put/delete).
 
 ![Image](../../wiki/distributed-fs.png?raw=true)
 
-The file system code is decoupled from handling the actual kinetic drives. It operates on a single kinetic namespace, which supplies a global key-value namespace. All implementation logic is encapsulated by a kinetic namespace implementation: The number of connected drives, how the global namespace is mapped to the individual drives, how (or even if) redundancy & reliability issues are handled. Currently there are two kinetic namespace implementations: The simple kinetic namespace forwards all requests to a single drive or simulator instance. The distributed kinetic namespace implements namespace sharding and replication. 
+The file system code is decoupled from handling the actual kinetic drives. It operates on a single kinetic namespace, which supplies a global key-value namespace. All implementation logic is encapsulated by a kinetic namespace implementation: The number of connected drives, how the global namespace is mapped to the individual drives, how (or even if) redundancy & reliability issues are handled. Currently there are two kinetic namespace implementations: The simple kinetic namespace forwards all requests to a single drive or simulator instance. The distributed kinetic namespace implements namespace sharding and replication. It should be noted, however, that the focus of this project lies in the file system part, not in providing a well-rounded distributed key-value store implementation on top of the basic kinetic api. As such, more advanced features such as changing the number of partitions in the cluster for an existing system are not supported.  
 
 ![Image](../../wiki/kinetic-namespace.png?raw=true)
 
@@ -33,7 +33,11 @@ Using the knowledge that such an operation occurred can now be used to behave as
 
 
 ### Multiple Clients: Local Knowledge & Effects on File System Semantics
-A scenario with multiple independently acting file system clients adds a layer of complexity: The above described *knowledge* about exectued hierachical file system operations has to be available at every client. Querying a remote service for this information is not practical as it is required for every lookup operation. It is not possible, however, to guarantee synchronous updates for an arbitrary number of file system clients. 
+A scenario with multiple independently acting file system clients adds a layer of complexity: The above described *knowledge* about exectued hierachical file system operations has to be available at every client. Querying a remote service for this information is not practical as it is required for every lookup operation. It is not possible, however, to guarantee synchronous updates for an arbitrary number of file system clients. This leads to an architecture where the local knowledge of a client might not be equivalent on all clients. The following diagram shows three clients, each with a different snapshot of the global database storing hierachical changes to the file system. 
+
+![Image](../../wiki/multi-client.png?raw=true)
+
+All database entries are stored on the Kinetic drives,  which can be accessed as usual by all clients in order to update their local snapshot. When a client executes a hierarchical file system operation it creates a new database entry 
 
 Executed operations are stored in system-level files on the regular file system (invisible to a user); each file system client can use this information to update its local knowledge about executed hierachical operations. Local knowledge is therefore updated asynchronously. 
 

@@ -18,10 +18,10 @@ To achieve key-value performance characteristics the full path of a file is cons
 # Getting Started
 Unless you have some real Kinetic drives, you might want to get the [simulator](https://github.com/Seagate/kinetic-java). 
 ### Dependencies
-+ [CMake](http://www.cmake.org) is used to build the project
++ [CMake](http://www.cmake.org) 
 + **OSX** [libosxfuse](http://osxfuse.github.io), [libconfig](http://www.hyperrealm.com/libconfig/)
  + Tip: make your life easier by using [homebrew](http://brew.sh) to install all of the dependencies 
-+ **Linux** *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
++ **Linux** *libfuse-dev*, *libssl-dev*, *uuid-dev*, *libconfig-dev* packages, up-to-date g++
 
 ### Initial Setup
 + Install any missing dependencies

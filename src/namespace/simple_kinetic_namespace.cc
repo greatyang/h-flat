@@ -16,6 +16,7 @@
  */
 #include "simple_kinetic_namespace.h"
 #include <exception>
+#include <stdexcept>
 
 SimpleKineticNamespace::SimpleKineticNamespace(const hflat::KineticDrive &d)
 {

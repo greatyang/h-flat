@@ -108,6 +108,6 @@ int hflat_statfs(const char *user_path, struct statvfs *s)
 
     s->f_namemax = NAME_MAX; /* Max file name length */
     s->f_files   = PRIV->inum_base + PRIV->inum_counter; /* Total inodes */
-    s->f_ffree   = UINT16_MAX; /* Free inodes */
+    s->f_ffree   = std::numeric_limits<std::uint16_t>::max(); /* Free inodes */
     return 0;
 }

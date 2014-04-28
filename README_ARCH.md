@@ -33,20 +33,22 @@ Using the knowledge that such an operation occurred can now be used to behave as
 
 
 ### Multiple Clients: Local Knowledge & Effects on File System Semantics
-A scenario with multiple independently acting file system clients adds a layer of complexity: The above described *knowledge* about exectued hierachical file system operations has to be available at every client. Querying a remote service for this information is not practical as it is required for every lookup operation. It is not possible, however, to guarantee synchronous updates for an arbitrary number of file system clients. This leads to an architecture where the local knowledge of a client might not be equivalent on all clients. The following diagram shows three clients, each with a different snapshot of the global database storing hierachical changes to the file system. 
+A scenario with multiple independently acting file system clients adds a layer of complexity: The above described *knowledge* about exectued hierachical file system operations has to be available at every client. Querying a remote service for this information is not practical as it is required for every lookup operation. It is also not possible, however, to guarantee synchronous updates for an arbitrary number of file system clients. This leads to an architecture where the local knowledge might not be equivalent on all clients. The following diagram shows three clients, each with a different snapshot of the global database storing hierachical changes to the file system. 
 
 ![Image](../../wiki/multi-client.png?raw=true)
 
-All database entries are stored on the Kinetic drives,  which can be accessed as usual by all clients in order to update their local snapshot. When a client executes a hierarchical file system operation it creates a new database entry 
+All database entries are stored on the Kinetic drives; each file system client can use this information to update its local knowledge about executed hierachical operations. Local knowledge is therefore updated asynchronously. 
 
-Executed operations are stored in system-level files on the regular file system (invisible to a user); each file system client can use this information to update its local knowledge about executed hierachical operations. Local knowledge is therefore updated asynchronously. 
+This slightly changes file system semantics: If client **A** moves a directory, this will not be immediately visible to client **B**. Instead, client **B** will be able to keep using the old path of the directory until it updates the database. We call these kind of semantics snapshot-semantics, as the local knowledge of a client represents a snapshot of the global knowledge that is stored on the Kinetic drives. While clients can choose the frequency with which they update their local snapshots, they might be forced to update when required for file system consistency (e.g. a client tries to create a file whose name is already in use because of a directory move operation), or when they attempt to execute a hierachical file system operation themselves. 
 
-This slightly changes file system semantics: If client **A** moves a directory, this will not be immediately visible to client **B**. Instead, client **B** will be able to keep using the old path of the directory until it updates the database. The same delayed update semantics apply to the other two hierachical file system operations. 
+All the logic for using and updating local knowledge about hierarchical functionality is encapsulated in [pathmapdb.cc](src/pathmap_db.cc).
 
 
-![Image](../../wiki/h-flat.png?raw=true)
+
 
 # Code Overview 
+
+![Image](../../wiki/h-flat.png?raw=true)
 
 **src/fuseops**  
 Contains the implementations of fuse functions, sorted by category. data.cc, e.g., contains data related functions: read / write / truncate. All implemented functions are listed in src/fuseops.h

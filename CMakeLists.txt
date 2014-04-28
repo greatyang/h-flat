@@ -106,16 +106,6 @@ target_link_libraries(hflat
     ${LIBRARY_DEPENDENCIES}
 )
 
-add_executable(hflat-tools
-     tools/tools.cc
-)
-target_link_libraries(hflat-tools
-    dl
-)
-add_library(iointer SHARED
-     iointercept/pathchange.cc
-     iointercept/iointercept.cc
-)
-target_link_libraries(iointer
-    dl
-)
+add_subdirectory(tools)
+add_subdirectory(iointercept)
+

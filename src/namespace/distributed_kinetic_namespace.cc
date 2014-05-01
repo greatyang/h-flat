@@ -16,6 +16,7 @@
  */
 #include <algorithm>
 #include <future>
+#include <iostream>
 #include "distributed_kinetic_namespace.h"
 #include "debug.h"
 

@@ -29,8 +29,12 @@ static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<Met
     std::string key  = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknum);
 
     if(PRIV->data_cache.get(key, di) == false){
-        if (int err = get_data(key, di))
+        /* Don't GET if the file is growing. */
+        if(mode == rw::WRITE && offset+size > mdi->getMD().size())
+            di.reset(new DataInfo(key, std::string(""), std::string("")));
+        else if (int err = get_data(key, di))
             return err;
+
         PRIV->data_cache.add(key, di);
     }
 

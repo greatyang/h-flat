@@ -9,7 +9,7 @@ ExternalProject_add(
     kinetic_cpp_client
     PREFIX "vendor"
     # using kinetic-cpp-client fork at plensing instead of Seagate github repository because of unresolved multithreading issues
-    GIT_REPOSITORY "git@github.com:plensing/kinetic-cpp-client.git"
+    GIT_REPOSITORY "https://github.com/plensing/kinetic-cpp-client"
     GIT_TAG ""
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""

@@ -4,23 +4,16 @@ project(hflat CXX C)
 set(CMAKE_CXX_FLAGS "-g --std=c++11 -Wall -Wextra -Werror -Wno-unknown-warning-option -Wno-unused-parameter -Wno-unused-local-typedefs -Wno-null-dereference -DGTEST_USE_OWN_TR1_TUPLE=1 -D__STDC_FORMAT_MACROS")
 
 include(ExternalProject)
-
-if(EXISTS "$ENV{HOME}/git/kinetic-cpp-client/")
-   message("Found existing kinetic-cpp-client at ~/git/kinetic-cpp-client.")
-   set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client/")
-else()
-   message("Existing kinetic-cpp-client not found. External project added.")
-   set(KINETIC_CLIENT_PATH "${CMAKE_BINARY_DIR}/vendor/src/kinetic_cpp_client/")
-
-    ExternalProject_add(
-        kinetic_cpp_client
-        PREFIX "vendor"
-        GIT_REPOSITORY "git@github.com:Seagate/kinetic-cpp-client.git"
-        GIT_TAG ""
-        BUILD_IN_SOURCE 1
-        INSTALL_COMMAND ""
-    )
-endif()
+set(KINETIC_CLIENT_PATH "${CMAKE_BINARY_DIR}/vendor/src/kinetic_cpp_client/")
+ExternalProject_add(
+    kinetic_cpp_client
+    PREFIX "vendor"
+    # using kinetic-cpp-client fork at plensing instead of Seagate github repository because of unresolved multithreading issues
+    GIT_REPOSITORY "git@github.com:plensing/kinetic-cpp-client.git"
+    GIT_TAG ""
+    BUILD_IN_SOURCE 1
+    INSTALL_COMMAND ""
+)
 
 include_directories(
     ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/include

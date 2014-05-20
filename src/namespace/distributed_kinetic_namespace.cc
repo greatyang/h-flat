@@ -77,11 +77,8 @@ bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int 
 {
     auto con = driveToConnection(p, driveID);
     if(! con) return false;
-
-    std::unique_ptr<kinetic::DriveLog> unused;
-    KineticStatus status = con->blocking().GetLog(unused);
-    if( !status.ok() ){
-        hflat_debug("Failed getLog on drive %s:%d due to: '%s'",p.drives(driveID).host().c_str(),p.drives(driveID).port(),status.message().c_str());
+    if(!con->blocking().NoOp().ok()){
+        hflat_debug("Failed connecting to drive %s:%d",p.drives(driveID).host().c_str(),p.drives(driveID).port());
         return false;
     }
     return true;
@@ -111,8 +108,10 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
     kinetic::Capacity cap = {0, 0};
     for(auto &f : futures){
         kinetic::Capacity c = f.get();
-        if(!c.total_bytes)
+        if(!c.total_bytes){
+            hflat_warning("Incomplete capacity update.");
             return false;
+        }
         cap.total_bytes     += c.total_bytes;
         cap.remaining_bytes += c.remaining_bytes;
     }
@@ -274,13 +273,12 @@ bool DistributedKineticNamespace::enableDrive(hflat::Partition &p, int index)
     std::shared_ptr<kinetic::ConnectionHandle>  con = driveToConnection(p, index);
     if(!con) return false;
 
-    std::unique_ptr<kinetic::DriveLog> unused;
     std::int64_t cversion = -1;
     KineticStatus status(kinetic::StatusCode::OK, "");
     do{
         cversion++;
         con->blocking().SetClientClusterVersion(cversion);
-        status = con->blocking().GetLog(unused);
+        status = con->blocking().NoOp();
     }while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH);
     if(status.ok() == false){
         return false;

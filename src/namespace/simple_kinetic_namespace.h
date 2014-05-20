@@ -24,14 +24,11 @@ class SimpleKineticNamespace final : public KineticNamespace
 {
 private:
     kinetic::ConnectionOptions        options;
+    kinetic::Capacity                 capacity_estimate;
     unique_ptr<kinetic::ConnectionHandle> con;
 
 private:
     void connect();
-
-    /* Run operation, retry in case of potential network problems or temporary drive problems. */
-    KineticStatus Run(std::function<KineticStatus()> op);
-
 
 public:
     KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);

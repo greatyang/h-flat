@@ -45,56 +45,42 @@ void SimpleKineticNamespace::connect()
     kinetic::Status status = factory.NewThreadsafeConnection(options, 5, con);
     if (status.notOk())
         throw std::runtime_error(status.ToString());
+
+    unique_ptr<kinetic::DriveLog> log;
+    if (con->blocking().GetLog(log).ok() == false)
+      throw std::runtime_error("failed getlog during initial connect.");
+    capacity_estimate = log->capacity;
 }
 
 bool SimpleKineticNamespace::selfCheck()
 {
-    unique_ptr<kinetic::DriveLog> log;
-    KineticStatus status = con->blocking().GetLog(log);
-    if(status.ok())
+    if(con->blocking().NoOp().ok())
         return true;
     return false;
 }
 
-#include<debug.h>
-KineticStatus SimpleKineticNamespace::Run(std::function<KineticStatus()> op)
-{
-    int maxrepeat = 1;
-    KineticStatus s(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "Invalid");
-    do {
-        s = op();
-        if(s.statusCode() != kinetic::StatusCode::REMOTE_SERVICE_BUSY &&
-           s.statusCode() != kinetic::StatusCode::REMOTE_INTERNAL_ERROR &&
-           s.statusCode() != kinetic::StatusCode::CLIENT_IO_ERROR)
-            break;
-    }while(--maxrepeat);
-
-    if(maxrepeat == 0)
-    if(s.statusCode() == kinetic::StatusCode::REMOTE_SERVICE_BUSY ||
-       s.statusCode() == kinetic::StatusCode::REMOTE_INTERNAL_ERROR ||
-       s.statusCode() == kinetic::StatusCode::CLIENT_IO_ERROR)
-        hflat_warning("Giving up retrying for error code %d. %s",s.statusCode(),s.message().c_str());
-    return s;
-}
-
 KineticStatus SimpleKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
-    return Run([&](){return con->blocking().Get(key, record);});
+    return con->blocking().Get(key, record);
 }
 
 KineticStatus SimpleKineticNamespace::Delete(const string &key, const string& version, WriteMode mode)
 {
-    return Run([&](){return con->blocking().Delete(key, version, mode);});
+    KineticStatus result = con->blocking().Delete(key, version, mode);
+    if(result.ok()) capacity_estimate.remaining_bytes += 1024*1024;
+    return result;
 }
 
 KineticStatus SimpleKineticNamespace::Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record)
 {
-    return Run([&](){return con->blocking().Put(key, current_version, mode, record);});
+    KineticStatus result = con->blocking().Put(key, current_version, mode, record);
+    if(result.ok() && current_version.empty()) capacity_estimate.remaining_bytes -= 1024*1024;
+    return result;
 }
 
 KineticStatus SimpleKineticNamespace::GetVersion(const string &key, unique_ptr<string>& version)
 {
-    return Run([&](){return con->blocking().GetVersion(key, version);});
+    return con->blocking().GetVersion(key, version);
 }
 
 KineticStatus SimpleKineticNamespace::GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results,
@@ -103,16 +89,11 @@ KineticStatus SimpleKineticNamespace::GetKeyRange(const string &start_key, const
     const bool start_key_inclusive = false;
     const bool end_key_inclusive = false;
     const bool reverse_results = false;
-    return Run([&](){return con->blocking().GetKeyRange(start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);});
+    return con->blocking().GetKeyRange(start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);
 }
 
 KineticStatus SimpleKineticNamespace::Capacity(kinetic::Capacity &cap)
 {
-    unique_ptr<kinetic::DriveLog> log;
-    KineticStatus status = Run([&](){return con->blocking().GetLog(log);});
-    if (status.ok()) {
-        cap.remaining_bytes = log->capacity.remaining_bytes;
-        cap.total_bytes     = log->capacity.total_bytes;
-    }
-    return status;
+    cap = capacity_estimate;
+    return KineticStatus(kinetic::StatusCode::OK, "");
 }

@@ -61,8 +61,6 @@ int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
         hflat_warning("status == %s",status.message().c_str());
         return -EIO;
     }
-
-    hflat_debug("PUT key %s",mdi->getSystemPath().c_str());
     mdi->setKeyVersion(new_version);
     return 0;
 }

@@ -48,14 +48,15 @@ struct hflat_priv
 
     hflat_priv(KineticNamespace *kn, int cache_expiration_ms, int block_size_bytes, PosixMode mode):
             kinetic(kn),
-            lookup_cache(cache_expiration_ms, 500,
+            lookup_cache(cache_expiration_ms, 5000,
                     std::mem_fn(&MetadataInfo::getSystemPath),
                     [](const std::shared_ptr<MetadataInfo> &mdi){
-                        if(mdi->getDirtyData() && mdi->getDirtyData()->hasUpdates())
-                            return true;
-                        return false;
+                       std::shared_ptr<DataInfo> di = mdi->getDirtyData();
+                       if(! di || ! di->hasUpdates() )
+                            return false;
+                       return true;
             }),
-            data_cache(cache_expiration_ms, 50,
+            data_cache(cache_expiration_ms, 500,
                     std::mem_fn(&DataInfo::getKey),
                     std::mem_fn(&DataInfo::hasUpdates)
             ),

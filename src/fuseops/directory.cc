@@ -122,7 +122,7 @@ int hflat_readdir(const char *user_path, void *buffer, fuse_fill_dir_t filldir, 
 
     string keystart = std::to_string(mdi->getMD().inode_number()) + "|";
     string keyend   = std::to_string(mdi->getMD().inode_number()) + "|" + static_cast<char>(251);
-    size_t maxsize = 10000;
+    size_t maxsize = 100;
     unique_ptr<vector<std::string>> keys(new vector<string>());
 
     do {

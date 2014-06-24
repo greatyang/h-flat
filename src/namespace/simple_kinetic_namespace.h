@@ -25,7 +25,8 @@ class SimpleKineticNamespace final : public KineticNamespace
 private:
     kinetic::ConnectionOptions        options;
     kinetic::Capacity                 capacity_estimate;
-    unique_ptr<kinetic::ConnectionHandle> con;
+    float                             capacity_chunksize;
+    unique_ptr<kinetic::BlockingKineticConnection> con;
 
 private:
     void connect();

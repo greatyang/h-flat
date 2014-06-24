@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "simple_kinetic_namespace.h"
+#include "threadsafe_blocking_connection.h"
 #include <exception>
 #include <stdexcept>
 
@@ -36,51 +37,59 @@ SimpleKineticNamespace::~SimpleKineticNamespace()
 {
 }
 
+#include "debug.h"
 void SimpleKineticNamespace::connect()
 {
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
 
+    std::shared_ptr<kinetic::NonblockingKineticConnection> shared_con;
     kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-    kinetic::Status status = factory.NewThreadsafeConnection(options, 5, con);
+    kinetic::Status status = factory.NewThreadsafeNonblockingConnection(options, shared_con);
     if (status.notOk())
         throw std::runtime_error(status.ToString());
+    con.reset(new kinetic::ThreadsafeBlockingConnection(shared_con, 5));
 
     unique_ptr<kinetic::DriveLog> log;
-    if (con->blocking().GetLog(log).ok() == false)
-      throw std::runtime_error("failed getlog during initial connect.");
-    capacity_estimate = log->capacity;
+    KineticStatus logstatus = con->GetLog(log);
+    if(logstatus.ok()){
+        capacity_estimate  = log->capacity;
+        capacity_chunksize = ((float)1024*1024) / (float)capacity_estimate.nominal_capacity_in_bytes;
+    }
+    else
+       hflat_warning("Failed obtaining drive capacity: %s",logstatus.message().c_str());
 }
 
 bool SimpleKineticNamespace::selfCheck()
 {
-    if(con->blocking().NoOp().ok())
+    if(con->NoOp().ok())
         return true;
     return false;
 }
 
 KineticStatus SimpleKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
-    return con->blocking().Get(key, record);
+    return con->Get(key, record);
 }
 
 KineticStatus SimpleKineticNamespace::Delete(const string &key, const string& version, WriteMode mode)
 {
-    KineticStatus result = con->blocking().Delete(key, version, mode);
-    if(result.ok()) capacity_estimate.remaining_bytes += 1024*1024;
+    KineticStatus result = con->Delete(key, version, mode);
+
+    if(result.ok()) capacity_estimate.portion_full -= capacity_chunksize;
     return result;
 }
 
 KineticStatus SimpleKineticNamespace::Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record)
 {
-    KineticStatus result = con->blocking().Put(key, current_version, mode, record);
-    if(result.ok() && current_version.empty()) capacity_estimate.remaining_bytes -= 1024*1024;
+    KineticStatus result = con->Put(key, current_version, mode, record);
+    if(result.ok() && current_version.empty()) capacity_estimate.portion_full += capacity_chunksize;
     return result;
 }
 
 KineticStatus SimpleKineticNamespace::GetVersion(const string &key, unique_ptr<string>& version)
 {
-    return con->blocking().GetVersion(key, version);
+    return con->GetVersion(key, version);
 }
 
 KineticStatus SimpleKineticNamespace::GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results,
@@ -89,7 +98,7 @@ KineticStatus SimpleKineticNamespace::GetKeyRange(const string &start_key, const
     const bool start_key_inclusive = false;
     const bool end_key_inclusive = false;
     const bool reverse_results = false;
-    return con->blocking().GetKeyRange(start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);
+    return con->GetKeyRange(start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);
 }
 
 KineticStatus SimpleKineticNamespace::Capacity(kinetic::Capacity &cap)

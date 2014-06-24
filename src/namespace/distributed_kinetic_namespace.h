@@ -51,15 +51,16 @@ private:
 
     hflat::Partition                                                                       log_partition;
     std::vector< hflat::Partition >                                                        cluster_map;
-    std::unordered_map< hflat::KineticDrive, std::shared_ptr<kinetic::ConnectionHandle> >  connection_map;
+    std::unordered_map< hflat::KineticDrive, std::shared_ptr<kinetic::BlockingKineticConnection> >  connection_map;
 
     kinetic::KineticConnectionFactory connection_factory;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
+    float                             capacity_chunksize;
 
 private:
-    hflat::Partition &                       keyToPartition(const std::string &key);
-    std::shared_ptr<kinetic::ConnectionHandle> driveToConnection(const hflat::Partition &p, int driveID);
+    hflat::Partition &                         keyToPartition(const std::string &key);
+    std::shared_ptr<kinetic::BlockingKineticConnection> driveToConnection(const hflat::Partition &p, int driveID);
 
     bool testConnection(const hflat::Partition &p, int driveID);
     bool testPartition (const hflat::Partition &p);
@@ -77,10 +78,10 @@ private:
     KineticStatus readRepair(const string &key, std::unique_ptr<KineticRecord> &record);
 
     /* Run PUT / DELETE operations on all drives of the partition associated with the key that are not marked DOWN. */
-    KineticStatus writeOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
+    KineticStatus writeOperation (const string &key, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
     KineticStatus evaluateWriteOperation(hflat::Partition &p, std::vector<KineticStatus> &results );
     /* Run GET / GETVERSION / GETKEYRANGE operations on any single drive of the partition marked UP. */
-    KineticStatus readOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation);
+    KineticStatus readOperation (const string &key, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
 
     bool updateCapacityEstimate();
 public:

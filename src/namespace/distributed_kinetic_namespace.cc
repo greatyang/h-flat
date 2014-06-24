@@ -18,9 +18,12 @@
 #include <future>
 #include <iostream>
 #include "distributed_kinetic_namespace.h"
+#include "threadsafe_blocking_connection.h"
 #include "debug.h"
 
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
+typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
+
 
 static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
@@ -45,22 +48,23 @@ hflat::Partition & DistributedKineticNamespace::keyToPartition(const std::string
     return cluster_map[index];
 }
 
-std::shared_ptr<kinetic::ConnectionHandle>  DistributedKineticNamespace::driveToConnection(const hflat::Partition &p, int driveID)
+ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::Partition &p, int driveID)
 {
     if(connection_map.count(p.drives(driveID))) return connection_map[p.drives(driveID)];
 
-    std::unique_ptr<kinetic::ConnectionHandle> con;
+    std::shared_ptr<kinetic::NonblockingKineticConnection> nonblocking_con;
+    ConnectionPointer con;
     kinetic::ConnectionOptions options;
     options.host = p.drives(driveID).host();
     options.port = p.drives(driveID).port();
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
 
-
-    if( connection_factory.NewThreadsafeConnection(options, 5, con).ok() ){
-        connection_map[p.drives(driveID)] = std::shared_ptr<kinetic::ConnectionHandle>(con.release());
+    if( connection_factory.NewThreadsafeNonblockingConnection(options, nonblocking_con).ok() ){
+        con.reset(new kinetic::ThreadsafeBlockingConnection(nonblocking_con, 5));
+        connection_map[p.drives(driveID)] = con;
         if(p.cluster_version()){
-            connection_map[p.drives(driveID)]->blocking().SetClientClusterVersion(p.cluster_version());
+            connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());
             hflat_trace("Set cluster version of connection for drive %s:%d to %d",
                     p.drives(driveID).host().c_str(),p.drives(driveID).port(),p.cluster_version());
         }
@@ -69,7 +73,7 @@ std::shared_ptr<kinetic::ConnectionHandle>  DistributedKineticNamespace::driveTo
 
     if(p.drives(driveID).status() != hflat::KineticDrive_Status_RED)
         hflat_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
-    return std::shared_ptr<kinetic::ConnectionHandle>();
+    return ConnectionPointer();
 }
 
 
@@ -77,7 +81,7 @@ bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int 
 {
     auto con = driveToConnection(p, driveID);
     if(! con) return false;
-    if(!con->blocking().NoOp().ok()){
+    if(!con->NoOp().ok()){
         hflat_debug("Failed connecting to drive %s:%d",p.drives(driveID).host().c_str(),p.drives(driveID).port());
         return false;
     }
@@ -93,10 +97,10 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
         for(int i=0; i<p.drives_size(); i++){
             if(p.drives(i).status() == hflat::KineticDrive_Status_GREEN){
                 futures.push_back( std::async( [&](){
-                    std::shared_ptr<kinetic::ConnectionHandle>  con = driveToConnection(p,i);
+                    ConnectionPointer  con = driveToConnection(p,i);
                     std::unique_ptr<kinetic::DriveLog> dlog;
                     kinetic::Capacity c;
-                    if( con && (con->blocking().GetLog(dlog)).ok() )
+                    if( con && (con->GetLog(dlog)).ok() )
                         c = dlog->capacity;
                     return c;
                     }));
@@ -108,16 +112,19 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
     kinetic::Capacity cap = {0, 0};
     for(auto &f : futures){
         kinetic::Capacity c = f.get();
-        if(!c.total_bytes){
+        if(!c.nominal_capacity_in_bytes){
             hflat_warning("Incomplete capacity update.");
             return false;
         }
-        cap.total_bytes     += c.total_bytes;
-        cap.remaining_bytes += c.remaining_bytes;
+        cap.nominal_capacity_in_bytes     += c.nominal_capacity_in_bytes;
+        cap.portion_full += c.portion_full;
     }
+    cap.portion_full /= futures.size();
     capacity_estimate = cap;
+    capacity_chunksize = ((float)1024*1024) / capacity_estimate.nominal_capacity_in_bytes;
     return true;
 }
+
 
 bool DistributedKineticNamespace::selfCheck()
 {
@@ -159,8 +166,8 @@ bool DistributedKineticNamespace::getPartitionUpdate(hflat::Partition & p)
 
         do{
             cversion++;
-            con->blocking().SetClientClusterVersion(cversion);
-            status = con->blocking().Get(cv_base_name+std::to_string(cversion), record);
+            con->SetClientClusterVersion(cversion);
+            status = con->Get(cv_base_name+std::to_string(cversion), record);
             hflat_debug("trying cluster version %d for drive %s:%d",cversion,p.drives(i).host().c_str(),p.drives(i).port());
         }while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH);
 
@@ -186,15 +193,15 @@ bool DistributedKineticNamespace::putPartitionUpdate(hflat::Partition &p)
      for(int i=0; i < p.drives_size(); i++){
          if(p.drives(i).status() == hflat::KineticDrive_Status_RED) continue;
 
-         std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,i);
+         ConnectionPointer con = driveToConnection(p,i);
          KineticStatus status = KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "connection error");
-         if(con)       status = con->blocking().Put(key, "" , WriteMode::REQUIRE_SAME_VERSION, record);
+         if(con)       status = con->Put(key, "" , WriteMode::REQUIRE_SAME_VERSION, record);
          if(!status.ok()){
              hflat_warning("Failure.");
              return false;
          }
-         con->blocking().SetClusterVersion(p.cluster_version());
-         con->blocking().SetClientClusterVersion(p.cluster_version());
+         con->SetClusterVersion(p.cluster_version());
+         con->SetClientClusterVersion(p.cluster_version());
      }
      hflat_debug("Put Partition successful: ");
      printPartition(p);
@@ -259,7 +266,8 @@ bool DistributedKineticNamespace::disableDrive(hflat::Partition &p, int index)
         if(getPartitionUpdate(p))
             return disableDrive(p, index);
     }
-    hflat_warning("Unexpected error code while failing a drive. Probably encountering multiple concurrent failures or network split.");
+    hflat_warning("Unexpected error code while failing a drive. Either no additional drives left in partition or encountering multiple concurrent failures or network split.");
+    printPartition(p);
     return false;
 }
 
@@ -270,15 +278,15 @@ bool DistributedKineticNamespace::enableDrive(hflat::Partition &p, int index)
     std::lock_guard<std::recursive_mutex> l(failure_lock);
     if(p.drives(index).status() != hflat::KineticDrive_Status_RED) return true;
 
-    std::shared_ptr<kinetic::ConnectionHandle>  con = driveToConnection(p, index);
+    ConnectionPointer  con = driveToConnection(p, index);
     if(!con) return false;
 
     std::int64_t cversion = -1;
     KineticStatus status(kinetic::StatusCode::OK, "");
     do{
         cversion++;
-        con->blocking().SetClientClusterVersion(cversion);
-        status = con->blocking().NoOp();
+        con->SetClientClusterVersion(cversion);
+        status = con->NoOp();
     }while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH);
     if(status.ok() == false){
         return false;
@@ -310,7 +318,7 @@ bool DistributedKineticNamespace::synchronizeDrive(hflat::Partition &p, int inde
     unique_ptr<KineticRecord> record;
     string keystart = " ";
     string keyend   = "|";
-    std::shared_ptr<kinetic::ConnectionHandle> con;
+    ConnectionPointer con;
     std::string prefix = std::to_string(p.partitionid()) + logkey_prefix;
     bool write_quorum_all = std::all_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() != d.RED;});
 
@@ -335,7 +343,7 @@ bool DistributedKineticNamespace::synchronizeDrive(hflat::Partition &p, int inde
          if (keys->size())
              keystart = keys->back();
          keys->clear();
-         if( con->blocking().GetKeyRange(keystart,true,keyend,true,false,maxsize,keys).ok() == false)
+         if( con->GetKeyRange(keystart,true,keyend,true,false,maxsize,keys).ok() == false)
              return false;
          hflat_debug("obtained %d keys that might need to be repaired",keys->size());
 
@@ -351,7 +359,7 @@ bool DistributedKineticNamespace::synchronizeDrive(hflat::Partition &p, int inde
                  element.insert(0, prefix);
                  // Delete the repaired key from the logdrive, ONLY if there are no other failed drives in the same partition.
                  // Otherwise, the log could not be used to repair them once they come online.
-                 if(write_quorum_all) con->blocking().Delete(element,"",kinetic::WriteMode::IGNORE_VERSION);
+                 if(write_quorum_all) con->Delete(element,"",kinetic::WriteMode::IGNORE_VERSION);
              }
          }
      } while (keys->size() == maxsize);
@@ -382,7 +390,7 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
     while(p.drives(index).status() != hflat::KineticDrive_Status_GREEN) index++;
 
     auto con = driveToConnection(p,index);
-    KineticStatus status = con->blocking().Get(key,record);
+    KineticStatus status = con->Get(key,record);
     if(!status.ok() && status.statusCode() != kinetic::StatusCode::REMOTE_NOT_FOUND)
         return status;
 
@@ -398,13 +406,13 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
 
           std::unique_ptr<std::string> version(new std::string(""));
           con = driveToConnection(p,i);
-          status = con->blocking().GetVersion(key, version);
+          status = con->GetVersion(key, version);
           if(!status.ok() && status.statusCode() != kinetic::StatusCode::REMOTE_NOT_FOUND)
               return status;
 
           /* Delete record or */
           if(!record && status.ok()){
-              status = con->blocking().Delete(key, *version, WriteMode::REQUIRE_SAME_VERSION);
+              status = con->Delete(key, *version, WriteMode::REQUIRE_SAME_VERSION);
               hflat_debug("Removing key %s from drive %s:%d",
                       key.c_str(),p.drives(i).host().c_str(), p.drives(i).port());
           }
@@ -412,7 +420,7 @@ KineticStatus DistributedKineticNamespace::readRepair(const string &key, std::un
           else if (record){
               if(status.ok() && *version == *record->version())
                   continue;
-              status = con->blocking().Put(key, *version, WriteMode::REQUIRE_SAME_VERSION, *record);
+              status = con->Put(key, *version, WriteMode::REQUIRE_SAME_VERSION, *record);
               hflat_debug("Copying key %s to drive %s:%d",
                       key.c_str(),p.drives(i).host().c_str(), p.drives(i).port());
           }
@@ -462,7 +470,7 @@ KineticStatus DistributedKineticNamespace::evaluateWriteOperation( hflat::Partit
 }
 
 
-KineticStatus DistributedKineticNamespace::writeOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation)
+KineticStatus DistributedKineticNamespace::writeOperation (const string &key, std::function< KineticStatus(ConnectionPointer&) > operation)
 {
     hflat::Partition &p = keyToPartition(key);
     std::vector<std::future<KineticStatus>> futures;
@@ -470,18 +478,18 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
     for(int i=0; i<p.drives_size(); i++){
        futures.push_back( std::async( [this, i, &p, &operation](){
                        if(p.drives(i).status() == hflat::KineticDrive_Status_RED) return KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "Unreachable");
-                       std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,i);
-                       return operation( con->blocking() );
+                       ConnectionPointer con = driveToConnection(p,i);
+                       return operation( con );
                }));
     }
 
     /* Try to log operation if at least one drive is missing from the write quorum. */
     if(p.has_logid() && std::any_of(p.drives().begin(), p.drives().end(), [](const hflat::KineticDrive &d){return d.status() == hflat::KineticDrive_Status_RED;})){
 
-       std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(log_partition, p.logid());
+       ConnectionPointer con = driveToConnection(log_partition, p.logid());
 
        kinetic::KineticRecord record("", "", "", Message_Algorithm_SHA1);
-       auto status = con->blocking().Put(std::to_string(p.partitionid())+logkey_prefix+key,"",WriteMode::IGNORE_VERSION, record);
+       auto status = con->Put(std::to_string(p.partitionid())+logkey_prefix+key,"",WriteMode::IGNORE_VERSION, record);
 
        if(status.ok() == false){
            disableDrive(log_partition, p.logid());
@@ -507,7 +515,7 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
     return evaluateWriteOperation(p, results);
 }
 
-KineticStatus DistributedKineticNamespace::readOperation (const string &key, std::function< KineticStatus(kinetic::BlockingKineticConnection&) > operation)
+KineticStatus DistributedKineticNamespace::readOperation (const string &key, std::function< KineticStatus(ConnectionPointer&) > operation)
 {
     /* Step 1) Pick a drive, obtain connection, execute operation */
     hflat::Partition &p = keyToPartition(key);
@@ -516,9 +524,9 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
     do{ index = dist(random_generator); }
     while(p.drives(index).status() != hflat::KineticDrive_Status_GREEN);
 
-    std::shared_ptr<kinetic::ConnectionHandle> con = driveToConnection(p,index);
+    ConnectionPointer con = driveToConnection(p,index);
     KineticStatus status = KineticStatus(kinetic::StatusCode::REMOTE_REMOTE_CONNECTION_ERROR, "");
-    if(con)       status = operation(con->blocking());
+    if(con)       status = operation(con);
 
     /* Step 2) Evaluate the results. */
     if(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH){
@@ -545,7 +553,7 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
 KineticStatus DistributedKineticNamespace::Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record)
 {
     KineticStatus result = writeOperation(key,
-            [&](kinetic::BlockingKineticConnection&b){return b.Put(std::cref(key), std::cref(current_version), mode, std::cref(record));}
+            [&](ConnectionPointer&b){return b->Put(std::cref(key), std::cref(current_version), mode, std::cref(record));}
     );
 
     if(result.statusCode() == kinetic::StatusCode::REMOTE_OTHER_ERROR){
@@ -565,14 +573,14 @@ KineticStatus DistributedKineticNamespace::Put(const string &key, const string &
        }
     }
 
-    if(result.ok() && current_version.empty()) capacity_estimate.remaining_bytes -= 1024*1024;
+    if(result.ok() && current_version.empty()) capacity_estimate.portion_full += capacity_chunksize;
     return result;
 }
 
 KineticStatus DistributedKineticNamespace::Delete(const string &key, const string& version, WriteMode mode)
 {
     KineticStatus result = writeOperation(key,
-            [&](kinetic::BlockingKineticConnection&b){return b.Delete(std::cref(key), std::cref(version), mode);}
+            [&](ConnectionPointer&b){return b->Delete(std::cref(key), std::cref(version), mode);}
     );
 
     if(result.statusCode() == kinetic::StatusCode::REMOTE_OTHER_ERROR){
@@ -591,21 +599,19 @@ KineticStatus DistributedKineticNamespace::Delete(const string &key, const strin
         }
     }
 
-    if(result.ok()) capacity_estimate.remaining_bytes += 1024*1024;
+    if(result.ok()) capacity_estimate.portion_full -= capacity_chunksize;
     return result;
 }
 
 KineticStatus DistributedKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
-    return readOperation(key,
-            [&](kinetic::BlockingKineticConnection&b){return b.Get(std::cref(key), std::ref(record));}
+    return readOperation(key, [&](ConnectionPointer & b){return b->Get(std::cref(key), std::ref(record));}
     );
 }
 
 KineticStatus DistributedKineticNamespace::GetVersion(const string &key, unique_ptr<string>& version)
 {
-    return readOperation(key,
-            [&](kinetic::BlockingKineticConnection&b){return b.GetVersion(std::cref(key), std::ref(version));}
+    return readOperation(key, [&](ConnectionPointer & b){return b->GetVersion(std::cref(key), std::ref(version));}
     );
 }
 
@@ -617,9 +623,9 @@ KineticStatus DistributedKineticNamespace::GetKeyRange(const string &start_key, 
     const bool reverse_results = false;
 
     return readOperation(start_key,
-               [&](kinetic::BlockingKineticConnection&b){return b.GetKeyRange(
+            [&](ConnectionPointer & b){return b->GetKeyRange(
                        start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);}
-       );
+    );
 }
 
 KineticStatus DistributedKineticNamespace::Capacity(kinetic::Capacity &cap)

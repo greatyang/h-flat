@@ -21,7 +21,7 @@ static int scan_direntries(const char *user_path, const std::shared_ptr<Metadata
 {
     string keystart = std::to_string(dir->getMD().inode_number()) + "|";
     string keyend   = std::to_string(dir->getMD().inode_number()) + "|" + static_cast<char>(254);
-    size_t maxsize = 10000;
+    size_t maxsize = 100;
     unique_ptr<vector<std::string>> keys(new vector<string>());
 
     do {

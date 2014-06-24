@@ -18,13 +18,11 @@ To achieve key-value performance characteristics the full path of a file is cons
 # Getting Started
 You might want to get the [kinetic simulator](https://github.com/Seagate/kinetic-java). Especially if you don't happen to have a bunch of kinetic drives lying around. 
 
-Note that a custom fork of the kinetic-cpp-client is used to communicate with kinetic drives, as the official client does not offer adequate multithreading support. It will be automatically downloaded and compiled during the build process. 
-
 ### Dependencies
-+ A git client, a c++ compiler and [CMake](http://www.cmake.org) 
-+ **OSX** [libosxfuse](http://osxfuse.github.io), [libconfig](http://www.hyperrealm.com/libconfig/)
++ **OSX** [libosxfuse](http://osxfuse.github.io),
  + Tip: make your life easier by using [homebrew](http://brew.sh) to install dependencies 
-+ **Linux** *libfuse-dev*, *libssl-dev*, *uuid-dev*, *libconfig-dev* packages
++ **Linux** *libfuse-dev* 
++ A git client, a c++ compiler and [CMake](http://www.cmake.org). Other dependencies should be resolved automatically during the build process. 
 
 ### Initial Setup
 + Install any missing dependencies

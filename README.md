@@ -19,9 +19,8 @@ To achieve key-value performance characteristics the full path of a file is cons
 You might want to get the [kinetic simulator](https://github.com/Seagate/kinetic-java). Especially if you don't happen to have a bunch of kinetic drives lying around. 
 
 ### Dependencies
-+ **OSX** [libosxfuse](http://osxfuse.github.io),
- + Tip: make your life easier by using [homebrew](http://brew.sh) to install dependencies 
-+ **Linux** *libfuse-dev* 
++ **OSX** [libosxfuse](http://osxfuse.github.io) ( make your life easier by using [homebrew](http://brew.sh) to install dependencies on OSX )
++ **Linux** *libfuse-dev* package on debian-based systems, *fuse-devel* package on fedora-based systems
 + A git client, a c++ compiler and [CMake](http://www.cmake.org). Other dependencies should be resolved automatically during the build process. 
 
 ### Initial Setup
@@ -39,7 +38,7 @@ Some flags interesting for debugging:
 + -f foreground mode: sends all debug to std out 
 + -d debug mode: list internal fuse function calls in addition to file system debug output
 
-Example: `./hflat -s -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
+Example: `./hflat -f -o allow_other,use_ino,attr_timeout=0 /mountpoint` 
 
 
 ### Configuration

@@ -29,7 +29,7 @@ add_executable(hflat
      src/fsck/fsck.cc
 )
 
-set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client/")
+set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client./")
 if(EXISTS "${KINETIC_CLIENT_PATH}")
    message("Found existing kinetic-cpp-client at ${KINETIC_CLIENT_PATH}")
 else()
@@ -50,7 +50,7 @@ endif()
 
 add_dependencies(hflat kinetic_cpp_client)
 include_directories(
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/include
+    ${KINETIC_CLIENT_PATH}/vendor/include
     ${KINETIC_CLIENT_PATH}/src/main/generated
     ${KINETIC_CLIENT_PATH}/src/main
     ${KINETIC_CLIENT_PATH}/include
@@ -60,10 +60,10 @@ include_directories(
 )
 target_link_libraries(hflat
     ${KINETIC_CLIENT_PATH}/libkinetic_client.a
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libglog.a
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libgflags.a
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libcrypto.a
-    ${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/lib/libprotobuf.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libglog.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libgflags.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libcrypto.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libprotobuf.a
     ${CMAKE_THREAD_LIBS_INIT}
     dl
 )
@@ -109,7 +109,7 @@ endif(APPLE)
 
 # protobuf code generation rules
 set(PROTO_GEN ${hflat_SOURCE_DIR}/src/generated)
-set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/src/protobufutil/vendor/host/bin/protoc")
+set(PROTOC_PATH "${KINETIC_CLIENT_PATH}/vendor/host/bin/protoc")
 add_custom_command(
     COMMENT "Compiling protobuf files"
     OUTPUT  ${PROTO_GEN}/database.pb.h ${PROTO_GEN}/database.pb.cc ${PROTO_GEN}/metadata.pb.h ${PROTO_GEN}/metadata.pb.cc ${PROTO_GEN}/replication.pb.h ${PROTO_GEN}/replication.pb.cc

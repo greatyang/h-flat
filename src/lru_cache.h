@@ -76,7 +76,7 @@ public:
             else return false;
         }
 
-        for (auto it = -- std::end(cache); cache.size() >= capacity && it!=std::begin(cache); it--){
+        for (auto it = cache.rbegin(); it!=cache.rend() && cache.size() >= capacity; ++it){
             if(!dirty(it->first))
                 remove(getKey(it->first));
         }
@@ -100,7 +100,7 @@ public:
                       std::uint32_t capacity,
                       std::function<const Key(const Data&)> getKey,
                       std::function<bool (const Data&)> dirty):
-         expiration_time(expiration_milliseconds), capacity(capacity), getKey(getKey), dirty(dirty) {};
+         cache(), lookup(), expiration_time(expiration_milliseconds), capacity(capacity), getKey(getKey), dirty(dirty) {};
     ~LRUcache(){};
 };
 

@@ -29,7 +29,7 @@ add_executable(hflat
      src/fsck/fsck.cc
 )
 
-set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client./")
+set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client/")
 if(EXISTS "${KINETIC_CLIENT_PATH}")
    message("Found existing kinetic-cpp-client at ${KINETIC_CLIENT_PATH}")
 else()

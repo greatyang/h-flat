@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MAIN_H_
-#define MAIN_H_
+#ifndef MAIN_H__
+#define MAIN_H__
 
 #define FUSE_USE_VERSION 26
 #include <fuse/fuse.h>

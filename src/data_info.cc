@@ -20,7 +20,7 @@
 #include <assert.h>
 
 DataInfo::DataInfo(const std::string &key, const std::string &keyVersion, const std::string &data):
-        key(key), keyVersion(keyVersion), d(data)
+        key(key), keyVersion(keyVersion), d(data), updates()
 {
 }
 
@@ -68,12 +68,12 @@ void DataInfo::truncate(off_t offset)
 
 bool DataInfo::hasUpdates() const
 {
-    return !this->updates.empty();
+    return !updates.empty();
 }
 
 void DataInfo::forgetUpdates()
 {
-    this->updates.clear();
+    updates.clear();
 }
 
 const std::string& DataInfo::getKeyVersion() const
@@ -88,10 +88,10 @@ void DataInfo::setKeyVersion(const std::string &v)
 
 const std::string& DataInfo::data() const
 {
-    return this->d;
+    return d;
 }
 
 const std::string & DataInfo::getKey() const
 {
-    return this->key;
+    return key;
 }

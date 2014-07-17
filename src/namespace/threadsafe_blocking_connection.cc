@@ -3,6 +3,9 @@
 #include <condition_variable>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 using namespace kinetic;
 
 class ThreadsafeBlockingCallbackState {
@@ -148,6 +151,7 @@ KineticStatus ThreadsafeBlockingConnection::Get(const string& key, unique_ptr<Ki
     return callback->getResult();
 }
 
+
 KineticStatus ThreadsafeBlockingConnection::Put(const string& key, const string& current_version, WriteMode mode, const KineticRecord& record)
 {
     auto callback = make_shared<SimpleCallback>();
@@ -156,6 +160,16 @@ KineticStatus ThreadsafeBlockingConnection::Put(const string& key, const string&
     good_morning();
     return callback->getResult();
 }
+
+KineticStatus ThreadsafeBlockingConnection::Put(const string& key, const string& current_version, WriteMode mode, const KineticRecord& record, PersistMode persistMode)
+{
+    auto callback = make_shared<SimpleCallback>();
+    nonblocking_connection_->Put(key, current_version, mode, make_shared<KineticRecord>(record), callback, persistMode);
+
+    good_morning();
+    return callback->getResult();
+}
+
 
 KineticStatus ThreadsafeBlockingConnection::Delete(const string& key, const string& version, WriteMode mode)
 {
@@ -217,15 +231,29 @@ void slisten(
     fd_set read_fds, write_fds;
     int num_fds = 0;
     char buf[1];
+
     while(run){
         con->Run(&read_fds, &write_fds, &num_fds);
 
+        /* disable the Nagle buffering algorithm, small puts will otherwise be unduly delayed. */
+         if(num_fds){
+             int state = 1;
+             setsockopt( num_fds-1, IPPROTO_TCP, TCP_NODELAY, (void *)&state, sizeof(state));
+
+        #ifndef __APPLE__
+             state=1;
+             setsockopt( num_fds-1, IPPROTO_TCP, TCP_QUICKACK, (void *)&state, sizeof(state));
+        #endif
+         }
+
         /* add pipe fd so that we can wake up select from the blocking API. */
         FD_SET(pipeFD, &read_fds);
+
         select(std::max(num_fds,pipeFD) + 1, &read_fds, &write_fds, NULL, NULL);
 
         /* clear pipe wakeup-fd */
         read(pipeFD, buf, 1);
+
     }
 }
 
@@ -234,7 +262,7 @@ ThreadsafeBlockingConnection::ThreadsafeBlockingConnection(
     std::shared_ptr<NonblockingKineticConnection> nonblocking_connection,
     unsigned int network_timeout_seconds) :
             BlockingKineticConnection(nonblocking_connection, network_timeout_seconds),
-            nonblocking_connection_(nonblocking_connection), run_listener(true)
+            nonblocking_connection_(nonblocking_connection), run_listener(true), invalid(kinetic::StatusCode::CLIENT_INTERNAL_ERROR, "Not implemented.")
 {
     int pFD[2];
     int err = pipe(pFD);

@@ -23,6 +23,7 @@ add_executable(hflat
      src/generated/metadata.pb.cc
      src/generated/replication.pb.cc
      src/namespace/distributed_kinetic_namespace.cc
+     src/namespace/simple_distributed_kinetic_namespace.cc
      src/namespace/simple_kinetic_namespace.cc
      src/namespace/kinetic_helper.cc
      src/namespace/threadsafe_blocking_connection.cc

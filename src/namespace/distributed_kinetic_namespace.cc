@@ -33,7 +33,9 @@ DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hfla
 {
     if(selfCheck() == false)
         throw std::runtime_error("Invalid Clustermap");
-    updateCapacityEstimate();
+
+    hflat_warning("Capacity reporting disabled due to getlog performance issues. ");
+    //updateCapacityEstimate();
 }
 
 DistributedKineticNamespace::~DistributedKineticNamespace()

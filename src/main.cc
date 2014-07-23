@@ -19,6 +19,7 @@
 #include "fuseops.h"
 #include "kinetic_helper.h"
 #include "simple_kinetic_namespace.h"
+#include "simple_distributed_kinetic_namespace.h"
 #include "distributed_kinetic_namespace.h"
 #include <libconfig.h>
 #include <glog/logging.h>
@@ -130,10 +131,16 @@ void *hflat_init(struct fuse_conn_info *conn)
     try {
         if(clustermap.empty())
             priv = new hflat_priv(new SimpleKineticNamespace(), cache_expiration_ms, 1024*1024, mode);
+        /* DEBUG ONLY
         else if(clustermap.size() == 1 && clustermap.at(0).drives_size() == 1){
             hflat_debug("simple namespace used");
             priv = new hflat_priv(new SimpleKineticNamespace(clustermap[0].drives(0)), cache_expiration_ms, 1024*1024, mode);
         }
+        else if(std::all_of(clustermap.begin(), clustermap.end(),
+                [](const hflat::Partition &p){ return p.drives_size() == 1 ? true : false;})){
+            hflat_debug("simple distributed namespace used");
+            priv = new hflat_priv(new SimpleDistributedKineticNamespace(clustermap), cache_expiration_ms, 1024*1024, mode);
+        } */
         else
             priv = new hflat_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms, 1024*1024, mode);
     }

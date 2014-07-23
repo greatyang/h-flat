@@ -89,6 +89,16 @@ void _realpath(std::string &path)
 
 void _substitute(std::string &path, size_t pos)
 {
+    if(path.length() < pos)
+        path.append("/");
+
+    /* Step 1) insert a virtual directory to circumvent per-directory serialization. */
+    size_t directoryID = std::hash<std::string>()(path) % 100;
+    std::string vdir(":"+std::to_string(directoryID)+":/");
+    path.insert(pos,vdir);
+    pos+=vdir.length();
+
+    /* Step 2) substitute ':' for '/' for all path components in the file system */
     while(pos != std::string::npos) {
         if(path[pos]=='/')
             path[pos]=':';
@@ -103,9 +113,9 @@ std::string change(const char *path)
     _realpath(p);
     for(auto mnt : mountpoints){
         if(! mnt.compare(0, mnt.length(), p.data(), mnt.length())){
-            printf("intial: '%s'\n",path);
+            //printf("intial: '%s'\n",path);
             _substitute(p, mnt.length() + 1);
-            printf("substitute: '%s'\n",p.data());
+            //printf("substitute: '%s'\n",p.data());
         }
     }
     return p;

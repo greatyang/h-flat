@@ -83,12 +83,20 @@ bool PathMapDB::searchPathRecursive(std::string& path, std::int64_t &maxTimeStam
 
 void PathMapDB::iointercept(std::string &path) const
 {
-    /* In order to support direct lookup via iointercept, handle ':' in path */
-       size_t pos = path.find_first_of(':');;
-       while(pos != std::string::npos){
+       /* In order to support direct lookup via iointercept, undo path manipulation if appropiate. */
+       size_t pos = path.find_first_of(':');
+
+       if(pos == std::string::npos)
+           return;
+
+       /* Step1) remove virtual directory. */
+       size_t end = path.find_first_of('/',pos);
+       path.erase(pos,end-pos+1);
+
+       /* Step2) substitute slashes back in. */
+
+       while((pos = path.find_first_of(':')) != std::string::npos)
            path[pos]='/';
-           pos = path.find_first_of(':',pos);
-       }
 }
 
 std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTimeStamp, CallingType ctype) const

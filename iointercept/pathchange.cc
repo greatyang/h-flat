@@ -92,6 +92,15 @@ void _substitute(std::string &path, size_t pos)
     if(path.length() < pos)
         path.append("/");
 
+    /* Step 0) clean path if required:
+     * If the pwd has been changed to a directory in the file system the parents virtual directory
+     * will be appended to the path. It has to be removed to maintain the flat namespace hierarchy.*/
+    size_t clean = path.find_first_of(':');
+    if(clean != std::string::npos){
+          size_t end = path.find_first_of('/',pos);
+          path.erase(clean,end-clean+1);
+    }
+
     /* Step 1) insert a virtual directory to circumvent per-directory serialization. */
     size_t directoryID = std::hash<std::string>()(path) % 100;
     std::string vdir(":"+std::to_string(directoryID)+":/");

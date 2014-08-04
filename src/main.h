@@ -48,7 +48,7 @@ struct hflat_priv
 
     hflat_priv(KineticNamespace *kn, int cache_expiration_ms, int block_size_bytes, PosixMode mode):
             kinetic(kn),
-            lookup_cache(cache_expiration_ms, 5000,
+            lookup_cache(cache_expiration_ms, 1000,
                     std::mem_fn(&MetadataInfo::getSystemPath),
                     [](const std::shared_ptr<MetadataInfo> &mdi){
                        std::shared_ptr<DataInfo> di = mdi->getDirtyData();

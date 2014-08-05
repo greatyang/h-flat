@@ -31,7 +31,7 @@ static std::string filename;
 
 static bool parse_configuration(
         std::vector< hflat::Partition > &clustermap, hflat::Partition &logpartition,
-        int &cache_expiration_ms, PosixMode &pmode)
+        int &cache_expiration_ms, int &direntry_clustersize, PosixMode &pmode)
 {
     auto cfg_to_hflat = [&](config_setting_t *partition, hflat::Partition &p) -> bool {
         if(partition)
@@ -85,6 +85,7 @@ static bool parse_configuration(
 
     if (config_setting_t * options =  config_lookup(&cfg, "options")){
         config_setting_lookup_int(options, "cache_expiration", &cache_expiration_ms);
+        config_setting_lookup_int(options, "direntry_clustersize", &direntry_clustersize);
 
         const char *mode;
         if( config_setting_lookup_string(options, "posix_mode", &mode) )
@@ -119,11 +120,12 @@ void *hflat_init(struct fuse_conn_info *conn)
     hflat::Partition logpartition;
     PosixMode mode = PosixMode::FULL;
     int cache_expiration_ms = 1000;
+    int direntry_clustersize = 1;
 
     if(! filename.empty()){
         bool cok = parse_configuration(
                         clustermap, logpartition,
-                        cache_expiration_ms,
+                        cache_expiration_ms, direntry_clustersize,
                         mode);
         if(cok == false) REQ(EXIT_FAILURE);
     }
@@ -142,7 +144,7 @@ void *hflat_init(struct fuse_conn_info *conn)
             priv = new hflat_priv(new SimpleDistributedKineticNamespace(clustermap), cache_expiration_ms, 1024*1024, mode);
         } */
         else
-            priv = new hflat_priv(new DistributedKineticNamespace(clustermap, logpartition), cache_expiration_ms, 1024*1024, mode);
+            priv = new hflat_priv(new DistributedKineticNamespace(clustermap, logpartition, direntry_clustersize), cache_expiration_ms, 1024*1024, mode);
     }
     catch(std::exception& e){
         hflat_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());

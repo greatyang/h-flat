@@ -49,9 +49,13 @@ private:
     /* get lock in all cases where the cluster_map is changed. */
     std::recursive_mutex failure_lock;
 
-    hflat::Partition                                                                       log_partition;
-    std::vector< hflat::Partition >                                                        cluster_map;
+    hflat::Partition                                                                                log_partition;
+    std::vector< hflat::Partition >                                                                 cluster_map;
     std::unordered_map< hflat::KineticDrive, std::shared_ptr<kinetic::BlockingKineticConnection> >  connection_map;
+
+    /* Number of partitions directory entry keys of a single directory are distributed over.
+     * This can be configured to be anywhere from 1 (best for small directories) to all (best scaling create performance). */
+    int                               direntry_clustersize;
 
     kinetic::KineticConnectionFactory connection_factory;
     std::default_random_engine        random_generator;
@@ -59,18 +63,18 @@ private:
     float                             capacity_chunksize;
 
 private:
-    hflat::Partition &                         keyToPartition(const std::string &key);
+    hflat::Partition &                                  keyToPartition(const std::string &key);
     std::shared_ptr<kinetic::BlockingKineticConnection> driveToConnection(const hflat::Partition &p, int driveID);
 
-    bool testConnection(const hflat::Partition &p, int driveID);
     bool testPartition (const hflat::Partition &p);
+    bool testConnection(const hflat::Partition &p, int driveID);
+
+    bool enableDrive     (hflat::Partition &p, int driveID);
+    bool disableDrive    (hflat::Partition &p, int driveID);
+    bool synchronizeDrive(hflat::Partition &p, int driveID);
 
     bool getPartitionUpdate(hflat::Partition &p);
     bool putPartitionUpdate(hflat::Partition &p);
-
-    bool synchronizeDrive(hflat::Partition &p, int driveID);
-    bool disableDrive(hflat::Partition &p, int driveID);
-    bool enableDrive(hflat::Partition &p, int driveID);
 
     /* repairs any version missmatches existing for the specified key.
       * fails if a drive in the partition fails during the operation.
@@ -81,7 +85,7 @@ private:
     KineticStatus writeOperation (const string &key, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
     KineticStatus evaluateWriteOperation(hflat::Partition &p, std::vector<KineticStatus> &results );
     /* Run GET / GETVERSION / GETKEYRANGE operations on any single drive of the partition marked UP. */
-    KineticStatus readOperation (const string &key, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
+    KineticStatus readOperation (hflat::Partition &p, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
 
     bool updateCapacityEstimate();
 public:
@@ -97,13 +101,12 @@ public:
 
     bool          selfCheck();
 
-
     /* DEBUG ONLY */
     void printPartition(const hflat::Partition &p);
     void printClusterMap();
 
 public:
-    explicit DistributedKineticNamespace(const std::vector< hflat::Partition > &clustermap, const hflat::Partition &logpartition);
+    explicit DistributedKineticNamespace(const std::vector< hflat::Partition > &clustermap, const hflat::Partition &logpartition, int dirclustersize);
     ~DistributedKineticNamespace();
 };
 

@@ -24,30 +24,33 @@
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
 typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
 
-
 static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
 
-DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hflat::Partition > &cmap, const hflat::Partition &lpart):
-        failure_lock(), log_partition(lpart), cluster_map(cmap), connection_factory(kinetic::NewKineticConnectionFactory())
+DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hflat::Partition > &cmap, const hflat::Partition &lpart, int dirclustersize):
+        failure_lock(), log_partition(lpart), cluster_map(cmap), direntry_clustersize(dirclustersize), connection_factory(kinetic::NewKineticConnectionFactory())
 {
     if(selfCheck() == false)
         throw std::runtime_error("Invalid Clustermap");
-
-    hflat_warning("Capacity reporting disabled due to getlog performance issues. ");
-    //updateCapacityEstimate();
+    updateCapacityEstimate();
 }
 
 DistributedKineticNamespace::~DistributedKineticNamespace()
 {
 }
 
-
 hflat::Partition & DistributedKineticNamespace::keyToPartition(const std::string &key)
 {
-    size_t hashvalue = std::hash<std::string>()(key.substr(0,key.find_first_of("|")));
-    int index = hashvalue % cluster_map.size();
-    return cluster_map[index];
+    /* directory entry keys are special:
+     * should only be hashed to fixed, configured number of partitions for a specific directory.
+     * using knowledge that direntry keys have form inodenumber|entryname to achieve this functionality. */
+    size_t dirslash = key.find_first_of("|");
+    size_t keyhash  = std::hash<std::string>()(key.substr(0,dirslash));
+
+    if(dirslash != string::npos && dirslash != key.size()-1)
+        keyhash+= std::hash<std::string>()(key) % direntry_clustersize;
+
+    return cluster_map[ ( keyhash % cluster_map.size()) ];
 }
 
 ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::Partition &p, int driveID)
@@ -93,13 +96,20 @@ bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int 
 
 bool DistributedKineticNamespace::updateCapacityEstimate()
 {
+    hflat_warning("Capacity reporting disabled due to getlog performance issues. ");
+    /* assuming 4TB per partition, a 10% utilization and 1MB chunksize. */
+    capacity_estimate.nominal_capacity_in_bytes = cluster_map.size() * 4 * 1099511627776;
+    capacity_estimate.portion_full = 0.1;
+    capacity_chunksize = ((float)1024*1024) / capacity_estimate.nominal_capacity_in_bytes;
+    return true;
+
     std::vector<std::future<kinetic::Capacity>> futures;
 
     for(auto &p : cluster_map){
         for(int i=0; i<p.drives_size(); i++){
             if(p.drives(i).status() == hflat::KineticDrive_Status_GREEN){
                 futures.push_back( std::async( [&](){
-                    ConnectionPointer  con = driveToConnection(p,i);
+                    ConnectionPointer con = driveToConnection(p,i);
                     std::unique_ptr<kinetic::DriveLog> dlog;
                     kinetic::Capacity c;
                     if( con && (con->GetLog(dlog)).ok() )
@@ -517,10 +527,9 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
     return evaluateWriteOperation(p, results);
 }
 
-KineticStatus DistributedKineticNamespace::readOperation (const string &key, std::function< KineticStatus(ConnectionPointer&) > operation)
+KineticStatus DistributedKineticNamespace::readOperation (hflat::Partition &p, std::function< KineticStatus(ConnectionPointer&) > operation)
 {
     /* Step 1) Pick a drive, obtain connection, execute operation */
-    hflat::Partition &p = keyToPartition(key);
     std::uniform_int_distribution<int> dist(0, p.drives_size()-1);
     int index;
     do{ index = dist(random_generator); }
@@ -533,7 +542,7 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
     /* Step 2) Evaluate the results. */
     if(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH){
         if(getPartitionUpdate(p))
-            return readOperation(key, operation);
+            return readOperation(p, operation);
         hflat_debug("Failed partition update after a cluster_version_mismatch for drive %s:%d. Returning %s.",
                 p.drives(index).host().data(),p.drives(index).port(),status.message().data());
         return status;
@@ -543,7 +552,7 @@ KineticStatus DistributedKineticNamespace::readOperation (const string &key, std
             status.statusCode() != kinetic::StatusCode::REMOTE_NOT_FOUND &&
             status.statusCode() != kinetic::StatusCode::REMOTE_NOT_AUTHORIZED ){
         if(disableDrive(p, index))
-            return readOperation(key, operation);
+            return readOperation(p, operation);
         hflat_debug("Didn't fail drive %s:%d successfully after encountering status %s.",p.drives(index).host().data(),p.drives(index).port(),status.message().data());
         return status;
     }
@@ -607,13 +616,13 @@ KineticStatus DistributedKineticNamespace::Delete(const string &key, const strin
 
 KineticStatus DistributedKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
-    return readOperation(key, [&](ConnectionPointer & b){return b->Get(std::cref(key), std::ref(record));}
+    return readOperation(keyToPartition(key), [&](ConnectionPointer & b){return b->Get(std::cref(key), std::ref(record));}
     );
 }
 
 KineticStatus DistributedKineticNamespace::GetVersion(const string &key, unique_ptr<string>& version)
 {
-    return readOperation(key, [&](ConnectionPointer & b){return b->GetVersion(std::cref(key), std::ref(version));}
+    return readOperation(keyToPartition(key), [&](ConnectionPointer & b){return b->GetVersion(std::cref(key), std::ref(version));}
     );
 }
 
@@ -624,10 +633,29 @@ KineticStatus DistributedKineticNamespace::GetKeyRange(const string &start_key, 
     const bool end_key_inclusive = false;
     const bool reverse_results = false;
 
-    return readOperation(start_key,
-            [&](ConnectionPointer & b){return b->GetKeyRange(
-                       start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);}
-    );
+    /* This could be handled much nicer obviously. I'm not even parallelizing, GetKeyRange is only used by ls. */
+    unique_ptr<vector<string>> tmp;
+
+    auto p = keyToPartition(start_key);
+
+    for(int i=0; i<direntry_clustersize; i++){
+       KineticStatus status = readOperation(p,[&](ConnectionPointer & b){return b->GetKeyRange(
+                       start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, tmp);}
+                       );
+
+       if(!status.ok()) return status;
+
+       hflat_debug("Got %d keys from partition %d",tmp->size(),p.partitionid());
+
+       keys->insert(keys->end(), tmp->begin(), tmp->end());
+       tmp->clear();
+       p = cluster_map[(p.partitionid()+1) % cluster_map.size()];
+    }
+
+    std::sort(keys->begin(),keys->end());
+    if(keys->size() > max_results)
+        keys->resize(max_results);
+    return KineticStatus(kinetic::StatusCode::OK, "");
 }
 
 KineticStatus DistributedKineticNamespace::Capacity(kinetic::Capacity &cap)
@@ -660,6 +688,7 @@ void DistributedKineticNamespace::printPartition(const hflat::Partition &p)
 
 void DistributedKineticNamespace::printClusterMap()
 {
+    std::cout << "  configured direntry cluster size is " << direntry_clustersize << std::endl;
     for (size_t i=0; i<cluster_map.size(); i++ ){
         auto &p = cluster_map[i];
         printPartition(p);

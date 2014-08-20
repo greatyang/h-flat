@@ -15,7 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "simple_kinetic_namespace.h"
-#include "threadsafe_blocking_connection.h"
 #include <exception>
 #include <stdexcept>
 
@@ -43,12 +42,7 @@ void SimpleKineticNamespace::connect()
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
 
-    std::shared_ptr<kinetic::NonblockingKineticConnection> shared_con;
-    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-    kinetic::Status status = factory.NewThreadsafeNonblockingConnection(options, shared_con);
-    if (status.notOk())
-        throw std::runtime_error(status.ToString());
-    con.reset(new kinetic::ThreadsafeBlockingConnection(shared_con, 5));
+    con.reset(new kinetic::ThreadsafeBlockingConnection(options));
 
     unique_ptr<kinetic::DriveLog> log;
     KineticStatus logstatus = con->GetLog(log);

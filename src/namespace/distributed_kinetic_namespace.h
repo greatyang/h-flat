@@ -42,6 +42,8 @@ namespace std {
   };
 }
 
+typedef std::shared_ptr<kinetic::ThreadsafeBlockingConnection> ConnectionPointer;
+
 /* Aggregates a number of kinetic drives into a single namespace. Uses N-1-N replication with global node-state to provide redundancy. */
 class DistributedKineticNamespace final : public KineticNamespace
 {
@@ -51,20 +53,19 @@ private:
 
     hflat::Partition                                                                                log_partition;
     std::vector< hflat::Partition >                                                                 cluster_map;
-    std::unordered_map< hflat::KineticDrive, std::shared_ptr<kinetic::BlockingKineticConnection> >  connection_map;
+    std::unordered_map< hflat::KineticDrive, ConnectionPointer >  connection_map;
 
     /* Number of partitions directory entry keys of a single directory are distributed over.
      * This can be configured to be anywhere from 1 (best for small directories) to all (best scaling create performance). */
     int                               direntry_clustersize;
-
-    kinetic::KineticConnectionFactory connection_factory;
+    std::shared_ptr<kinetic::ConnectionListener> listener;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
     float                             capacity_chunksize;
 
 private:
-    hflat::Partition &                                  keyToPartition(const std::string &key);
-    std::shared_ptr<kinetic::BlockingKineticConnection> driveToConnection(const hflat::Partition &p, int driveID);
+    hflat::Partition & keyToPartition(const std::string &key);
+    ConnectionPointer  driveToConnection(const hflat::Partition &p, int driveID);
 
     bool testPartition (const hflat::Partition &p);
     bool testConnection(const hflat::Partition &p, int driveID);
@@ -82,10 +83,10 @@ private:
     KineticStatus readRepair(const string &key, std::unique_ptr<KineticRecord> &record);
 
     /* Run PUT / DELETE operations on all drives of the partition associated with the key that are not marked DOWN. */
-    KineticStatus writeOperation (const string &key, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
+    KineticStatus writeOperation (const string &key, std::function< KineticStatus(ConnectionPointer&) > operation);
     KineticStatus evaluateWriteOperation(hflat::Partition &p, std::vector<KineticStatus> &results );
     /* Run GET / GETVERSION / GETKEYRANGE operations on any single drive of the partition marked UP. */
-    KineticStatus readOperation (hflat::Partition &p, std::function< KineticStatus(std::shared_ptr<kinetic::BlockingKineticConnection>&) > operation);
+    KineticStatus readOperation (hflat::Partition &p, std::function< KineticStatus(ConnectionPointer&) > operation);
 
     bool updateCapacityEstimate();
 public:

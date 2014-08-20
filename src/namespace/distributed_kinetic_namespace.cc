@@ -22,13 +22,13 @@
 #include "debug.h"
 
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
-typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
+
 
 static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
 
 DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hflat::Partition > &cmap, const hflat::Partition &lpart, int dirclustersize):
-        failure_lock(), log_partition(lpart), cluster_map(cmap), direntry_clustersize(dirclustersize), connection_factory(kinetic::NewKineticConnectionFactory())
+        failure_lock(), log_partition(lpart), cluster_map(cmap), direntry_clustersize(dirclustersize), listener(new kinetic::ConnectionListener())
 {
     if(selfCheck() == false)
         throw std::runtime_error("Invalid Clustermap");
@@ -58,26 +58,25 @@ ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::P
     if(connection_map.count(p.drives(driveID))) return connection_map[p.drives(driveID)];
 
     std::shared_ptr<kinetic::NonblockingKineticConnection> nonblocking_con;
-    ConnectionPointer con;
     kinetic::ConnectionOptions options;
     options.host = p.drives(driveID).host();
     options.port = p.drives(driveID).port();
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
 
-    if( connection_factory.NewThreadsafeNonblockingConnection(options, nonblocking_con).ok() ){
-        con.reset(new kinetic::ThreadsafeBlockingConnection(nonblocking_con, 5));
-        connection_map[p.drives(driveID)] = con;
-        if(p.cluster_version()){
-            connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());
-            hflat_trace("Set cluster version of connection for drive %s:%d to %d",
-                    p.drives(driveID).host().c_str(),p.drives(driveID).port(),p.cluster_version());
-        }
-        return connection_map[p.drives(driveID)];
+    try{
+    ConnectionPointer con(new kinetic::ThreadsafeBlockingConnection(options,listener));
+    connection_map[p.drives(driveID)] = con;
+    if(p.cluster_version()){
+        connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());
+        hflat_trace("Set cluster version of connection for drive %s:%d to %d",
+                p.drives(driveID).host().c_str(),p.drives(driveID).port(),p.cluster_version());
     }
-
-    if(p.drives(driveID).status() != hflat::KineticDrive_Status_RED)
-        hflat_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
+        return connection_map[p.drives(driveID)];
+    }catch(...){
+        if(p.drives(driveID).status() != hflat::KineticDrive_Status_RED)
+            hflat_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
+    }
     return ConnectionPointer();
 }
 
@@ -644,9 +643,6 @@ KineticStatus DistributedKineticNamespace::GetKeyRange(const string &start_key, 
                        );
 
        if(!status.ok()) return status;
-
-       hflat_debug("Got %d keys from partition %d",tmp->size(),p.partitionid());
-
        keys->insert(keys->end(), tmp->begin(), tmp->end());
        tmp->clear();
        p = cluster_map[(p.partitionid()+1) % cluster_map.size()];

@@ -19,27 +19,21 @@
 
 
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
-typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
+
 
 SimpleDistributedKineticNamespace::SimpleDistributedKineticNamespace(const std::vector< hflat::Partition > &cmap):
         capacity_estimate({100000,0}),capacity_chunksize(0)
 {
+
+        std::shared_ptr<kinetic::ConnectionListener> listener(new kinetic::ConnectionListener);
         for(auto &p : cmap){
 
-        std::shared_ptr<kinetic::NonblockingKineticConnection> nonblocking_con;
         kinetic::ConnectionOptions options;
         options.host = p.drives(0).host();
         options.port = p.drives(0).port();
         options.user_id = 1;
         options.hmac_key = "asdfasdf";
-
-        ConnectionPointer con;
-        kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-        if( factory.NewThreadsafeNonblockingConnection(options, nonblocking_con).ok() )
-              con.reset(new kinetic::ThreadsafeBlockingConnection(nonblocking_con, 5));
-        else
-            throw std::runtime_error("Couldn't establish connection.");
-
+        ConnectionPointer con(new kinetic::ThreadsafeBlockingConnection(options, listener));
         connections.push_back(con);
     }
     hashcounter.resize( connections.size(), 0);

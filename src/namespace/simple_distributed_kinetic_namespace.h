@@ -20,20 +20,23 @@
 #include <vector>
 #include "replication.pb.h"
 #include "kinetic_namespace.h"
+#include "threadsafe_blocking_connection.h"
+
+typedef std::shared_ptr<kinetic::ThreadsafeBlockingConnection> ConnectionPointer;
 
 /* Aggregates a number of kinetic drives into a single namespace.
  * Doesn't use any kind or replication or redundancy strategy, see distributed_kinetic_namespace for a real world implementation. */
 class SimpleDistributedKineticNamespace final : public KineticNamespace
 {
 private:
-    std::vector< std::shared_ptr<kinetic::BlockingKineticConnection> > connections;
-    std::vector< int > hashcounter;
+    std::vector< ConnectionPointer >  connections;
+    std::vector< int >                hashcounter;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
     float                             capacity_chunksize;
 
 private:
-    std::shared_ptr<kinetic::BlockingKineticConnection> keyToCon(const std::string &key);
+    ConnectionPointer keyToCon(const std::string &key);
 
 public:
     KineticStatus Get(const string &key, unique_ptr<KineticRecord>& record);

@@ -89,6 +89,7 @@ void _realpath(std::string &path)
 
 void _substitute(std::string &path, size_t pos)
 {
+    /* prevent std::out_of_range for root directory */
     if(path.length() < pos)
         path.append("/");
 
@@ -113,6 +114,10 @@ void _substitute(std::string &path, size_t pos)
             path[pos]=':';
         pos = path.find_first_of('/',pos+1);
     }
+
+    /* Remove potentially existing trailing slashes */
+    while(path[path.length()-1] == ':')
+        path.resize(path.length()-1);
 }
 
 std::string change(const char *path)

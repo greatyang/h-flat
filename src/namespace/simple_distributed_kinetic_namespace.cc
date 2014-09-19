@@ -24,9 +24,7 @@ SimpleDistributedKineticNamespace::SimpleDistributedKineticNamespace(const std::
         capacity_estimate({100000,0}),capacity_chunksize(0)
 {
 
-    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-
-    for(auto &p : cmap){
+   for(auto &p : cmap){
         kinetic::ConnectionOptions options;
         options.host = p.drives(0).host();
         options.port = p.drives(0).port();
@@ -34,7 +32,7 @@ SimpleDistributedKineticNamespace::SimpleDistributedKineticNamespace(const std::
         options.hmac_key = "asdfasdf";
 
         ConnectionPointer con;
-        factory.NewThreadsafeBlockingConnection(options, con, 30);
+        con.reset(new kinetic::WrapperConnection(options));
         connections.push_back(con);
     }
     hashcounter.resize( connections.size(), 0);

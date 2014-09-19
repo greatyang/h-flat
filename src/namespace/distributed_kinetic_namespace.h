@@ -18,6 +18,7 @@
 #define DISTRIBUTED_KINETIC_NAMESPACE_H_
 #include "kinetic_namespace.h"
 #include "simple_kinetic_namespace.h"
+#include "WrapperConnection.h"
 #include "lru_cache.h"
 #include "replication.pb.h"
 #include <vector>
@@ -42,7 +43,7 @@ namespace std {
   };
 }
 
-typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
+typedef std::shared_ptr<kinetic::WrapperConnection> ConnectionPointer;
 
 /* Aggregates a number of kinetic drives into a single namespace. Uses N-1-N replication with global node-state to provide redundancy. */
 class DistributedKineticNamespace final : public KineticNamespace

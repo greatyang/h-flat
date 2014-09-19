@@ -20,8 +20,9 @@
 #include <vector>
 #include "replication.pb.h"
 #include "kinetic_namespace.h"
+#include "WrapperConnection.h"
 
-typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
+typedef std::shared_ptr<kinetic::WrapperConnection> ConnectionPointer;
 
 /* Aggregates a number of kinetic drives into a single namespace.
  * Doesn't use any kind or replication or redundancy strategy, see distributed_kinetic_namespace for a real world implementation. */

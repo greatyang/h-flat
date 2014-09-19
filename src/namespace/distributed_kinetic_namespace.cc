@@ -64,8 +64,7 @@ ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::P
 
     try{
         ConnectionPointer con;
-        kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
-        factory.NewThreadsafeBlockingConnection(options, con, 30);
+        con.reset(new kinetic::WrapperConnection(options));
         connection_map[p.drives(driveID)] = con;
     if(p.cluster_version()){
         connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());

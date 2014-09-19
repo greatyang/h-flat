@@ -26,6 +26,7 @@ add_executable(hflat
      src/namespace/simple_distributed_kinetic_namespace.cc
      src/namespace/simple_kinetic_namespace.cc
      src/namespace/kinetic_helper.cc
+     src/namespace/WrapperConnection.cc
      src/fsck/fsck.cc
 )
 

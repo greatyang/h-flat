@@ -42,7 +42,7 @@ namespace std {
   };
 }
 
-typedef std::shared_ptr<kinetic::ThreadsafeBlockingConnection> ConnectionPointer;
+typedef std::shared_ptr<kinetic::BlockingKineticConnection> ConnectionPointer;
 
 /* Aggregates a number of kinetic drives into a single namespace. Uses N-1-N replication with global node-state to provide redundancy. */
 class DistributedKineticNamespace final : public KineticNamespace
@@ -58,7 +58,6 @@ private:
     /* Number of partitions directory entry keys of a single directory are distributed over.
      * This can be configured to be anywhere from 1 (best for small directories) to all (best scaling create performance). */
     int                               direntry_clustersize;
-    std::shared_ptr<kinetic::ConnectionListener> listener;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
     float                             capacity_chunksize;

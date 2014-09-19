@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "simple_kinetic_namespace.h"
+#include "kinetic/kinetic_connection_factory.h"
 #include <exception>
 #include <stdexcept>
 
@@ -42,7 +43,8 @@ void SimpleKineticNamespace::connect()
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
 
-    con.reset(new kinetic::ThreadsafeBlockingConnection(options));
+    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+    factory.NewThreadsafeBlockingConnection(options, con, 30);
 
     unique_ptr<kinetic::DriveLog> log;
     KineticStatus logstatus = con->GetLog(log);

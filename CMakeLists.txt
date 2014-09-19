@@ -26,11 +26,10 @@ add_executable(hflat
      src/namespace/simple_distributed_kinetic_namespace.cc
      src/namespace/simple_kinetic_namespace.cc
      src/namespace/kinetic_helper.cc
-     src/namespace/threadsafe_blocking_connection.cc
      src/fsck/fsck.cc
 )
 
-set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client/")
+set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client-2.0.4/")
 if(EXISTS "${KINETIC_CLIENT_PATH}")
    message("Found existing kinetic-cpp-client at ${KINETIC_CLIENT_PATH}")
 else()
@@ -43,7 +42,7 @@ ExternalProject_add(
     kinetic_cpp_client
     PREFIX "vendor"
     GIT_REPOSITORY "https://github.com/Seagate/kinetic-cpp-client"
-    GIT_TAG ""
+    GIT_TAG "0.1.0"
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""
 )

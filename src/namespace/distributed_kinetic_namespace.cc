@@ -18,7 +18,6 @@
 #include <future>
 #include <iostream>
 #include "distributed_kinetic_namespace.h"
-#include "threadsafe_blocking_connection.h"
 #include "debug.h"
 
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
@@ -28,7 +27,7 @@ static const string cv_base_name =  "clusterversion_";
 static const string logkey_prefix = "log_";
 
 DistributedKineticNamespace::DistributedKineticNamespace(const std::vector< hflat::Partition > &cmap, const hflat::Partition &lpart, int dirclustersize):
-        failure_lock(), log_partition(lpart), cluster_map(cmap), direntry_clustersize(dirclustersize), listener(new kinetic::ConnectionListener())
+        failure_lock(), log_partition(lpart), cluster_map(cmap), direntry_clustersize(dirclustersize)
 {
     if(selfCheck() == false)
         throw std::runtime_error("Invalid Clustermap");
@@ -57,7 +56,6 @@ ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::P
 {
     if(connection_map.count(p.drives(driveID))) return connection_map[p.drives(driveID)];
 
-    std::shared_ptr<kinetic::NonblockingKineticConnection> nonblocking_con;
     kinetic::ConnectionOptions options;
     options.host = p.drives(driveID).host();
     options.port = p.drives(driveID).port();
@@ -65,8 +63,10 @@ ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::P
     options.hmac_key = "asdfasdf";
 
     try{
-    ConnectionPointer con(new kinetic::ThreadsafeBlockingConnection(options,listener));
-    connection_map[p.drives(driveID)] = con;
+        ConnectionPointer con;
+        kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+        factory.NewThreadsafeBlockingConnection(options, con, 30);
+        connection_map[p.drives(driveID)] = con;
     if(p.cluster_version()){
         connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());
         hflat_trace("Set cluster version of connection for drive %s:%d to %d",

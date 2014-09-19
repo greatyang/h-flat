@@ -18,7 +18,6 @@
 #define SIMPLE_KINETIC_NAMESPACE_H_
 #include "kinetic_namespace.h"
 #include "replication.pb.h"
-#include "threadsafe_blocking_connection.h"
 
 /* Simple one-drive implementation. */
 class SimpleKineticNamespace final : public KineticNamespace
@@ -27,7 +26,7 @@ private:
     kinetic::ConnectionOptions        options;
     kinetic::Capacity                 capacity_estimate;
     float                             capacity_chunksize;
-    unique_ptr<kinetic::ThreadsafeBlockingConnection> con;
+    unique_ptr<kinetic::BlockingKineticConnection> con;
 
 private:
     void connect();

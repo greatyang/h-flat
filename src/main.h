@@ -51,10 +51,9 @@ struct hflat_priv
             lookup_cache(cache_expiration_ms, 1000,
                     std::mem_fn(&MetadataInfo::getSystemPath),
                     [](const std::shared_ptr<MetadataInfo> &mdi){
-                       std::shared_ptr<DataInfo> di = mdi->getDirtyData();
-                       if(! di || ! di->hasUpdates() )
-                            return false;
-                       return true;
+                       auto di = mdi->getDirtyData();
+                       if (!di) return false;
+                       return di->hasUpdates();
             }),
             data_cache(cache_expiration_ms, 500,
                     std::mem_fn(&DataInfo::getKey),

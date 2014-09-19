@@ -44,7 +44,9 @@ private:
 
 private:
     bool expired(typename std::list<cache_entry>::iterator it){
+        // dirty elements cannot be expired from the cache
         if(dirty(it->first)) return false;
+        // an item is considered expired if it has been in the cache for longer than expiration_time
         return expiration_time.count() && (duration_cast<milliseconds>(steady_clock::now() - it->second) > expiration_time);
     }
     void remove(const Key &k){

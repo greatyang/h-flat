@@ -15,7 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "simple_distributed_kinetic_namespace.h"
-#include "threadsafe_blocking_connection.h"
 
 
 using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
@@ -25,15 +24,17 @@ SimpleDistributedKineticNamespace::SimpleDistributedKineticNamespace(const std::
         capacity_estimate({100000,0}),capacity_chunksize(0)
 {
 
-        std::shared_ptr<kinetic::ConnectionListener> listener(new kinetic::ConnectionListener);
-        for(auto &p : cmap){
+    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
 
+    for(auto &p : cmap){
         kinetic::ConnectionOptions options;
         options.host = p.drives(0).host();
         options.port = p.drives(0).port();
         options.user_id = 1;
         options.hmac_key = "asdfasdf";
-        ConnectionPointer con(new kinetic::ThreadsafeBlockingConnection(options, listener));
+
+        ConnectionPointer con;
+        factory.NewThreadsafeBlockingConnection(options, con, 30);
         connections.push_back(con);
     }
     hashcounter.resize( connections.size(), 0);

@@ -61,8 +61,8 @@ target_link_libraries(hflat
     ${KINETIC_CLIENT_PATH}/libkinetic_client.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libglog.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libgflags.a
-    ${KINETIC_CLIENT_PATH}/vendor/lib/libcrypto.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libssl.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libcrypto.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libprotobuf.a
     ${CMAKE_THREAD_LIBS_INIT}
     dl

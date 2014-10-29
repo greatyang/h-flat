@@ -109,10 +109,9 @@ std::string PathMapDB::toSystemPath(const char *user_path, std::int64_t &maxTime
     iointercept(systemPath);
     std::string temp(systemPath);
 
-
     /* Take this opportunity to check for path POSIX name compliance. */
     if (temp.size() > PATH_MAX) {
-        hflat_debug("path size > %d",PATH_MAX);
+        hflat_debug("path size for %s is %d. Maximum is %d",temp.c_str(),temp.size(),PATH_MAX);
         maxTimeStamp = -ENAMETOOLONG;
         return systemPath;
     }

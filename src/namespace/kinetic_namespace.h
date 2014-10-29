@@ -39,10 +39,8 @@ public:
     virtual KineticStatus Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record) = 0;
     virtual KineticStatus GetVersion(const string &key, unique_ptr<string>& version) = 0;
     virtual KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys) = 0;
-    virtual KineticStatus Capacity(kinetic::Capacity &cap) = 0;
+    virtual KineticStatus GetCapacity(kinetic::Capacity &cap) = 0;
 
-    /* Waiting for P2P operation support
-     *     virtual KineticStatus DeleteKeyRangeAsync(const string &start_key, const string &end_key); */
     virtual bool selfCheck() = 0;
     virtual ~KineticNamespace(){};
 };

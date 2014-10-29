@@ -20,7 +20,7 @@
 #include "kinetic_helper.h"
 #include <algorithm>
 
-using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
+using com::seagate::kinetic::client::proto::Command_Algorithm_SHA1;
 
 /** Create a directory */
 int hflat_mkdir(const char *user_path, mode_t mode)
@@ -52,7 +52,7 @@ int create_directory_entry(const std::shared_ptr<MetadataInfo> &mdi_parent, std:
 {
     string direntry_key = std::to_string(mdi_parent->getMD().inode_number()) + "|" + filename;
 
-    KineticRecord record("", std::to_string(1), "", Message_Algorithm_SHA1);
+    KineticRecord record("", std::to_string(1), "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(direntry_key, "", WriteMode::REQUIRE_SAME_VERSION, record);
 
     if (status.statusCode() ==  kinetic::StatusCode::REMOTE_VERSION_MISMATCH)

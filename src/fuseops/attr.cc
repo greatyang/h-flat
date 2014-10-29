@@ -96,14 +96,15 @@ int hflat_utimens(const char *user_path, const struct timespec tv[2])
 int hflat_statfs(const char *user_path, struct statvfs *s)
 {
     kinetic::Capacity cap;
-    KineticStatus status = PRIV->kinetic->Capacity(cap);
+    KineticStatus status = PRIV->kinetic->GetCapacity(cap);
     if (!status.ok())
         return -EIO;
 
-    s->f_frsize = PRIV->blocksize; /* Minimal allocated block size */
+
+    s->f_frsize = 4096; /* Minimal allocated block size. Set to 4K because that's the maximum accepted value. */
     s->f_bsize  = PRIV->blocksize; /* Preferred file system block size for I/O requests */
-    s->f_blocks = (fsblkcnt_t) (  cap.nominal_capacity_in_bytes / PRIV->blocksize ); /* Blocks on FS in units of f_frsize */
-    s->f_bavail = (fsblkcnt_t) ( ( cap.nominal_capacity_in_bytes - cap.nominal_capacity_in_bytes * cap.portion_full)  / PRIV->blocksize); /* Free blocks */
+    s->f_blocks = (fsblkcnt_t) ( cap.nominal_capacity_in_bytes / s->f_frsize ); /* Blocks on FS in units of f_frsize */
+    s->f_bavail = (fsblkcnt_t) ( ( cap.nominal_capacity_in_bytes - cap.nominal_capacity_in_bytes * cap.portion_full)  / s->f_frsize); /* Free blocks */
     s->f_bfree  = s->f_bavail;
 
     s->f_namemax = NAME_MAX; /* Max file name length */

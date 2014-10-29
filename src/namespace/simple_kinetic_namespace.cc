@@ -17,6 +17,8 @@
 #include "simple_kinetic_namespace.h"
 #include <exception>
 #include <stdexcept>
+#include "debug.h"
+
 
 SimpleKineticNamespace::SimpleKineticNamespace(const hflat::KineticDrive &d)
 {
@@ -36,48 +38,40 @@ SimpleKineticNamespace::~SimpleKineticNamespace()
 {
 }
 
-#include "debug.h"
 void SimpleKineticNamespace::connect()
 {
-    options.user_id = 1;
+    options.user_id  = 1;
     options.hmac_key = "asdfasdf";
-
-    con.reset(new kinetic::WrapperConnection(options));
-    unique_ptr<kinetic::DriveLog> log;
-    KineticStatus logstatus = con->GetLog(log);
-    if(logstatus.ok()){
-        capacity_estimate  = log->capacity;
-        capacity_chunksize = ((float)1024*1024) / (float)capacity_estimate.nominal_capacity_in_bytes;
-    }
-    else
-       hflat_warning("Failed obtaining drive capacity: %s",logstatus.message().c_str());
+    options.use_ssl  = false;
+    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+    unique_ptr<kinetic::ThreadsafeBlockingKineticConnection> bcon;
+    kinetic::Status s = factory.NewThreadsafeBlockingConnection(options, bcon, 60);
+    if(s.notOk())
+        throw std::runtime_error(s.ToString());
+    con = std::move(bcon);
 }
 
 bool SimpleKineticNamespace::selfCheck()
 {
-    if(con->NoOp().ok())
-        return true;
-    return false;
+    return con->NoOp().ok();
 }
 
 KineticStatus SimpleKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
+    hflat_trace("Get '%s'",key.c_str());
     return con->Get(key, record);
 }
 
 KineticStatus SimpleKineticNamespace::Delete(const string &key, const string& version, WriteMode mode)
 {
-    KineticStatus result = con->Delete(key, version, mode);
-
-    if(result.ok()) capacity_estimate.portion_full -= capacity_chunksize;
-    return result;
+    hflat_trace("Delete '%s'",key.c_str());
+    return con->Delete(key, version, mode);
 }
 
 KineticStatus SimpleKineticNamespace::Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record)
 {
-    KineticStatus result = con->Put(key, current_version, mode, record);
-    if(result.ok() && current_version.empty()) capacity_estimate.portion_full += capacity_chunksize;
-    return result;
+    hflat_trace("Put '%s'",key.c_str());
+    return con->Put(key, current_version, mode, record);
 }
 
 KineticStatus SimpleKineticNamespace::GetVersion(const string &key, unique_ptr<string>& version)
@@ -94,8 +88,14 @@ KineticStatus SimpleKineticNamespace::GetKeyRange(const string &start_key, const
     return con->GetKeyRange(start_key, start_key_inclusive, end_key, end_key_inclusive, reverse_results, max_results, keys);
 }
 
-KineticStatus SimpleKineticNamespace::Capacity(kinetic::Capacity &cap)
+KineticStatus SimpleKineticNamespace::GetCapacity(kinetic::Capacity &cap)
 {
-    cap = capacity_estimate;
-    return KineticStatus(kinetic::StatusCode::OK, "");
+   unique_ptr<kinetic::DriveLog> log;
+   vector<kinetic::Command_GetLog_Type> types;
+   types.push_back(kinetic::Command_GetLog_Type::Command_GetLog_Type_CAPACITIES);
+
+   KineticStatus status = con->GetLog(types,log);
+   if(status.ok())
+       cap = log->capacity;
+   return status;
 }

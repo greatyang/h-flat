@@ -18,7 +18,6 @@
 #define DISTRIBUTED_KINETIC_NAMESPACE_H_
 #include "kinetic_namespace.h"
 #include "simple_kinetic_namespace.h"
-#include "WrapperConnection.h"
 #include "lru_cache.h"
 #include "replication.pb.h"
 #include <vector>
@@ -36,14 +35,14 @@ namespace std {
   template <> struct equal_to<hflat::KineticDrive>
   {
       bool operator() (const hflat::KineticDrive &a, const hflat::KineticDrive &b) const {
-          return std::string(a.host()+std::to_string(a.port())).compare(
-                             b.host()+std::to_string(b.port()))
-                 ? false : true;
+          if( a.host().compare(b.host()) ) return false;
+          if( a.port() != b.port() ) return false;
+          return true;
       }
   };
 }
 
-typedef std::shared_ptr<kinetic::WrapperConnection> ConnectionPointer;
+typedef std::shared_ptr<kinetic::BlockingKineticConnectionInterface> ConnectionPointer;
 
 /* Aggregates a number of kinetic drives into a single namespace. Uses N-1-N replication with global node-state to provide redundancy. */
 class DistributedKineticNamespace final : public KineticNamespace
@@ -52,12 +51,10 @@ private:
     /* get lock in all cases where the cluster_map is changed. */
     std::recursive_mutex failure_lock;
 
-    hflat::Partition                                                                                log_partition;
-    std::vector< hflat::Partition >                                                                 cluster_map;
+    hflat::Partition                                              log_partition;
+    std::vector< hflat::Partition >                               cluster_map;
     std::unordered_map< hflat::KineticDrive, ConnectionPointer >  connection_map;
 
-    /* Number of partitions directory entry keys of a single directory are distributed over.
-     * This can be configured to be anywhere from 1 (best for small directories) to all (best scaling create performance). */
     int                               direntry_clustersize;
     std::default_random_engine        random_generator;
     kinetic::Capacity                 capacity_estimate;
@@ -95,9 +92,7 @@ public:
     KineticStatus Delete(const string &key, const string& version, WriteMode mode);
     KineticStatus Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record);
     KineticStatus GetVersion(const string &key, unique_ptr<string>& version);
-    KineticStatus Capacity(kinetic::Capacity &cap);
-
-    /* Key-Range requests are never multi-partition. The partition that is queried depends on the start key. */
+    KineticStatus GetCapacity(kinetic::Capacity &cap);
     KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys);
 
     bool          selfCheck();

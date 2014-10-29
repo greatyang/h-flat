@@ -20,7 +20,7 @@
 #include "distributed_kinetic_namespace.h"
 #include "debug.h"
 
-using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
+using com::seagate::kinetic::client::proto::Command_Algorithm_SHA1;
 
 
 static const string cv_base_name =  "clusterversion_";
@@ -61,31 +61,32 @@ ConnectionPointer  DistributedKineticNamespace::driveToConnection(const hflat::P
     options.port = p.drives(driveID).port();
     options.user_id = 1;
     options.hmac_key = "asdfasdf";
+    options.use_ssl  = false;
 
-    try{
-        ConnectionPointer con;
-        con.reset(new kinetic::WrapperConnection(options));
-        connection_map[p.drives(driveID)] = con;
-    if(p.cluster_version()){
-        connection_map[p.drives(driveID)]->SetClientClusterVersion(p.cluster_version());
-        hflat_trace("Set cluster version of connection for drive %s:%d to %d",
-                p.drives(driveID).host().c_str(),p.drives(driveID).port(),p.cluster_version());
-    }
-        return connection_map[p.drives(driveID)];
-    }catch(...){
+    kinetic::KineticConnectionFactory factory = kinetic::NewKineticConnectionFactory();
+    unique_ptr<kinetic::ThreadsafeBlockingKineticConnection> bcon;
+    kinetic::Status s = factory.NewThreadsafeBlockingConnection(options, bcon, 60);
+
+    if(s.notOk()){
         if(p.drives(driveID).status() != hflat::KineticDrive_Status_RED)
             hflat_warning("Failed connecting to drive @ %s:%d.",p.drives(driveID).host().c_str(),p.drives(driveID).port());
+        return ConnectionPointer();
     }
-    return ConnectionPointer();
+
+    if(p.cluster_version())
+        bcon->SetClientClusterVersion(p.cluster_version());
+
+    connection_map[p.drives(driveID)] = std::move(bcon);
+    return connection_map[p.drives(driveID)];
 }
 
 
 bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int driveID)
 {
     auto con = driveToConnection(p, driveID);
-    if(! con) return false;
-    if(!con->NoOp().ok()){
-        hflat_debug("Failed connecting to drive %s:%d",p.drives(driveID).host().c_str(),p.drives(driveID).port());
+    if( !con ) return false;
+    if( !con->NoOp().ok() ){
+        hflat_trace("Failed connecting to drive %s:%d",p.drives(driveID).host().c_str(),p.drives(driveID).port());
         return false;
     }
     return true;
@@ -94,13 +95,6 @@ bool DistributedKineticNamespace::testConnection(const hflat::Partition &p, int 
 
 bool DistributedKineticNamespace::updateCapacityEstimate()
 {
-    hflat_warning("Capacity reporting disabled due to getlog performance issues. ");
-    /* assuming 4TB per partition, a 10% utilization and 1MB chunksize. */
-    capacity_estimate.nominal_capacity_in_bytes = cluster_map.size() * 4 * 1099511627776;
-    capacity_estimate.portion_full = 0.1;
-    capacity_chunksize = ((float)1024*1024) / capacity_estimate.nominal_capacity_in_bytes;
-    return true;
-
     std::vector<std::future<kinetic::Capacity>> futures;
 
     for(auto &p : cluster_map){
@@ -109,8 +103,10 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
                 futures.push_back( std::async( [&](){
                     ConnectionPointer con = driveToConnection(p,i);
                     std::unique_ptr<kinetic::DriveLog> dlog;
+                    vector<kinetic::Command_GetLog_Type> types;
+                    types.push_back(kinetic::Command_GetLog_Type::Command_GetLog_Type_CAPACITIES);
                     kinetic::Capacity c;
-                    if( con && (con->GetLog(dlog)).ok() )
+                    if( con && (con->GetLog(types,dlog)).ok() )
                         c = dlog->capacity;
                     return c;
                     }));
@@ -126,7 +122,7 @@ bool DistributedKineticNamespace::updateCapacityEstimate()
             hflat_warning("Incomplete capacity update.");
             return false;
         }
-        cap.nominal_capacity_in_bytes     += c.nominal_capacity_in_bytes;
+        cap.nominal_capacity_in_bytes += c.nominal_capacity_in_bytes;
         cap.portion_full += c.portion_full;
     }
     cap.portion_full /= futures.size();
@@ -171,15 +167,13 @@ bool DistributedKineticNamespace::getPartitionUpdate(hflat::Partition & p)
         if( !con) continue;
 
         std::unique_ptr<KineticRecord> record;
-        std::int64_t cversion = p.cluster_version() - 1;
-        KineticStatus status(kinetic::StatusCode::OK, "");
-
-        do{
-            cversion++;
-            con->SetClientClusterVersion(cversion);
+        KineticStatus status = con->NoOp();
+        while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH){
+            std::int64_t cversion =  status.expected_cluster_version();
+            con->SetClientClusterVersion( cversion );
             status = con->Get(cv_base_name+std::to_string(cversion), record);
-            hflat_debug("trying cluster version %d for drive %s:%d",cversion,p.drives(i).host().c_str(),p.drives(i).port());
-        }while(status.statusCode() == kinetic::StatusCode::REMOTE_CLUSTER_VERSION_MISMATCH);
+        }
+        if(status.expected_cluster_version())
 
         if(status.ok()){
            p.ParseFromString(*record->value());
@@ -196,7 +190,7 @@ bool DistributedKineticNamespace::putPartitionUpdate(hflat::Partition &p)
     std::lock_guard<std::recursive_mutex> l(failure_lock);
 
     std::string   key      = cv_base_name + std::to_string(p.cluster_version());
-    KineticRecord record(p.SerializeAsString(), "yes", "", Message_Algorithm_SHA1);
+    KineticRecord record(p.SerializeAsString(), "yes", "", Command_Algorithm_SHA1);
 
      /* Serialize write accesses to ensure that multiple clients attempting to update the same cluster version don't conflict.
       * The first write may thus fail in case of concurrency. */
@@ -498,7 +492,7 @@ KineticStatus DistributedKineticNamespace::writeOperation (const string &key, st
 
        ConnectionPointer con = driveToConnection(log_partition, p.logid());
 
-       kinetic::KineticRecord record("", "", "", Message_Algorithm_SHA1);
+       kinetic::KineticRecord record("", "", "", Command_Algorithm_SHA1);
        auto status = con->Put(std::to_string(p.partitionid())+logkey_prefix+key,"",WriteMode::IGNORE_VERSION, record);
 
        if(status.ok() == false){
@@ -561,6 +555,7 @@ KineticStatus DistributedKineticNamespace::readOperation (hflat::Partition &p, s
 
 KineticStatus DistributedKineticNamespace::Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record)
 {
+    hflat_trace("Put '%s'",key.c_str());
     KineticStatus result = writeOperation(key,
             [&](ConnectionPointer&b){return b->Put(std::cref(key), std::cref(current_version), mode, std::cref(record));}
     );
@@ -588,6 +583,7 @@ KineticStatus DistributedKineticNamespace::Put(const string &key, const string &
 
 KineticStatus DistributedKineticNamespace::Delete(const string &key, const string& version, WriteMode mode)
 {
+    hflat_trace("Delete '%s'",key.c_str());
     KineticStatus result = writeOperation(key,
             [&](ConnectionPointer&b){return b->Delete(std::cref(key), std::cref(version), mode);}
     );
@@ -614,6 +610,7 @@ KineticStatus DistributedKineticNamespace::Delete(const string &key, const strin
 
 KineticStatus DistributedKineticNamespace::Get(const string &key, unique_ptr<KineticRecord>& record)
 {
+    hflat_trace("Get '%s'",key.c_str());
     return readOperation(keyToPartition(key), [&](ConnectionPointer & b){return b->Get(std::cref(key), std::ref(record));}
     );
 }
@@ -625,6 +622,7 @@ KineticStatus DistributedKineticNamespace::GetVersion(const string &key, unique_
 }
 
 
+/* Key-Range requests are never multi-partition. The partition that is queried depends on the start key. */
 KineticStatus DistributedKineticNamespace::GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys)
 {
     const bool start_key_inclusive = false;
@@ -653,7 +651,7 @@ KineticStatus DistributedKineticNamespace::GetKeyRange(const string &start_key, 
     return KineticStatus(kinetic::StatusCode::OK, "");
 }
 
-KineticStatus DistributedKineticNamespace::Capacity(kinetic::Capacity &cap)
+KineticStatus DistributedKineticNamespace::GetCapacity(kinetic::Capacity &cap)
 {
     cap = capacity_estimate;
     return KineticStatus(kinetic::StatusCode::OK, "");

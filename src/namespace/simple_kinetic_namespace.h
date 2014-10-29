@@ -18,16 +18,15 @@
 #define SIMPLE_KINETIC_NAMESPACE_H_
 #include "kinetic_namespace.h"
 #include "replication.pb.h"
-#include "WrapperConnection.h"
+#include "kinetic/kinetic.h"
 
-/* Simple one-drive implementation. */
+/* Simple one-drive implementation without any redundancy. Will attempt to connect to localhost
+ * if no drive definition is provided. */
 class SimpleKineticNamespace final : public KineticNamespace
 {
 private:
-    kinetic::ConnectionOptions        options;
-    kinetic::Capacity                 capacity_estimate;
-    float                             capacity_chunksize;
-    unique_ptr<kinetic::WrapperConnection> con;
+    kinetic::ConnectionOptions                          options;
+    unique_ptr<kinetic::BlockingKineticConnectionInterface> con;
 
 private:
     void connect();
@@ -38,8 +37,9 @@ public:
     KineticStatus Put(const string &key, const string &current_version, WriteMode mode, const KineticRecord& record);
     KineticStatus GetVersion(const string &key, unique_ptr<string>& version);
     KineticStatus GetKeyRange(const string &start_key, const string &end_key, unsigned int max_results, unique_ptr<vector<string>> &keys);
-    KineticStatus Capacity(kinetic::Capacity &cap);
+    KineticStatus GetCapacity(kinetic::Capacity &cap);
     bool          selfCheck();
+
 public:
     explicit SimpleKineticNamespace(const hflat::KineticDrive &d);
     explicit SimpleKineticNamespace();

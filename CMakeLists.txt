@@ -23,14 +23,12 @@ add_executable(hflat
      src/generated/metadata.pb.cc
      src/generated/replication.pb.cc
      src/namespace/distributed_kinetic_namespace.cc
-     src/namespace/simple_distributed_kinetic_namespace.cc
      src/namespace/simple_kinetic_namespace.cc
      src/namespace/kinetic_helper.cc
-     src/namespace/WrapperConnection.cc
      src/fsck/fsck.cc
 )
 
-set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client-2.0.4/")
+set(KINETIC_CLIENT_PATH "$ENV{HOME}/git/kinetic-cpp-client")
 if(EXISTS "${KINETIC_CLIENT_PATH}")
    message("Found existing kinetic-cpp-client at ${KINETIC_CLIENT_PATH}")
 else()
@@ -43,7 +41,7 @@ ExternalProject_add(
     kinetic_cpp_client
     PREFIX "vendor"
     GIT_REPOSITORY "https://github.com/Seagate/kinetic-cpp-client"
-    GIT_TAG "0.1.0"
+    GIT_TAG ""
     BUILD_IN_SOURCE 1
     INSTALL_COMMAND ""
 )
@@ -64,6 +62,7 @@ target_link_libraries(hflat
     ${KINETIC_CLIENT_PATH}/vendor/lib/libglog.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libgflags.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libcrypto.a
+    ${KINETIC_CLIENT_PATH}/vendor/lib/libssl.a
     ${KINETIC_CLIENT_PATH}/vendor/lib/libprotobuf.a
     ${CMAKE_THREAD_LIBS_INIT}
     dl

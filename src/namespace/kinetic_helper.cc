@@ -20,14 +20,13 @@
 
 using namespace util;
 using kinetic::StatusCode;
-using com::seagate::kinetic::client::proto::Message_Algorithm_SHA1;
+using com::seagate::kinetic::client::proto::Command_Algorithm_SHA1;
 
 static const string db_base_name = "pathmapDB_";
 static const string db_version_key = db_base_name + "version";
 
 int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    hflat_debug("GET key %s",mdi->getSystemPath().c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(mdi->getSystemPath(), record);
 
@@ -47,10 +46,9 @@ int get_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    hflat_debug("PUT key %s",mdi->getSystemPath().c_str());
     std::string new_version  = util::generate_uuid();
 
-    KineticRecord record(mdi->getMD().SerializeAsString(), new_version, "", Message_Algorithm_SHA1);
+    KineticRecord record(mdi->getMD().SerializeAsString(), new_version, "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION, record);
 
     if(!status.ok()){
@@ -80,10 +78,9 @@ int put_metadata_forced(const std::shared_ptr<MetadataInfo> &mdi, std::function<
 
 int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    hflat_debug("CREATE key %s",mdi->getSystemPath().c_str());
     std::string new_version = util::generate_uuid();
 
-    KineticRecord record(mdi->getMD().SerializeAsString(),  new_version, "", Message_Algorithm_SHA1);
+    KineticRecord record(mdi->getMD().SerializeAsString(),  new_version, "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(mdi->getSystemPath(), "", WriteMode::REQUIRE_SAME_VERSION, record);
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
@@ -98,7 +95,6 @@ int create_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 {
-    hflat_debug("DELETE key %s",mdi->getSystemPath().c_str());
     PRIV->lookup_cache.invalidate(mdi->getSystemPath());
     KineticStatus status = PRIV->kinetic->Delete(mdi->getSystemPath(), mdi->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION);
 
@@ -115,7 +111,6 @@ int delete_metadata(const std::shared_ptr<MetadataInfo> &mdi)
 
 int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
 {
-    hflat_debug("GET DATA %s",key.c_str());
     unique_ptr<KineticRecord> record;
     KineticStatus status = PRIV->kinetic->Get(key, record);
 
@@ -134,10 +129,9 @@ int get_data(const std::string &key, std::shared_ptr<DataInfo> &di)
 
 int put_data(const std::shared_ptr<DataInfo> &di)
 {
-    hflat_debug("PUT DATA %s",di->getKey().c_str());
     std::string new_version = util::generate_uuid();
 
-    KineticRecord record(di->data(), new_version, "", Message_Algorithm_SHA1);
+    KineticRecord record(di->data(), new_version, "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(di->getKey(), di->getKeyVersion(), WriteMode::REQUIRE_SAME_VERSION, record);
 
     /* If someone else has updated the data block since we read it in, just write the incremental changes */
@@ -163,7 +157,6 @@ int put_data(const std::shared_ptr<DataInfo> &di)
 
 int delete_data(const std::shared_ptr<DataInfo> &di)
 {
-    hflat_debug("DELETE DATA %s",di->getKey().c_str());
     KineticStatus status = PRIV->kinetic->Delete(di->getKey(), "", WriteMode::IGNORE_VERSION);
     PRIV->data_cache.invalidate(di->getKey());
     if (status.statusCode() == StatusCode::REMOTE_NOT_FOUND)
@@ -176,7 +169,7 @@ int delete_data(const std::shared_ptr<DataInfo> &di)
 int put_db_entry(std::int64_t version, const hflat::db_entry &entry)
 {
     string key = db_base_name + std::to_string(version);
-    KineticRecord record(entry.SerializeAsString(), std::to_string(version), "", Message_Algorithm_SHA1);
+    KineticRecord record(entry.SerializeAsString(), std::to_string(version), "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(key, "", WriteMode::REQUIRE_SAME_VERSION, record);
 
     if (status.statusCode() ==  StatusCode::REMOTE_VERSION_MISMATCH)
@@ -186,7 +179,7 @@ int put_db_entry(std::int64_t version, const hflat::db_entry &entry)
 
     /* can be stored with IGNORE_VERSION since puts serialized by the db_version_key:
      * other clients will only see the database entry we just put after updating based on the db_version_key value */
-    KineticRecord empty("", std::to_string(version), "", Message_Algorithm_SHA1);
+    KineticRecord empty("", std::to_string(version), "", Command_Algorithm_SHA1);
     status = PRIV->kinetic->Put(db_version_key, "", WriteMode::IGNORE_VERSION, empty);
     if (!status.ok())
         hflat_warning("Failed updating database version key.");
@@ -232,7 +225,7 @@ int get_db_version(std::int64_t &version)
 int put_db_snapshot (const hflat::db_snapshot &s)
 {
     string key = db_base_name + "SNAPSHOT";
-    KineticRecord record(s.SerializeAsString(), "", "", Message_Algorithm_SHA1);
+    KineticRecord record(s.SerializeAsString(), "", "", Command_Algorithm_SHA1);
     KineticStatus status = PRIV->kinetic->Put(key, "", WriteMode::IGNORE_VERSION, record);
 
     if (!status.ok())

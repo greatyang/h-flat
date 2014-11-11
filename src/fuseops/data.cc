@@ -24,20 +24,23 @@ enum class rw {READ, WRITE};
 static int do_rw(char *buf, size_t size, off_t offset, const std::shared_ptr<MetadataInfo> &mdi, std::shared_ptr<DataInfo> &di, rw mode)
 {
     int blocknum     = offset / PRIV->blocksize;
-    int inblockstart = offset - blocknum * PRIV->blocksize;
-    int inblocksize  = size > (size_t) PRIV->blocksize - inblockstart ? PRIV->blocksize - inblockstart : size;
     std::string key  = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(blocknum);
 
-    if(PRIV->data_cache.get(key, di) == false){
-        /* Don't GET if the file is growing. */
-        if(mode == rw::WRITE && offset+size > mdi->getMD().size())
-            di.reset(new DataInfo(key, std::string(""), std::string("")));
-        else if (int err = get_data(key, di))
-            return err;
-
-        PRIV->data_cache.add(key, di);
+    while(PRIV->data_cache.get(key, di) == false){
+          if(PRIV->data_cache.block(key)){
+            /* Don't GET if the file is growing. */
+            if(mode == rw::WRITE && offset+size > mdi->getMD().size())
+                di.reset(new DataInfo(key, std::string(""), std::string("")));
+            else if (int err = get_data(key, di)){
+                PRIV->data_cache.invalidate(key);
+                return err;
+            }
+            REQ_TRUE(PRIV->data_cache.add(key, di));
+          }
     }
 
+    int inblockstart = offset - blocknum * PRIV->blocksize;
+    int inblocksize  = size > (size_t) PRIV->blocksize - inblockstart ? PRIV->blocksize - inblockstart : size;
     if(mode == rw::WRITE)  di->updateData(buf, inblockstart, inblocksize);
     if(mode == rw::READ){
         /* After a truncate operation that increases size a client may legally read data that was never written.
@@ -141,9 +144,14 @@ int hflat_truncate(const char *user_path, off_t offset)
     std::shared_ptr<DataInfo> di;
     if(offset < size){
         std::string key = std::to_string(mdi->getMD().inode_number()) + "_" + std::to_string(offset/PRIV->blocksize);
-        if(PRIV->data_cache.get(key, di) == false){
-            if (int err = get_data(key, di)) return err;
-            PRIV->data_cache.add(key, di);
+        while(PRIV->data_cache.get(key, di) == false){
+              if(PRIV->data_cache.block(key)){
+                  if (int err = get_data(key, di)){
+                      PRIV->data_cache.invalidate(key);
+                      return err;
+                  }
+                  REQ_TRUE(PRIV->data_cache.add(key, di));
+              }
         }
         di->truncate(offset % PRIV->blocksize);
         put_data(di);

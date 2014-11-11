@@ -59,6 +59,7 @@ int put_metadata(const std::shared_ptr<MetadataInfo> &mdi)
         return -EIO;
     }
     mdi->setKeyVersion(new_version);
+    PRIV->lookup_cache.revalidate(mdi->getSystemPath());
     return 0;
 }
 
@@ -152,6 +153,7 @@ int put_data(const std::shared_ptr<DataInfo> &di)
 
     di->forgetUpdates();
     di->setKeyVersion(new_version);
+    PRIV->data_cache.revalidate(di->getKey());
     return 0;
 }
 

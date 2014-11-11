@@ -136,7 +136,7 @@ static int do_permission_change(const char *user_path, mode_t mode, uid_t uid, g
         entry.set_type(hflat::db_entry_Type_NONE);
         entry.set_origin(user_path);
 
-        REQ( util::database_operation(entry) );
+        REQ_0( util::database_operation(entry) );
         std::int64_t snapshot_version = PRIV->pmap.getSnapshotVersion();
         err = put_metadata_forced(mdi, [&mdi, &snapshot_version](){ mdi->getMD().set_path_permission_verified(snapshot_version);});
         assert(!err || err == -ENOENT);

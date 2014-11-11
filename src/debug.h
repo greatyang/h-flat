@@ -30,7 +30,9 @@ static int llconfig = 0;
 #define hflat_warning(message...) hflat_printlog(3, __FUNCTION__, __FILE__, __LINE__, ## message)
 #define hflat_error(message...)   hflat_printlog(4, __FUNCTION__, __FILE__, __LINE__, ## message)
 
-#define REQ(fun) if(fun){ hflat_error("Unrecoverable File System Error. \n Killing myself now. Goodbye."); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
+#define REQ_TRUE(fun) if(fun == false){ hflat_error("Unrecoverable File System Error. \n Killing myself now. Goodbye."); if(PRIV)delete PRIV; exit(EXIT_FAILURE); }
+#define REQ_0(fun) REQ_TRUE((fun == 0))
+
 
 static void hflat_printlog(const int loglevel, const char* fun, const char* file, int line, const char* msg, ...)
 {

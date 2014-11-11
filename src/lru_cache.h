@@ -17,6 +17,8 @@
 #ifndef LRU_CACHE_H_
 #define LRU_CACHE_H_
 #include <unordered_map>
+#include <unordered_set>
+#include <condition_variable>
 #include <mutex>
 #include <list>
 #include <chrono>
@@ -34,6 +36,9 @@ private:
 
     std::list<cache_entry> cache;
     std::unordered_map<Key, typename std::list<cache_entry>::iterator > lookup;
+
+    std::unordered_set<Key> blocked_keys;
+    std::condition_variable unblocked;
 
     milliseconds        expiration_time;
     std::uint32_t       capacity;
@@ -55,8 +60,11 @@ private:
     }
 
 public:
-    bool get(const Key& k, Data& d){
-        std::lock_guard<std::mutex> locker(mutex);
+    bool __attribute__((warn_unused_result)) get(const Key& k, Data& d){
+        std::unique_lock<std::mutex> locker(mutex);
+
+        while(blocked_keys.count(k))
+            unblocked.wait(locker);
 
         if(lookup.count(k) == 0)
             return false;
@@ -70,8 +78,8 @@ public:
         return true;
     }
 
-    bool add(const Key& k, Data& d){
-        std::lock_guard<std::mutex> locker(mutex);
+    bool __attribute__((warn_unused_result)) add(const Key& k, Data& d){
+        std::unique_lock<std::mutex> locker(mutex);
 
         if(lookup.count(k) > 0){
             if(expired(lookup[k])) remove(k);
@@ -85,14 +93,29 @@ public:
 
         cache.push_front(cache_entry(d, steady_clock::now()));
         lookup[k] = cache.begin();
+
+        if(blocked_keys.erase(k))
+            unblocked.notify_all();
         return true;
     }
 
-    void invalidate(const Key& k){
-        std::lock_guard<std::mutex> locker(mutex);
+    bool __attribute__((warn_unused_result)) block(const Key &k){
+        std::unique_lock<std::mutex> locker(mutex);
+        return blocked_keys.insert(k).second;
+    }
 
+    void revalidate(const Key& k){
+        std::unique_lock<std::mutex> locker(mutex);
+        if(lookup.count(k) > 0)
+            lookup[k]->second = steady_clock::now();
+    }
+
+    void invalidate(const Key& k){
+        std::unique_lock<std::mutex> locker(mutex);
         if(lookup.count(k) > 0)
             remove(k);
+        if(blocked_keys.erase(k))
+            unblocked.notify_all();
     }
 
 public:

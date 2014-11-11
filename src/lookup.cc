@@ -90,15 +90,21 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         return pathPermissionTimeStamp;
 
     /* Step 2: Get metadata from flat namespace */
-    bool cached = PRIV->lookup_cache.get(key, mdi);
+    bool cached = true;
+    while(cached == true && PRIV->lookup_cache.get(key, mdi) == false)
+        if(PRIV->lookup_cache.block(key))
+            cached = false;
 
     if(!cached){
         mdi.reset(new MetadataInfo(key));
         int err = get_metadata(mdi);
         if (err == -ENOENT){
-            PRIV->lookup_cache.add(key,mdi);
+            REQ_TRUE(PRIV->lookup_cache.add(key,mdi));
         }
-        if (err) return err;
+        else if (err){
+            PRIV->lookup_cache.invalidate(key);
+            return err;
+        }
     }
     if(mdi->getMD().inode_number() == 0)
         return -ENOENT;
@@ -110,7 +116,7 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
             std::shared_ptr<MetadataInfo> mdi_source(new MetadataInfo(key));
             mdi_source->getMD().set_type( hflat::Metadata_InodeType_HARDLINK_S );
             mdi_source->getMD().set_inode_number( mdi->getMD().inode_number() );
-            PRIV->lookup_cache.add(key,mdi_source);
+            REQ_TRUE(PRIV->lookup_cache.add(key,mdi_source));
         }
         std::string hlkey = "hardlink_" + std::to_string(mdi->getMD().inode_number());
         return lookup(hlkey.c_str(), mdi);
@@ -120,12 +126,15 @@ int lookup(const char *user_path, std::shared_ptr<MetadataInfo> &mdi)
         if (int err = util::database_update()){
             hflat_warning("encountered force_update inode in regular lookup and couldn't update database."
                     "user path: %s, system path: %s",user_path,mdi->getSystemPath().c_str());
+            PRIV->lookup_cache.invalidate(key);
             return err;
         }
+        PRIV->lookup_cache.invalidate(key);
         return lookup(user_path, mdi);
     }
 
-    if(!cached) PRIV->lookup_cache.add(key,mdi);
+    if(!cached)
+        REQ_TRUE(PRIV->lookup_cache.add(key,mdi));
 
     /* Step 4: check path permissions, update (recursively as necessary) in case of staleness */
     bool stale = mdi->getMD().path_permission_verified() < pathPermissionTimeStamp;

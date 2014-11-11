@@ -79,10 +79,10 @@ static int unlink_hardlink(const char *user_path, const std::shared_ptr<Metadata
      * Since HARDLINK_S key was used for serialization, no other client will interfere writing to it.  */
     if(err){
         mdiS->getMD().set_link_count(1);
-        REQ( put_metadata(mdiS) );
+        REQ_0( put_metadata(mdiS) );
         return err;
     }
-    REQ( delete_metadata(mdiS) );
+    REQ_0( delete_metadata(mdiS) );
     return 0;
 }
 
@@ -107,14 +107,14 @@ int hflat_unlink(const char *user_path)
         hflat::db_entry entry;
         entry.set_type(hflat::db_entry_Type_REMOVED);
         entry.set_origin(user_path);
-        REQ( database_operation(entry) );
+        REQ_0( database_operation(entry) );
     }
 
     /* remove force_update that (might) exist for the current path when unlinking a directory that has been moved. */
-    if (directory) REQ(unlink_force_update(user_path));
+    if (directory) REQ_0(unlink_force_update(user_path));
 
     /* remove directory entry */
-    REQ( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
+    REQ_0( delete_directory_entry(mdi_dir, path_to_filename(user_path)) );
 
     /* start a background thread to delete now unused data blocks */
     auto datadelete = [](int size, int ino, struct hflat_priv *priv){
@@ -252,7 +252,7 @@ int hflat_create(const char *user_path, mode_t mode)
 
     /* initialize metadata and write metadata-key to drive*/
     initialize_metadata(mdi, mdi_dir, mode);
-    REQ ( create_metadata(mdi) );
+    REQ_0( create_metadata(mdi) );
     return 0;
 }
 

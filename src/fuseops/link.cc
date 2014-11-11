@@ -72,7 +72,7 @@ int hflat_symlink(const char *target, const char *origin)
 
     /* initialize metadata and write metadata-key to drive */
     initialize_metadata(mdi, mdi_dir, S_IFLNK | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH);
-    REQ( create_metadata(mdi) );
+    REQ_0( create_metadata(mdi) );
     return err;
 }
 
@@ -94,7 +94,7 @@ static int toHardlinkT(const std::shared_ptr<MetadataInfo> &mdi_target)
         return err;
 
     /* store target metadata at hardlink-key location */
-    REQ ( create_metadata(mdi_target) );
+    REQ_0 ( create_metadata(mdi_target) );
     return 0;
 }
 
@@ -132,7 +132,7 @@ int hflat_hardlink(const char *target, const char *origin)
     /* If the target metadata is not already a hardlink_target, make it so. */
     if (mdi_target->getMD().type() != hflat::Metadata_InodeType_HARDLINK_T) {
         if (( err = toHardlinkT(mdi_target) )){
-            REQ ( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
+            REQ_0( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
             if(err == -EAGAIN) return hflat_hardlink(target, origin);
             return err;
         }
@@ -142,7 +142,7 @@ int hflat_hardlink(const char *target, const char *origin)
     mdi_target->getMD().set_link_count(mdi_target->getMD().link_count() + 1);
     if ((err = put_metadata(mdi_target))) {
         /* another client could have changed / deleted hardlink_t inode. */
-        REQ ( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
+        REQ_0 ( delete_directory_entry(mdi_origin_dir, util::path_to_filename(origin)) );
         if(err == -EAGAIN) return hflat_hardlink(target, origin);
         return err;
     }
@@ -150,6 +150,6 @@ int hflat_hardlink(const char *target, const char *origin)
     mdi_origin->getMD().set_type(hflat::Metadata_InodeType_HARDLINK_S);
     mdi_origin->getMD().set_inode_number(mdi_target->getMD().inode_number());
     mdi_origin->getMD().set_link_count(1);
-    REQ(create_metadata(mdi_origin));
+    REQ_0(create_metadata(mdi_origin));
     return 0;
 }

@@ -126,7 +126,7 @@ void *hflat_init(struct fuse_conn_info *conn)
                         clustermap, logpartition,
                         cache_expiration_ms, direntry_clustersize,
                         mode);
-        if(cok == false) REQ(EXIT_FAILURE);
+        REQ_TRUE(cok);
     }
 
     try {
@@ -139,7 +139,7 @@ void *hflat_init(struct fuse_conn_info *conn)
     }
     catch(std::exception& e){
         hflat_error("Exception thrown during mount operation. Reason: %s \n Check your Configuration.",e.what());
-        REQ(EXIT_FAILURE);
+        REQ_TRUE(false);
     }
     fuse_get_context()->private_data = priv;
 

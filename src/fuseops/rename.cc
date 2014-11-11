@@ -90,16 +90,16 @@ static int rename_softlink(const char *user_path_from, const char *user_path_to,
 {
     hflat::db_entry entry;
     char buffer[PATH_MAX];
-    REQ( hflat_readlink(user_path_from, buffer, PATH_MAX) );
+    REQ_0( hflat_readlink(user_path_from, buffer, PATH_MAX) );
 
     entry.set_type(hflat::db_entry_Type_REMOVED);
     entry.set_origin(user_path_from);
-    REQ( util::database_operation(entry) );
+    REQ_0( util::database_operation(entry) );
 
     entry.set_type(entry.SYMLINK);
     entry.set_origin(user_path_to);
     entry.set_target(buffer);
-    REQ( util::database_operation(entry) );
+    REQ_0( util::database_operation(entry) );
 
     return rename_regular(mdito, mdifrom);
 }
@@ -107,10 +107,10 @@ static int rename_softlink(const char *user_path_from, const char *user_path_to,
 static int rename_hardlink(const char *user_path_from, std::shared_ptr<MetadataInfo> &mdito)
 {
     std::shared_ptr<MetadataInfo> mdifrom;
-    REQ( get_metadata_userpath(user_path_from, mdifrom) );
+    REQ_0( get_metadata_userpath(user_path_from, mdifrom) );
     assert(mdifrom->getMD().type() == hflat::Metadata_InodeType_HARDLINK_S);
 
-    REQ (rename_regular(mdito, mdifrom));
+    REQ_0(rename_regular(mdito, mdifrom));
     PRIV->lookup_cache.invalidate(mdifrom->getSystemPath());
     return 0;
 }
@@ -126,25 +126,25 @@ static int rename_directory(const char *user_path_from, const char *user_path_to
     entry.set_type(entry.MOVE);
     entry.set_origin(user_path_from);
     entry.set_target(user_path_to);
-    REQ ( util::database_operation( entry ) );
+    REQ_0 ( util::database_operation( entry ) );
 
     /* If a force_update metadata inode exist at original location (the directory had already been moved in the past), remove it. */
     std::string fu_dir =  dir_mdifrom->getSystemPath().length() > 1 ? dir_mdifrom->getSystemPath()+"/" : "/";
     std::shared_ptr<MetadataInfo> mdi_fu( new MetadataInfo( fu_dir + util::path_to_filename(user_path_from) ));
     hflat_debug("Checking path %s for existing FORCE_UPDATE inode.",mdi_fu->getSystemPath().c_str());
     if(get_metadata(mdi_fu) == 0 && mdi_fu->getMD().type() == hflat::Metadata_InodeType_FORCE_UPDATE)
-        REQ ( delete_metadata(mdi_fu) );
+        REQ_0 ( delete_metadata(mdi_fu) );
 
     /* Create a new force_udpate metadata key at target location.  */
     mdito->getMD().set_type(hflat::Metadata_InodeType_FORCE_UPDATE);
     mdito->getMD().set_inode_number( util::generate_inode_number() );
-    REQ ( create_metadata(mdito) );
+    REQ_0 ( create_metadata(mdito) );
     hflat_trace("successfully created FORCE_UPDATE inode for path %s",mdito->getSystemPath().data());
 
 
     /* Update ACtime for POSIX compliance */
     if(PRIV->posix == PosixMode::FULL)
-        REQ(put_metadata_forced(mdifrom, [&mdifrom](){mdifrom->updateACtime();}) );
+        REQ_0(put_metadata_forced(mdifrom, [&mdifrom](){mdifrom->updateACtime();}) );
     return 0;
 }
 
@@ -175,12 +175,12 @@ int hflat_rename(const char *user_path_from, const char *user_path_to)
     /* create recovery key in order to guarantee that fsck works correctly in all cases if client
      * crashes somewhere between this point and successfully finishing the rename operation. */
     std::string recovery_direntry = util::path_to_filename(user_path_to) + "|recovery|" + user_path_from;
-    REQ( create_directory_entry (dir_mdito, recovery_direntry) );
+    REQ_0( create_directory_entry (dir_mdito, recovery_direntry) );
 
     /* Delete old directory entry: Synchronization point (2) */
     if (( err = delete_directory_entry(dir_mdifrom, util::path_to_filename(user_path_from)) )){
-        REQ ( delete_directory_entry (dir_mdito, util::path_to_filename(user_path_to)) );
-        REQ ( delete_directory_entry (dir_mdito, recovery_direntry) );
+        REQ_0 ( delete_directory_entry (dir_mdito, util::path_to_filename(user_path_to)) );
+        REQ_0 ( delete_directory_entry (dir_mdito, recovery_direntry) );
         return err;
     }
 
@@ -192,13 +192,13 @@ int hflat_rename(const char *user_path_from, const char *user_path_to)
     bool hardlink  = hflat::Metadata_InodeType_HARDLINK_T == mdifrom->getMD().type();
     bool regular   = !directory && !hardlink && !softlink;
 
-    if( directory ) REQ( rename_directory(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom) );
-    if( softlink  ) REQ( rename_softlink( user_path_from, user_path_to, mdito, mdifrom) );
-    if( hardlink )  REQ( rename_hardlink( user_path_from, mdito) );
-    if( regular  )  REQ( rename_regular(  mdito, mdifrom) );
+    if( directory ) REQ_0( rename_directory(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom) );
+    if( softlink  ) REQ_0( rename_softlink( user_path_from, user_path_to, mdito, mdifrom) );
+    if( hardlink )  REQ_0( rename_hardlink( user_path_from, mdito) );
+    if( regular  )  REQ_0( rename_regular(  mdito, mdifrom) );
 
     /* remove recovery key */
-    REQ( delete_directory_entry (dir_mdito, recovery_direntry ));
+    REQ_0( delete_directory_entry (dir_mdito, recovery_direntry ));
 
     /* invalidate cache */
     PRIV->lookup_cache.invalidate(mdito->getSystemPath());

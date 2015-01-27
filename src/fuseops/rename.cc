@@ -166,6 +166,11 @@ int hflat_rename(const char *user_path_from, const char *user_path_to)
              err = hflat_rmdir(user_path_to);
         else err = hflat_unlink(user_path_to);
         if (err) return err;
+
+        /* The system path set for mdito can be invalid after an unlink operation
+         * iff mdito refers to a hardlinked inode... re-do lookup in this case. */
+        if(mdito->getMD().type() == hflat::Metadata_InodeType_HARDLINK_T)
+        	lookup(user_path_to, mdito);
     }
 
     /* Create new directory entry: Synchronization point (1) */
@@ -189,7 +194,7 @@ int hflat_rename(const char *user_path_from, const char *user_path_to)
     /* The actual move operation is type dependent */
     bool directory = S_ISDIR(mdifrom->getMD().mode());
     bool softlink  = S_ISLNK(mdifrom->getMD().mode());
-    bool hardlink  = hflat::Metadata_InodeType_HARDLINK_T == mdifrom->getMD().type();
+    bool hardlink  = mdifrom->getMD().type() == hflat::Metadata_InodeType_HARDLINK_T;
     bool regular   = !directory && !hardlink && !softlink;
 
     if( directory ) REQ_0( rename_directory(user_path_from, user_path_to, mdito, mdifrom, dir_mdito, dir_mdifrom) );

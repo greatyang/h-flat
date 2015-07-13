@@ -100,12 +100,12 @@ The file system tool suite located in the *tools* directory enables file system 
 #####File System Check 
 Repairs invalid file system state that might occur when a file system client crashes or is disconnected in the middle of a multi-step metadata operation. Every invalid file system state can be detected by dangling directory entries (entries that have no metadata). fsck takes a directory path as a parameter, as walking the whole directory tree is unnecessary and for big systems also impractical. This operation can be done online. 
 
-Example: `./tools -fsck /path/to/directory/with/dangling/direntries` 
+Example: `./hflat-tools -fsck /path/to/directory/with/dangling/direntries` 
 
 #####Name Space Check 
 Execute a self-check on the underlying key-value namespace. In the case of a distributed kinetic namespace, the connection to all kinetic drives listed in the cluster definition will be checked. Should connection to a drive that is marked as inaccesible be succesfull, it is re-integrated into the existing cluster. This operation can be done online. 
 
-Example: `./tools -nsck /path/to/mountpoint` 
+Example: `./hflat-tools -nsck /path/to/mountpoint` 
 
 
 # Testing
